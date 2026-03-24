@@ -165,8 +165,8 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
                                                 disabled={updatingId === t.id}
                                                 title={t.isPinned ? "Unpin" : "Pin"}
                                                 className={`p-1.5 rounded-lg border transition-colors disabled:opacity-50 ${t.isPinned
-                                                        ? "bg-pink-900/50 text-pink-300 hover:bg-pink-900 border-pink-800"
-                                                        : "bg-gray-800 text-gray-500 hover:text-pink-300 border-gray-700"
+                                                    ? "bg-pink-900/50 text-pink-300 hover:bg-pink-900 border-pink-800"
+                                                    : "bg-gray-800 text-gray-500 hover:text-pink-300 border-gray-700"
                                                     }`}
                                             >
                                                 {t.isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
@@ -176,8 +176,8 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
                                                 disabled={updatingId === t.id}
                                                 title={t.lifecyclePolicy === "PERMANENT" ? "Mark temporary" : "Mark permanent"}
                                                 className={`p-1.5 rounded-lg border transition-colors disabled:opacity-50 ${t.lifecyclePolicy === "PERMANENT"
-                                                        ? "bg-indigo-900/50 text-indigo-300 hover:bg-indigo-900 border-indigo-800"
-                                                        : "bg-gray-800 text-gray-500 hover:text-indigo-300 border-gray-700"
+                                                    ? "bg-indigo-900/50 text-indigo-300 hover:bg-indigo-900 border-indigo-800"
+                                                    : "bg-gray-800 text-gray-500 hover:text-indigo-300 border-gray-700"
                                                     }`}
                                             >
                                                 <Shield className="w-3 h-3" />
@@ -194,37 +194,34 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
                                             )}
                                         </div>
                                     </td>
-                                    );
-                        })}
-                                </td>
                                 </tr>
-                    );
+                            );
                         })}
-                </tbody>
-            </table>
-        </div>
-
-            {/* Pagination */ }
-    {
-        data?.data && data.data.totalPages > 1 && (
-            <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-gray-500">
-                    {((page - 1) * 25) + 1}–{Math.min(page * 25, data.data.total)} of {data.data.total}
-                </span>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => setPage((p) => p - 1)} disabled={page === 1}
-                        className="text-sm px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-colors">
-                        Prev
-                    </button>
-                    <span className="text-sm text-gray-500">{page} / {data.data.totalPages}</span>
-                    <button onClick={() => setPage((p) => p + 1)} disabled={page >= data.data.totalPages}
-                        className="text-sm px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-colors">
-                        Next
-                    </button>
-                </div>
+                    </tbody>
+                </table>
             </div>
-        )
-    }
+
+            {/* Pagination */}
+            {
+                data?.data && data.data.totalPages > 1 && (
+                    <div className="flex items-center justify-between py-2">
+                        <span className="text-sm text-gray-500">
+                            {((page - 1) * 25) + 1}–{Math.min(page * 25, data.data.total)} of {data.data.total}
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setPage((p) => p - 1)} disabled={page === 1}
+                                className="text-sm px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-colors">
+                                Prev
+                            </button>
+                            <span className="text-sm text-gray-500">{page} / {data.data.totalPages}</span>
+                            <button onClick={() => setPage((p) => p + 1)} disabled={page >= data.data.totalPages}
+                                className="text-sm px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-colors">
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )
+            }
         </div >
     );
 }
