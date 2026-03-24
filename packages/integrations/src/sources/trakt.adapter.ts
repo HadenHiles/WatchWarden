@@ -8,6 +8,9 @@ const logger = createLogger("trakt-adapter");
 const TRAKT_BASE = "https://api.trakt.tv";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const TMDB_ENRICH_BATCH_SIZE = 10;
+const TMDB_ENRICH_BATCH_DELAY_MS = 300;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 interface TmdbDetailResult {
     overview?: string | null;
@@ -85,9 +88,14 @@ export class TraktTrendingAdapter implements SourceAdapter {
         const enriched = [...items];
 
         for (let i = 0; i < enriched.length; i += TMDB_ENRICH_BATCH_SIZE) {
+            // Skip the delay before the first batch
+            if (i > 0) await sleep(TMDB_ENRICH_BATCH_DELAY_MS);
+
             await Promise.all(
                 enriched.slice(i, i + TMDB_ENRICH_BATCH_SIZE).map(async (item, batchIndex) => {
                     if (!item.tmdbId) return;
+                    // Skip items that already have complete artwork — no TMDB call needed
+                    if (item.posterPath && item.backdropPath && item.overview) return;
                     try {
                         const endpoint =
                             item.mediaType === "MOVIE"
