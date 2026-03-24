@@ -20,27 +20,38 @@ async function handler(
 ): Promise<NextResponse> {
     const session = await getSession();
     if (!session.authenticated) {
-
-        let body: string | undefined;
-        if (req.method !== "GET" && req.method !== "HEAD") {
-            body = await req.text();
-        }
-
-        const upstream = await fetch(upstreamUrl, {
-            method: req.method,
-            headers,
-            body,
-        });
-
-        const data = await upstream.text();
-        return new NextResponse(data, {
-            status: upstream.status,
-            headers: { "Content-Type": upstream.headers.get("Content-Type") ?? "application/json" },
-        });
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    export const GET = handler;
-    export const POST = handler;
-    export const PATCH = handler;
-    export const PUT = handler;
-    export const DELETE = handler;
+    const upstreamPath = params.path.join("/");
+    const upstreamUrl = `${API_BASE}/${upstreamPath}${req.nextUrl.search}`;
+
+    const headers: Record<string, string> = {
+        Authorization: `Bearer ${API_SECRET}`,
+    };
+    const contentType = req.headers.get("Content-Type");
+    if (contentType) headers["Content-Type"] = contentType;
+
+    let body: string | undefined;
+    if (req.method !== "GET" && req.method !== "HEAD") {
+        body = await req.text();
+    }
+
+    const upstream = await fetch(upstreamUrl, {
+        method: req.method,
+        headers,
+        body,
+    });
+
+    const data = await upstream.text();
+    return new NextResponse(data, {
+        status: upstream.status,
+        headers: { "Content-Type": upstream.headers.get("Content-Type") ?? "application/json" },
+    });
+}
+
+export const GET = handler;
+export const POST = handler;
+export const PATCH = handler;
+export const PUT = handler;
+export const DELETE = handler;

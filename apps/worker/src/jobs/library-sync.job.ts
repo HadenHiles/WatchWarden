@@ -7,7 +7,7 @@ const logger = createLogger("library-sync-job");
 const JELLYSEERR_STATUS_AVAILABLE = 5;
 
 function buildClient(): JellyseerrClient | null {
-    const baseUrl = process.env.JELLYSEERR_URL;
+    const baseUrl = process.env.JELLYSEERR_BASE_URL;
     const apiKey = process.env.JELLYSEERR_API_KEY;
     if (!baseUrl || !apiKey) {
         logger.warn("Jellyseerr not configured — skipping library sync");

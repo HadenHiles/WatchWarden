@@ -16,7 +16,7 @@ interface JobSummary {
         status: string;
         startedAt: string;
         completedAt?: string;
-        durationMs?: number;
+        duration?: number;
         error?: string;
     } | null;
 }
@@ -75,7 +75,7 @@ export default function JobsPage() {
                             {job.lastRun ? (
                                 <div className="text-xs text-gray-500">
                                     Last run: {formatDate(job.lastRun.startedAt)}
-                                    {job.lastRun.durationMs && ` — ${(job.lastRun.durationMs / 1000).toFixed(1)}s`}
+                                    {job.lastRun.duration != null && ` — ${(job.lastRun.duration / 1000).toFixed(1)}s`}
                                     {job.lastRun.error && (
                                         <span className="text-red-400 ml-2">{job.lastRun.error}</span>
                                     )}

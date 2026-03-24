@@ -12,14 +12,13 @@ interface AuditEntry {
     action: string;
     entityType: string;
     entityId: string;
-    message: string;
-    metadata?: unknown;
+    details?: unknown;
     createdAt: string;
 }
 
 export default function AuditPage() {
     const { data, isLoading } = useSWR<{ data: { items: AuditEntry[] } }>(
-        apiUrl("/audit?limit=200"),
+        apiUrl("/audit?pageSize=100"),
         fetcher
     );
     const entries = data?.data?.items ?? [];
@@ -61,7 +60,7 @@ export default function AuditPage() {
                                     {e.entityType}
                                 </td>
                                 <td className="px-4 py-3 text-gray-300 text-xs max-w-sm truncate">
-                                    {e.message}
+                                    {e.details ? JSON.stringify(e.details) : "—"}
                                 </td>
                             </tr>
                         ))}

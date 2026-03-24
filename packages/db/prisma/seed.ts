@@ -97,7 +97,8 @@ async function seedSourceConfigs() {
             config: {},
         },
         {
-            sourceId: "tmdb_trending_show_week",
+            // sourceId must match TmdbTrendingAdapter which uses mediaType param "tv"
+            sourceId: "tmdb_trending_tv_week",
             sourceName: "TMDB Trending Shows (Week)",
             enabled: true,
             region: null,

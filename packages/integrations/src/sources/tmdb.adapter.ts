@@ -6,7 +6,6 @@ import type { SourceAdapter } from "./adapter";
 const logger = createLogger("tmdb-adapter");
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
-const POSTER_BASE = "https://image.tmdb.org/t/p/w500";
 
 interface TmdbTrendingResult {
     id: number;
@@ -93,8 +92,10 @@ export class TmdbTrendingAdapter implements SourceAdapter {
             mediaType: isMovie ? "MOVIE" : "SHOW",
             year: isNaN(year!) ? null : year,
             overview: item.overview ?? null,
-            posterPath: item.poster_path ? `${POSTER_BASE}${item.poster_path}` : null,
-            backdropPath: item.backdrop_path ? `${POSTER_BASE}${item.backdrop_path}` : null,
+            // Store only the raw path fragment from TMDB (e.g. "/abc123.jpg").
+            // Consumers are responsible for prepending the desired image base URL.
+            posterPath: item.poster_path ?? null,
+            backdropPath: item.backdrop_path ?? null,
             genres: [],
             source: this.sourceId,
             region: null,

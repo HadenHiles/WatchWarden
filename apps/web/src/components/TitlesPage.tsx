@@ -42,7 +42,7 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
     if (cleanupEligible !== undefined) params.set("cleanupEligible", String(cleanupEligible));
     if (isPinned !== undefined) params.set("isPinned", String(isPinned));
     if (mediaFilter !== "ALL") params.set("mediaType", mediaFilter);
-    params.set("limit", "100");
+    params.set("pageSize", "100");
 
     const url = apiUrl(`/titles?${params.toString()}`);
     const { data, isLoading } = useSWR<{ data: { items: TitleRow[] } }>(url, fetcher);
@@ -58,8 +58,8 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
                             key={t}
                             onClick={() => setMediaFilter(t)}
                             className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${mediaFilter === t
-                                    ? "bg-brand-600 border-brand-600 text-white"
-                                    : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
+                                ? "bg-brand-600 border-brand-600 text-white"
+                                : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
                                 }`}
                         >
                             {t === "ALL" ? "All" : t === "MOVIE" ? "Movies" : "Shows"}
@@ -95,8 +95,10 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
                     </thead>
                     <tbody className="divide-y divide-gray-800">
                         {items.map((t) => {
+                            // posterPath is stored as the raw fragment (e.g. "/abc.jpg");
+                            // prepend the TMDB image base to construct the full URL.
                             const posterUrl = t.posterPath
-                                ? `https://image.tmdb.org/t/p/w92${t.posterPath}`
+                                ? (t.posterPath.startsWith("http") ? t.posterPath : `https://image.tmdb.org/t/p/w92${t.posterPath}`)
                                 : null;
                             return (
                                 <tr key={t.id} className="bg-gray-900 hover:bg-gray-800/50 transition-colors">

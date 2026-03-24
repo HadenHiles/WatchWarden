@@ -17,7 +17,7 @@ export function SuggestionsPage({ mediaType }: SuggestionsPageProps) {
     const [statusFilter, setStatusFilter] = useState<string>("PENDING");
 
     const url = apiUrl(
-        `/suggestions?mediaType=${mediaType}&status=${statusFilter}&sortBy=${sortBy}&limit=50`
+        `/suggestions?mediaType=${mediaType}&status=${statusFilter}&sortBy=${sortBy}&pageSize=50`
     );
     const { data, mutate, isLoading } = useSWR<{ data: { items: SuggestionCardData[] } }>(url, fetcher);
 
