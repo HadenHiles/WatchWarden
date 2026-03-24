@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import Image from "next/image";
+import { Pin, PinOff, Shield, Trash2 } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 import { LifecycleBadge } from "./LifecycleBadge";
 import { formatDate } from "@/lib/utils";
@@ -36,17 +37,35 @@ interface TitlesPageProps {
 
 export function TitlesPage({ heading, status, cleanupEligible, isPinned }: TitlesPageProps) {
     const [mediaFilter, setMediaFilter] = useState<"ALL" | "MOVIE" | "SHOW">("ALL");
+    const [page, setPage] = useState(1);
+    const [updatingId, setUpdatingId] = useState<string | null>(null);
 
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     if (cleanupEligible !== undefined) params.set("cleanupEligible", String(cleanupEligible));
     if (isPinned !== undefined) params.set("isPinned", String(isPinned));
     if (mediaFilter !== "ALL") params.set("mediaType", mediaFilter);
-    params.set("pageSize", "100");
+    params.set("pageSize", "25");
+    params.set("page", String(page));
 
     const url = apiUrl(`/titles?${params.toString()}`);
-    const { data, isLoading } = useSWR<{ data: { items: TitleRow[] } }>(url, fetcher);
+    const { data, isLoading, mutate } = useSWR<{ data: { items: TitleRow[]; total: number; page: number; pageSize: number; totalPages: number } }>(url, fetcher);
     const items = data?.data?.items ?? [];
+
+    async function updateLifecycle(titleId: string, update: Record<string, unknown>) {
+        setUpdatingId(titleId);
+        try {
+            await fetch(apiUrl(`/titles/${titleId}/lifecycle`), {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(update),
+                credentials: "include",
+            });
+            mutate();
+        } finally {
+            setUpdatingId(null);
+        }
+    }
 
     return (
         <div className="space-y-4">
@@ -91,6 +110,7 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
                             <th className="px-4 py-3 text-left">Policy</th>
                             <th className="px-4 py-3 text-left">Library</th>
                             <th className="px-4 py-3 text-left">Updated</th>
+                            <th className="px-4 py-3 text-left">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800">
@@ -138,12 +158,73 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
                                         )}
                                     </td>
                                     <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(t.updatedAt)}</td>
-                                </tr>
-                            );
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => updateLifecycle(t.id, { isPinned: !t.isPinned })}
+                                                disabled={updatingId === t.id}
+                                                title={t.isPinned ? "Unpin" : "Pin"}
+                                                className={`p-1.5 rounded-lg border transition-colors disabled:opacity-50 ${t.isPinned
+                                                        ? "bg-pink-900/50 text-pink-300 hover:bg-pink-900 border-pink-800"
+                                                        : "bg-gray-800 text-gray-500 hover:text-pink-300 border-gray-700"
+                                                    }`}
+                                            >
+                                                {t.isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                                            </button>
+                                            <button
+                                                onClick={() => updateLifecycle(t.id, { lifecyclePolicy: t.lifecyclePolicy === "PERMANENT" ? "TEMPORARY_TRENDING" : "PERMANENT" })}
+                                                disabled={updatingId === t.id}
+                                                title={t.lifecyclePolicy === "PERMANENT" ? "Mark temporary" : "Mark permanent"}
+                                                className={`p-1.5 rounded-lg border transition-colors disabled:opacity-50 ${t.lifecyclePolicy === "PERMANENT"
+                                                        ? "bg-indigo-900/50 text-indigo-300 hover:bg-indigo-900 border-indigo-800"
+                                                        : "bg-gray-800 text-gray-500 hover:text-indigo-300 border-gray-700"
+                                                    }`}
+                                            >
+                                                <Shield className="w-3 h-3" />
+                                            </button>
+                                            {!t.cleanupEligible && (
+                                                <button
+                                                    onClick={() => updateLifecycle(t.id, { cleanupEligible: true })}
+                                                    disabled={updatingId === t.id}
+                                                    title="Force cleanup eligible"
+                                                    className="p-1.5 rounded-lg border bg-gray-800 text-gray-500 hover:text-orange-300 border-gray-700 transition-colors disabled:opacity-50"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                    );
                         })}
-                    </tbody>
-                </table>
-            </div>
+                                </td>
+                                </tr>
+                    );
+                        })}
+                </tbody>
+            </table>
         </div>
+
+            {/* Pagination */ }
+    {
+        data?.data && data.data.totalPages > 1 && (
+            <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-gray-500">
+                    {((page - 1) * 25) + 1}–{Math.min(page * 25, data.data.total)} of {data.data.total}
+                </span>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setPage((p) => p - 1)} disabled={page === 1}
+                        className="text-sm px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-colors">
+                        Prev
+                    </button>
+                    <span className="text-sm text-gray-500">{page} / {data.data.totalPages}</span>
+                    <button onClick={() => setPage((p) => p + 1)} disabled={page >= data.data.totalPages}
+                        className="text-sm px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-colors">
+                        Next
+                    </button>
+                </div>
+            </div>
+        )
+    }
+        </div >
     );
 }

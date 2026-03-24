@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { CheckCircle, XCircle, Clock, Pin } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Pin, RotateCcw, PinOff, Flag, Trash2, CalendarPlus } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 import { ScoreBreakdown } from "./ScoreBreakdown";
 import { cn, formatScore, scoreColor, formatDate } from "@/lib/utils";
@@ -31,6 +31,7 @@ export interface SuggestionCardData {
         isPinned: boolean;
         inLibrary: boolean;
         isRequested: boolean;
+        cleanupEligible: boolean;
     };
 }
 
@@ -43,8 +44,12 @@ export function SuggestionCard({ suggestion, onDecision }: SuggestionCardProps) 
     const { title, finalScore } = suggestion;
     const [expanded, setExpanded] = useState(false);
     const [loading, setLoading] = useState<string | null>(null);
+    const [snoozeDays, setSnoozeDays] = useState(14);
+    const [extendDays, setExtendDays] = useState(30);
+    const [showSnoozeInput, setShowSnoozeInput] = useState(false);
+    const [showExtendInput, setShowExtendInput] = useState(false);
 
-    async function applyDecision(action: string, reason?: string) {
+    async function applyDecision(action: string, options?: { reason?: string; snoozeDays?: number; extendDays?: number }) {
         setLoading(action);
         try {
             await fetch(apiUrl("/decisions"), {
@@ -53,7 +58,7 @@ export function SuggestionCard({ suggestion, onDecision }: SuggestionCardProps) 
                 body: JSON.stringify({
                     suggestionId: suggestion.id,
                     action,
-                    reason,
+                    ...options,
                 }),
                 credentials: "include",
             });
@@ -123,52 +128,109 @@ export function SuggestionCard({ suggestion, onDecision }: SuggestionCardProps) 
                     </div>
                 )}
 
-                {/* Actions */}
-                {suggestion.status === "PENDING" && (
-                    <div className="flex items-center gap-1.5 pt-1">
-                        <button
-                            onClick={() => applyDecision("APPROVE")}
-                            disabled={loading !== null}
-                            className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-green-900/50 text-green-300 hover:bg-green-900 border border-green-800 transition-colors disabled:opacity-50"
-                        >
-                            <CheckCircle className="w-3 h-3" />
-                            Approve
-                        </button>
-                        <button
-                            onClick={() => applyDecision("REJECT")}
-                            disabled={loading !== null}
-                            className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-red-900/50 text-red-300 hover:bg-red-900 border border-red-800 transition-colors disabled:opacity-50"
-                        >
-                            <XCircle className="w-3 h-3" />
-                            Reject
-                        </button>
-                        <button
-                            onClick={() => applyDecision("SNOOZE")}
-                            disabled={loading !== null}
-                            className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-yellow-900/50 text-yellow-300 hover:bg-yellow-900 border border-yellow-800 transition-colors disabled:opacity-50"
-                        >
-                            <Clock className="w-3 h-3" />
-                            Snooze
-                        </button>
-                        <button
-                            onClick={() => applyDecision("PIN")}
-                            disabled={loading !== null}
-                            className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-pink-900/50 text-pink-300 hover:bg-pink-900 border border-pink-800 transition-colors disabled:opacity-50"
-                        >
-                            <Pin className="w-3 h-3" />
-                            Pin
-                        </button>
-                        <button
-                            onClick={() => setExpanded((v) => !v)}
-                            className="ml-auto text-xs text-gray-500 hover:text-gray-300 transition-colors"
-                        >
+                {/* Actions + footer */}
+                <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* PENDING actions */}
+                        {suggestion.status === "PENDING" && <>
+                            <button onClick={() => applyDecision("APPROVE")} disabled={loading !== null}
+                                className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-green-900/50 text-green-300 hover:bg-green-900 border border-green-800 transition-colors disabled:opacity-50">
+                                <CheckCircle className="w-3 h-3" /> Approve
+                            </button>
+                            <button onClick={() => applyDecision("REJECT")} disabled={loading !== null}
+                                className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-red-900/50 text-red-300 hover:bg-red-900 border border-red-800 transition-colors disabled:opacity-50">
+                                <XCircle className="w-3 h-3" /> Reject
+                            </button>
+                            {showSnoozeInput ? (
+                                <span className="flex items-center gap-1">
+                                    <input type="number" value={snoozeDays} min={1} max={365}
+                                        onChange={(e) => setSnoozeDays(Number(e.target.value))}
+                                        className="w-12 rounded bg-gray-800 border border-gray-700 px-1.5 py-0.5 text-xs text-white text-center focus:outline-none" />
+                                    <button onClick={() => { applyDecision("SNOOZE", { snoozeDays }); setShowSnoozeInput(false); }} disabled={loading !== null}
+                                        className="text-xs rounded-lg px-2 py-1 bg-yellow-900/50 text-yellow-300 hover:bg-yellow-900 border border-yellow-800 transition-colors disabled:opacity-50">
+                                        {snoozeDays}d
+                                    </button>
+                                    <button onClick={() => setShowSnoozeInput(false)} className="text-xs text-gray-600 hover:text-gray-300 px-1">✕</button>
+                                </span>
+                            ) : (
+                                <button onClick={() => setShowSnoozeInput(true)} disabled={loading !== null}
+                                    className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-yellow-900/50 text-yellow-300 hover:bg-yellow-900 border border-yellow-800 transition-colors disabled:opacity-50">
+                                    <Clock className="w-3 h-3" /> Snooze
+                                </button>
+                            )}
+                            {!title.isPinned && (
+                                <button onClick={() => applyDecision("PIN")} disabled={loading !== null}
+                                    className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-pink-900/50 text-pink-300 hover:bg-pink-900 border border-pink-800 transition-colors disabled:opacity-50">
+                                    <Pin className="w-3 h-3" /> Pin
+                                </button>
+                            )}
+                        </>}
+
+                        {/* UNPIN — available on any non-pending status when pinned */}
+                        {title.isPinned && suggestion.status !== "PENDING" && (
+                            <button onClick={() => applyDecision("UNPIN")} disabled={loading !== null}
+                                className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-pink-900/50 text-pink-300 hover:bg-pink-900 border border-pink-800 transition-colors disabled:opacity-50">
+                                <PinOff className="w-3 h-3" /> Unpin
+                            </button>
+                        )}
+
+                        {/* APPROVED lifecycle actions */}
+                        {suggestion.status === "APPROVED" && <>
+                            {title.lifecyclePolicy !== "PERMANENT" ? (
+                                <button onClick={() => applyDecision("MARK_PERMANENT")} disabled={loading !== null}
+                                    className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-indigo-900/50 text-indigo-300 hover:bg-indigo-900 border border-indigo-800 transition-colors disabled:opacity-50">
+                                    <Flag className="w-3 h-3" /> Permanent
+                                </button>
+                            ) : (
+                                <button onClick={() => applyDecision("MARK_TEMPORARY")} disabled={loading !== null}
+                                    className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-gray-700/50 text-gray-300 hover:bg-gray-700 border border-gray-600 transition-colors disabled:opacity-50">
+                                    Temporary
+                                </button>
+                            )}
+                            {showExtendInput ? (
+                                <span className="flex items-center gap-1">
+                                    <input type="number" value={extendDays} min={1} max={365}
+                                        onChange={(e) => setExtendDays(Number(e.target.value))}
+                                        className="w-12 rounded bg-gray-800 border border-gray-700 px-1.5 py-0.5 text-xs text-white text-center focus:outline-none" />
+                                    <button onClick={() => { applyDecision("EXTEND_RETENTION", { extendDays }); setShowExtendInput(false); }} disabled={loading !== null}
+                                        className="text-xs rounded-lg px-2 py-1 bg-teal-900/50 text-teal-300 hover:bg-teal-900 border border-teal-800 transition-colors disabled:opacity-50">
+                                        +{extendDays}d
+                                    </button>
+                                    <button onClick={() => setShowExtendInput(false)} className="text-xs text-gray-600 hover:text-gray-300 px-1">✕</button>
+                                </span>
+                            ) : (
+                                <button onClick={() => setShowExtendInput(true)} disabled={loading !== null}
+                                    className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-teal-900/50 text-teal-300 hover:bg-teal-900 border border-teal-800 transition-colors disabled:opacity-50">
+                                    <CalendarPlus className="w-3 h-3" /> Extend
+                                </button>
+                            )}
+                            {!title.cleanupEligible && (
+                                <button onClick={() => applyDecision("FORCE_CLEANUP_ELIGIBLE")} disabled={loading !== null}
+                                    className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-orange-900/50 text-orange-300 hover:bg-orange-900 border border-orange-800 transition-colors disabled:opacity-50">
+                                    <Trash2 className="w-3 h-3" /> Cleanup
+                                </button>
+                            )}
+                            <button onClick={() => applyDecision("UNDO")} disabled={loading !== null}
+                                className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-gray-700/50 text-gray-400 hover:bg-gray-700 border border-gray-600 transition-colors disabled:opacity-50">
+                                <RotateCcw className="w-3 h-3" /> Undo
+                            </button>
+                        </>}
+
+                        {/* REJECTED / SNOOZED: undo only */}
+                        {(suggestion.status === "REJECTED" || suggestion.status === "SNOOZED") && (
+                            <button onClick={() => applyDecision("UNDO")} disabled={loading !== null}
+                                className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 bg-gray-700/50 text-gray-400 hover:bg-gray-700 border border-gray-600 transition-colors disabled:opacity-50">
+                                <RotateCcw className="w-3 h-3" /> Undo
+                            </button>
+                        )}
+
+                        <button onClick={() => setExpanded((v) => !v)}
+                            className="ml-auto text-xs text-gray-500 hover:text-gray-300 transition-colors">
                             {expanded ? "Hide" : "Details"}
                         </button>
                     </div>
-                )}
-
-                {/* Generated at */}
-                <p className="text-xs text-gray-600">{formatDate(suggestion.generatedAt)}</p>
+                    <p className="text-xs text-gray-600">{formatDate(suggestion.generatedAt)}</p>
+                </div>
             </div>
         </div>
     );

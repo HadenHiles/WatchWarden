@@ -18,6 +18,8 @@ import {
     Settings,
     Briefcase,
     ShieldCheck,
+    Download,
+    Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +55,8 @@ const NAV_SECTIONS = [
         items: [
             { href: "/dashboard/audit", label: "Audit Log", icon: ScrollText },
             { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
+            { href: "/dashboard/exports", label: "Exports", icon: Download },
+            { href: "/dashboard/requests", label: "Requests", icon: Inbox },
             { href: "/dashboard/settings", label: "Settings", icon: Settings },
         ],
     },
