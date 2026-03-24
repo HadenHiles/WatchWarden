@@ -6,7 +6,11 @@
             "type": "node",
             "request": "launch",
             "program": "${workspaceFolder}/node_modules/.bin/next",
-            "args": ["dev", "-p", "3000"],
+            "args": [
+                "dev",
+                "-p",
+                "3000"
+            ],
             "cwd": "${workspaceFolder}/apps/web",
             "env": {
                 "NODE_ENV": "development"
@@ -24,10 +28,14 @@
             "request": "launch",
             "runtimeExecutable": "node",
             "runtimeArgs": [
-                "--require", "ts-node/register",
-                "--require", "tsconfig-paths/register"
+                "--require",
+                "ts-node/register",
+                "--require",
+                "tsconfig-paths/register"
             ],
-            "args": ["${workspaceFolder}/apps/api/src/index.ts"],
+            "args": [
+                "${workspaceFolder}/apps/api/src/index.ts"
+            ],
             "cwd": "${workspaceFolder}/apps/api",
             "env": {
                 "NODE_ENV": "development",
@@ -36,7 +44,9 @@
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal",
             "sourceMaps": true,
-            "outFiles": ["${workspaceFolder}/apps/api/dist/**/*.js"]
+            "outFiles": [
+                "${workspaceFolder}/apps/api/dist/**/*.js"
+            ]
         },
         {
             "name": "Worker (ts-node)",
@@ -44,10 +54,14 @@
             "request": "launch",
             "runtimeExecutable": "node",
             "runtimeArgs": [
-                "--require", "ts-node/register",
-                "--require", "tsconfig-paths/register"
+                "--require",
+                "ts-node/register",
+                "--require",
+                "tsconfig-paths/register"
             ],
-            "args": ["${workspaceFolder}/apps/worker/src/index.ts"],
+            "args": [
+                "${workspaceFolder}/apps/worker/src/index.ts"
+            ],
             "cwd": "${workspaceFolder}/apps/worker",
             "env": {
                 "NODE_ENV": "development",
@@ -56,14 +70,18 @@
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal",
             "sourceMaps": true,
-            "outFiles": ["${workspaceFolder}/apps/worker/dist/**/*.js"]
+            "outFiles": [
+                "${workspaceFolder}/apps/worker/dist/**/*.js"
+            ]
         },
         {
             "name": "Full Stack (web + api + worker)",
             "type": "node",
             "request": "launch",
             "runtimeExecutable": "pnpm",
-            "runtimeArgs": ["dev"],
+            "runtimeArgs": [
+                "dev"
+            ],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
         }
@@ -71,12 +89,19 @@
     "compounds": [
         {
             "name": "Web + API",
-            "configurations": ["Next.js (web)", "API (ts-node)"],
+            "configurations": [
+                "Next.js (web)",
+                "API (ts-node)"
+            ],
             "stopAll": true
         },
         {
             "name": "Web + API + Worker",
-            "configurations": ["Next.js (web)", "API (ts-node)", "Worker (ts-node)"],
+            "configurations": [
+                "Next.js (web)",
+                "API (ts-node)",
+                "Worker (ts-node)"
+            ],
             "stopAll": true
         }
     ]
