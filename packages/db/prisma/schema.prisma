@@ -1,0 +1,328 @@
+// This is your Prisma schema file.
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum MediaType {
+  MOVIE
+  SHOW
+}
+
+// Canonical lifecycle status for a title.
+// See state machine in packages/types/src/media.ts
+enum TitleStatus {
+  CANDIDATE
+  SUGGESTED
+  APPROVED
+  REJECTED
+  SNOOZED
+  REQUESTED
+  AVAILABLE
+  ACTIVE_TRENDING
+  CLEANUP_ELIGIBLE
+  EXPIRED
+  PINNED
+}
+
+enum LifecyclePolicy {
+  PERMANENT
+  TEMPORARY_TRENDING
+  WATCH_AND_EXPIRE
+  PINNED
+}
+
+enum SuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SNOOZED
+  FULFILLED
+}
+
+enum DecisionAction {
+  APPROVE
+  REJECT
+  SNOOZE
+  PIN
+  UNPIN
+  MARK_PERMANENT
+  MARK_TEMPORARY
+  EXTEND_RETENTION
+  FORCE_CLEANUP_ELIGIBLE
+  UNDO
+}
+
+enum RequestStatus {
+  PENDING
+  PROCESSING
+  AVAILABLE
+  FAILED
+  DECLINED
+  APPROVED
+}
+
+enum JobStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+// ─── Title ───────────────────────────────────────────────────────────────────
+// Canonical representation of a movie or TV show.
+// All downstream records (suggestions, requests, export items) reference this.
+
+model Title {
+  id            String    @id @default(cuid())
+  tmdbId        Int?      @unique
+  tvdbId        Int?
+  imdbId        String?
+
+  title         String
+  originalTitle String?
+  mediaType     MediaType
+  year          Int?
+  overview      String?   @db.Text
+  posterPath    String?
+  backdropPath  String?
+  genres        String[]
+
+  // Lifecycle and policy fields
+  status          TitleStatus     @default(CANDIDATE)
+  lifecyclePolicy LifecyclePolicy @default(TEMPORARY_TRENDING)
+  isTemporary     Boolean         @default(true)
+  isPinned        Boolean         @default(false)
+  keepUntil       DateTime?
+  cleanupEligible Boolean         @default(false)
+  cleanupReason   String?
+
+  // Library / request state (synced from Jellyseerr)
+  inLibrary        Boolean   @default(false)
+  libraryCheckedAt DateTime?
+  isRequested      Boolean   @default(false)
+  jellyseerrId     Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  trendSnapshots ExternalTrendSnapshot[]
+  watchSignals   LocalWatchSignal[]
+  suggestion     Suggestion?
+  requestRecord  RequestRecord?
+  auditLogs      AuditLog[]
+
+  @@index([status])
+  @@index([mediaType])
+  @@index([tmdbId])
+}
+
+// ─── ExternalTrendSnapshot ───────────────────────────────────────────────────
+// Raw + normalized trend data ingested from an external source adapter.
+// Multiple snapshots may exist per title (from different sources/regions).
+
+model ExternalTrendSnapshot {
+  id          String   @id @default(cuid())
+  titleId     String
+  source      String   // e.g. "tmdb_trending_week", "trakt_trending"
+  region      String?  // "US" | "CA"
+  rank        Int?
+  trendScore  Float
+  rawMetadata Json
+  snapshotAt  DateTime @default(now())
+  expiresAt   DateTime?
+
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@index([titleId])
+  @@index([source, region])
+  @@index([snapshotAt])
+}
+
+// ─── LocalWatchSignal ────────────────────────────────────────────────────────
+// Normalized engagement metrics derived from Tautulli.
+// One row per title, updated on each Tautulli sync.
+
+model LocalWatchSignal {
+  id                  String    @id @default(cuid())
+  titleId             String    @unique
+  recentWatchCount    Int       @default(0)
+  uniqueViewerCount   Int       @default(0)
+  completionRate      Float     @default(0) // 0–1
+  watchSaturation     Float     @default(0) // fraction of household that has watched
+  lastWatchedAt       DateTime?
+  recencyScore        Float     @default(0) // 0–1, decays with time
+  localInterestScore  Float     @default(0) // 0–1, composite local signal
+  multiUserBoost      Float     @default(0) // additional boost for multi-user interest
+  completionPenalty   Float     @default(0) // penalty if already fully watched by most users
+  rawData             Json?
+  fetchedAt           DateTime  @default(now())
+
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@index([titleId])
+}
+
+// ─── Suggestion ──────────────────────────────────────────────────────────────
+// Scored suggestion record.  One per title (upserted on each scoring run).
+
+model Suggestion {
+  id                  String           @id @default(cuid())
+  titleId             String           @unique
+  externalTrendScore  Float            @default(0)
+  localInterestScore  Float            @default(0)
+  freshnessScore      Float            @default(0)
+  editorialBoost      Float            @default(0)
+  finalScore          Float            @default(0)
+  scoreExplanation    String?          @db.Text
+  suggestedReasons    String[]
+  status              SuggestionStatus @default(PENDING)
+  snoozedUntil        DateTime?
+  generatedAt         DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  title     Title                @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  decisions SuggestionDecision[]
+
+  @@index([status])
+  @@index([finalScore])
+  @@index([titleId])
+}
+
+// ─── SuggestionDecision ──────────────────────────────────────────────────────
+// Immutable record of every admin action on a suggestion.
+
+model SuggestionDecision {
+  id           String         @id @default(cuid())
+  suggestionId String
+  action       DecisionAction
+  reason       String?
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  @@index([suggestionId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ─── RequestRecord ───────────────────────────────────────────────────────────
+// Tracks a Jellyseerr request submitted for an approved title.
+
+model RequestRecord {
+  id                  String        @id @default(cuid())
+  titleId             String        @unique
+  jellyseerrRequestId Int?
+  requestStatus       RequestStatus @default(PENDING)
+  requestedAt         DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  rootFolder          String?
+  qualityProfileId    Int?
+  requestedByBot      Boolean       @default(true)
+  mediaType           MediaType
+  overseerrMedia      Json?
+  failureReason       String?
+  retryCount          Int           @default(0)
+  lastSyncAt          DateTime?
+
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@index([requestStatus])
+  @@index([jellyseerrRequestId])
+}
+
+// ─── PublishedExport ─────────────────────────────────────────────────────────
+// Metadata record for each generated Kometa export file.
+
+model PublishedExport {
+  id          String   @id @default(cuid())
+  exportType  String   // e.g. "active_trending_movies"
+  filePath    String
+  itemCount   Int
+  generatedAt DateTime @default(now())
+  metadata    Json?
+
+  @@index([exportType])
+  @@index([generatedAt])
+}
+
+// ─── SourceConfig ────────────────────────────────────────────────────────────
+// Per-source configuration (enabled/disabled, region, etc.)
+
+model SourceConfig {
+  id         String     @id @default(cuid())
+  sourceId   String     @unique
+  sourceName String
+  enabled    Boolean    @default(true)
+  region     String?
+  mediaType  MediaType?
+  config     Json       @default("{}")
+  lastSyncAt DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([sourceId])
+}
+
+// ─── AppSetting ──────────────────────────────────────────────────────────────
+// Key-value store for admin-configurable application settings.
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  category  String   @default("general")
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+// ─── AuditLog ────────────────────────────────────────────────────────────────
+// Append-only record of lifecycle events and admin actions.
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String?
+  entityId   String?
+  titleId    String?
+  details    Json?
+  userId     String?
+  createdAt  DateTime @default(now())
+
+  title Title? @relation(fields: [titleId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([titleId])
+  @@index([createdAt])
+}
+
+// ─── JobRun ──────────────────────────────────────────────────────────────────
+// History of scheduled and manual job executions.
+
+model JobRun {
+  id             String    @id @default(cuid())
+  jobName        String
+  status         JobStatus @default(RUNNING)
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  duration       Int?      // milliseconds
+  itemsProcessed Int?
+  error          String?   @db.Text
+  metadata       Json?
+
+  @@index([jobName])
+  @@index([status])
+  @@index([startedAt])
+}

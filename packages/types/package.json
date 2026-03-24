@@ -1,0 +1,19 @@
+{
+    "name": "@watchwarden/types",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Watch Warden — shared TypeScript types",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "clean": "rm -rf dist",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint src --ext .ts"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.5",
+        "typescript": "^5.3.3"
+    }
+}

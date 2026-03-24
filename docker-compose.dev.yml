@@ -1,0 +1,35 @@
+version: "3.9"
+
+# ─── Watch Warden — Development Override ────────────────────────────────────
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Or for just the database: docker compose -f docker-compose.dev.yml up postgres
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: development
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./packages:/app/packages
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+      target: development
+    volumes:
+      - ./apps/worker/src:/app/apps/worker/src
+      - ./packages:/app/packages
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug

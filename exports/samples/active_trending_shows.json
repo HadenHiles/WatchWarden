@@ -1,0 +1,59 @@
+{
+    "exportType": "active_trending_shows",
+    "generatedAt": "2024-01-15T12:00:00.000Z",
+    "itemCount": 4,
+    "items": [
+        {
+            "tmdbId": 94997,
+            "tvdbId": 361753,
+            "imdbId": "tt13991232",
+            "title": "House of the Dragon",
+            "year": 2022,
+            "mediaType": "SHOW",
+            "lifecyclePolicy": "TEMPORARY_TRENDING",
+            "status": "ACTIVE_TRENDING",
+            "keepUntil": "2024-06-01T00:00:00.000Z",
+            "cleanupEligible": false,
+            "isPinned": false
+        },
+        {
+            "tmdbId": 202555,
+            "tvdbId": 422265,
+            "imdbId": "tt21209876",
+            "title": "The Acolyte",
+            "year": 2024,
+            "mediaType": "SHOW",
+            "lifecyclePolicy": "TEMPORARY_TRENDING",
+            "status": "ACTIVE_TRENDING",
+            "keepUntil": "2024-09-01T00:00:00.000Z",
+            "cleanupEligible": false,
+            "isPinned": false
+        },
+        {
+            "tmdbId": 1396,
+            "tvdbId": 81189,
+            "imdbId": "tt0903747",
+            "title": "Breaking Bad",
+            "year": 2008,
+            "mediaType": "SHOW",
+            "lifecyclePolicy": "PERMANENT",
+            "status": "ACTIVE_TRENDING",
+            "keepUntil": null,
+            "cleanupEligible": false,
+            "isPinned": true
+        },
+        {
+            "tmdbId": 84958,
+            "tvdbId": 375063,
+            "imdbId": "tt11126994",
+            "title": "Loki",
+            "year": 2021,
+            "mediaType": "SHOW",
+            "lifecyclePolicy": "TEMPORARY_TRENDING",
+            "status": "ACTIVE_TRENDING",
+            "keepUntil": "2024-04-01T00:00:00.000Z",
+            "cleanupEligible": false,
+            "isPinned": false
+        }
+    ]
+}

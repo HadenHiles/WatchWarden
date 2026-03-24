@@ -1,0 +1,46 @@
+{
+    "exportType": "cleanup_eligible_movies",
+    "generatedAt": "2024-01-15T12:00:00.000Z",
+    "itemCount": 3,
+    "items": [
+        {
+            "tmdbId": 493922,
+            "tvdbId": null,
+            "imdbId": "tt5052448",
+            "title": "Hereditary",
+            "year": 2018,
+            "mediaType": "MOVIE",
+            "lifecyclePolicy": "WATCH_AND_EXPIRE",
+            "status": "CLEANUP_ELIGIBLE",
+            "keepUntil": "2023-12-01T00:00:00.000Z",
+            "cleanupEligible": true,
+            "isPinned": false
+        },
+        {
+            "tmdbId": 297762,
+            "tvdbId": null,
+            "imdbId": "tt4154796",
+            "title": "Avengers: Endgame",
+            "year": 2019,
+            "mediaType": "MOVIE",
+            "lifecyclePolicy": "WATCH_AND_EXPIRE",
+            "status": "CLEANUP_ELIGIBLE",
+            "keepUntil": "2023-11-01T00:00:00.000Z",
+            "cleanupEligible": true,
+            "isPinned": false
+        },
+        {
+            "tmdbId": 522938,
+            "tvdbId": null,
+            "imdbId": "tt5886440",
+            "title": "Midsommar",
+            "year": 2019,
+            "mediaType": "MOVIE",
+            "lifecyclePolicy": "WATCH_AND_EXPIRE",
+            "status": "CLEANUP_ELIGIBLE",
+            "keepUntil": "2024-01-01T00:00:00.000Z",
+            "cleanupEligible": true,
+            "isPinned": false
+        }
+    ]
+}

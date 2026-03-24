@@ -1,0 +1,72 @@
+{
+    "exportType": "active_trending_movies",
+    "generatedAt": "2024-01-15T12:00:00.000Z",
+    "itemCount": 5,
+    "items": [
+        {
+            "tmdbId": 872585,
+            "tvdbId": null,
+            "imdbId": "tt15398776",
+            "title": "Oppenheimer",
+            "year": 2023,
+            "mediaType": "MOVIE",
+            "lifecyclePolicy": "TEMPORARY_TRENDING",
+            "status": "ACTIVE_TRENDING",
+            "keepUntil": "2024-04-15T00:00:00.000Z",
+            "cleanupEligible": false,
+            "isPinned": false
+        },
+        {
+            "tmdbId": 940551,
+            "tvdbId": null,
+            "imdbId": "tt13320622",
+            "title": "Migration",
+            "year": 2023,
+            "mediaType": "MOVIE",
+            "lifecyclePolicy": "TEMPORARY_TRENDING",
+            "status": "ACTIVE_TRENDING",
+            "keepUntil": "2024-03-01T00:00:00.000Z",
+            "cleanupEligible": false,
+            "isPinned": false
+        },
+        {
+            "tmdbId": 346698,
+            "tvdbId": null,
+            "imdbId": "tt1517268",
+            "title": "Barbie",
+            "year": 2023,
+            "mediaType": "MOVIE",
+            "lifecyclePolicy": "TEMPORARY_TRENDING",
+            "status": "ACTIVE_TRENDING",
+            "keepUntil": "2024-03-15T00:00:00.000Z",
+            "cleanupEligible": false,
+            "isPinned": false
+        },
+        {
+            "tmdbId": 786892,
+            "tvdbId": null,
+            "imdbId": "tt10298840",
+            "title": "Furiosa: A Mad Max Saga",
+            "year": 2024,
+            "mediaType": "MOVIE",
+            "lifecyclePolicy": "TEMPORARY_TRENDING",
+            "status": "ACTIVE_TRENDING",
+            "keepUntil": "2024-08-01T00:00:00.000Z",
+            "cleanupEligible": false,
+            "isPinned": false
+        },
+        {
+            "tmdbId": 1011985,
+            "tvdbId": null,
+            "imdbId": "tt21807222",
+            "title": "Kung Fu Panda 4",
+            "year": 2024,
+            "mediaType": "MOVIE",
+            "lifecyclePolicy": "TEMPORARY_TRENDING",
+            "status": "ACTIVE_TRENDING",
+            "keepUntil": "2024-07-01T00:00:00.000Z",
+            "cleanupEligible": false,
+            "isPinned": false
+        }
+    ]
+}

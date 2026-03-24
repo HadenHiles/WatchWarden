@@ -1,0 +1,32 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "baseUrl": ".",
+        "paths": {
+            "@watchwarden/config": [
+                "../../packages/config/src"
+            ],
+            "@watchwarden/db": [
+                "../../packages/db/src"
+            ],
+            "@watchwarden/integrations": [
+                "../../packages/integrations/src"
+            ],
+            "@watchwarden/scoring": [
+                "../../packages/scoring/src"
+            ],
+            "@watchwarden/types": [
+                "../../packages/types/src"
+            ]
+        }
+    },
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
+}

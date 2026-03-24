@@ -1,0 +1,38 @@
+# ─── Node.js ──────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.cache/
+coverage/
+
+# ─── Next.js ──────────────────────────────────────────────
+.next/
+out/
+
+# ─── Environment ──────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ─── Logs ─────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── pnpm / turbo ─────────────────────────────────────────
+.turbo/
+pnpm-debug.log*
+
+# ─── Editor ───────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# ─── Exports (runtime artifacts) ─────────────────────────
+exports/*.json
+exports/*.yaml
+!exports/samples/
+
+# ─── Test ─────────────────────────────────────────────────
+*.snap

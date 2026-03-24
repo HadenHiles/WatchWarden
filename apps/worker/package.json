@@ -1,0 +1,31 @@
+{
+    "name": "@watchwarden/worker",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Watch Warden — scheduled job worker service",
+    "main": "./dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "dev": "nodemon --watch src --ext ts --exec ts-node -r tsconfig-paths/register src/index.ts",
+        "start": "node dist/index.js",
+        "clean": "rm -rf dist",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint src --ext .ts"
+    },
+    "dependencies": {
+        "@watchwarden/config": "workspace:*",
+        "@watchwarden/db": "workspace:*",
+        "@watchwarden/integrations": "workspace:*",
+        "@watchwarden/scoring": "workspace:*",
+        "@watchwarden/types": "workspace:*",
+        "node-cron": "^3.0.3"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.5",
+        "@types/node-cron": "^3.0.11",
+        "nodemon": "^3.0.2",
+        "ts-node": "^10.9.2",
+        "tsconfig-paths": "^4.2.0",
+        "typescript": "^5.3.3"
+    }
+}

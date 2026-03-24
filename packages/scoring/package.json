@@ -1,0 +1,25 @@
+{
+    "name": "@watchwarden/scoring",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Watch Warden — scoring engine and lifecycle state machine",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "clean": "rm -rf dist",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint src --ext .ts",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@watchwarden/types": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.5",
+        "typescript": "^5.3.3",
+        "vitest": "^1.2.0"
+    }
+}
