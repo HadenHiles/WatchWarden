@@ -6,6 +6,14 @@ import type { SourceAdapter } from "./adapter";
 const logger = createLogger("trakt-adapter");
 
 const TRAKT_BASE = "https://api.trakt.tv";
+const TMDB_BASE = "https://api.themoviedb.org/3";
+const TMDB_ENRICH_BATCH_SIZE = 10;
+
+interface TmdbDetailResult {
+    overview?: string | null;
+    poster_path?: string | null;
+    backdrop_path?: string | null;
+}
 
 interface TraktTrendingMovie {
     watchers: number;
@@ -34,10 +42,12 @@ export class TraktTrendingAdapter implements SourceAdapter {
     readonly sourceName: string;
     private readonly mediaType: "movie" | "show";
     private readonly clientId: string;
+    private readonly tmdbApiKey: string | undefined;
 
-    constructor(config: { mediaType: "movie" | "show"; clientId: string }) {
+    constructor(config: { mediaType: "movie" | "show"; clientId: string; tmdbApiKey?: string }) {
         this.mediaType = config.mediaType;
         this.clientId = config.clientId;
+        this.tmdbApiKey = config.tmdbApiKey;
         this.sourceId = `trakt_trending_${config.mediaType}s`;
         this.sourceName = `Trakt Trending ${config.mediaType === "movie" ? "Movies" : "Shows"}`;
     }
@@ -59,13 +69,52 @@ export class TraktTrendingAdapter implements SourceAdapter {
                 timeout: 10_000,
             });
 
-            return (res.data as Array<TraktTrendingMovie | TraktTrendingShow>).map((item, index) =>
+            const items = (res.data as Array<TraktTrendingMovie | TraktTrendingShow>).map((item, index) =>
                 this.normalize(item, index + 1)
             );
+            return this.enrichWithTmdb(items);
         } catch (err) {
             logger.error("Trakt trending fetch failed", { source: this.sourceId, error: String(err) });
             throw err;
         }
+    }
+
+    private async enrichWithTmdb(items: SourceTrendItem[]): Promise<SourceTrendItem[]> {
+        if (!this.tmdbApiKey) return items;
+
+        const enriched = [...items];
+
+        for (let i = 0; i < enriched.length; i += TMDB_ENRICH_BATCH_SIZE) {
+            await Promise.all(
+                enriched.slice(i, i + TMDB_ENRICH_BATCH_SIZE).map(async (item, batchIndex) => {
+                    if (!item.tmdbId) return;
+                    try {
+                        const endpoint =
+                            item.mediaType === "MOVIE"
+                                ? `${TMDB_BASE}/movie/${item.tmdbId}`
+                                : `${TMDB_BASE}/tv/${item.tmdbId}`;
+                        const res = await axios.get<TmdbDetailResult>(endpoint, {
+                            params: { api_key: this.tmdbApiKey, language: "en-US" },
+                            timeout: 8_000,
+                        });
+                        enriched[i + batchIndex] = {
+                            ...item,
+                            overview: res.data.overview ?? item.overview,
+                            posterPath: res.data.poster_path ?? item.posterPath,
+                            backdropPath: res.data.backdrop_path ?? item.backdropPath,
+                        };
+                    } catch (err) {
+                        logger.warn("TMDB enrichment failed for Trakt item", {
+                            tmdbId: item.tmdbId,
+                            title: item.title,
+                            error: String(err),
+                        });
+                    }
+                })
+            );
+        }
+
+        return enriched;
     }
 
     private normalize(item: TraktTrendingMovie | TraktTrendingShow, rank: number): SourceTrendItem {

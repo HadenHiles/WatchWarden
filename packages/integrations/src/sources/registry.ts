@@ -24,8 +24,8 @@ export function buildSourceAdapters(env: {
     }
 
     if (env.TRAKT_CLIENT_ID) {
-        adapters.push(new TraktTrendingAdapter({ mediaType: "movie", clientId: env.TRAKT_CLIENT_ID }));
-        adapters.push(new TraktTrendingAdapter({ mediaType: "show", clientId: env.TRAKT_CLIENT_ID }));
+        adapters.push(new TraktTrendingAdapter({ mediaType: "movie", clientId: env.TRAKT_CLIENT_ID, tmdbApiKey: env.TMDB_API_KEY }));
+        adapters.push(new TraktTrendingAdapter({ mediaType: "show", clientId: env.TRAKT_CLIENT_ID, tmdbApiKey: env.TMDB_API_KEY }));
         logger.info("Trakt adapters registered");
     }
 
