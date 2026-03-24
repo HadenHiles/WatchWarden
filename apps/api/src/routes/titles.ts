@@ -20,7 +20,7 @@ const listQuerySchema = z.object({
 
 // GET /titles
 titlesRouter.get("/", validateQuery(listQuerySchema), async (req, res) => {
-    const q = req.query as z.infer<typeof listQuerySchema>;
+    const q = req.query as unknown as z.infer<typeof listQuerySchema>;
 
     const where = {
         ...(q.mediaType ? { mediaType: q.mediaType } : {}),

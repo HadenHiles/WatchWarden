@@ -68,7 +68,7 @@ export class TmdbTrendingAdapter implements SourceAdapter {
                 timeout: 10_000,
             });
 
-            return res.data.results.map((item, index) => this.normalize(item, index + 1));
+            return res.data.results.map((item: TmdbTrendingResult, index: number) => this.normalize(item, index + 1));
         } catch (err) {
             logger.error("TMDB trending fetch failed", { source: this.sourceId, error: String(err) });
             throw err;

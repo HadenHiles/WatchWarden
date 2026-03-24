@@ -1,4 +1,4 @@
-import type { TautulliHistoryRow, TautulliPopularItem, NormalizedWatchSignal } from "@watchwarden/types";
+import type { TautulliHistoryRow, NormalizedWatchSignal } from "@watchwarden/types";
 
 const RECENCY_HALF_LIFE_DAYS = 7; // score halves every 7 days
 
@@ -42,8 +42,7 @@ function getCompletionRate(rows: TautulliHistoryRow[]): number {
  * NormalizedWatchSignal.
  */
 export function transformHistoryToSignal(
-    rows: TautulliHistoryRow[],
-    popularItem?: TautulliPopularItem
+    rows: TautulliHistoryRow[]
 ): NormalizedWatchSignal {
     const guids = parseGuids(rows[0]?.guids);
     const uniqueViewerIds = new Set(rows.map((r) => r.user_id));

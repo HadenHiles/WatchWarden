@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosError } from "axios";
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from "axios";
 import { createLogger } from "@watchwarden/config";
 import type {
     JellyseerrSearchResult,
@@ -30,7 +30,7 @@ export class JellyseerrClient {
         });
 
         // Log outgoing requests in debug mode
-        this.http.interceptors.request.use((req) => {
+        this.http.interceptors.request.use((req: InternalAxiosRequestConfig) => {
             logger.debug("Jellyseerr request", { method: req.method?.toUpperCase(), url: req.url });
             return req;
         });

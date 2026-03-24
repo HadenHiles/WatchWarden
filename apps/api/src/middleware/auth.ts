@@ -13,7 +13,7 @@ declare module "express-session" {
  * Middleware: requires a valid admin session OR a valid Bearer API secret.
  * Allows service-to-service calls (worker → api) using API_SECRET.
  */
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+export function requireAuth(req: Request, _res: Response, next: NextFunction) {
     // Allow Bearer token for service-to-service calls
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith("Bearer ")) {

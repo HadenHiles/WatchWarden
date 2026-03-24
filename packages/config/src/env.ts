@@ -67,7 +67,7 @@ export function validateEnv<T extends z.ZodTypeAny>(schema: T): z.infer<T> {
     const result = schema.safeParse(process.env);
     if (!result.success) {
         const issues = result.error.issues
-            .map((i) => `  • ${i.path.join(".")}: ${i.message}`)
+            .map((i: { path: (string | number)[]; message: string }) => `  • ${i.path.join(".")}: ${i.message}`)
             .join("\n");
         console.error(`[Watch Warden] Environment validation failed:\n${issues}`);
         process.exit(1);

@@ -15,7 +15,7 @@ const listQuerySchema = z.object({
 
 // GET /audit
 auditRouter.get("/", validateQuery(listQuerySchema), async (req, res) => {
-    const q = req.query as z.infer<typeof listQuerySchema>;
+    const q = req.query as unknown as z.infer<typeof listQuerySchema>;
 
     const where = {
         ...(q.action ? { action: { contains: q.action } } : {}),

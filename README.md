@@ -4,7 +4,7 @@ A production-ready, self-hosted Docker application for orchestrating home media 
 
 ## Architecture Overview
 
-```
+```text
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  apps/web   │────▶│  apps/api   │────▶│  apps/worker│
 │  Next.js 14 │     │  Express.js │     │  node-cron  │
@@ -29,7 +29,7 @@ Export targets:
 
 ### Monorepo Structure
 
-```
+```text
 WatchWarden/
 ├── apps/
 │   ├── api/         Express.js REST API
@@ -64,6 +64,7 @@ cp .env.example .env
 ```
 
 Edit `.env` with your values — at minimum set:
+
 - `POSTGRES_PASSWORD` — any secure random string
 - `API_SECRET` — random 32+ char string
 - `ADMIN_PASSWORD_HASH` — bcrypt hash of your chosen admin password
@@ -82,8 +83,9 @@ docker compose up -d
 ```
 
 Services:
-- Web UI: http://localhost:3000
-- API: http://localhost:4000
+
+- Web UI: <http://localhost:3000>
+- API: <http://localhost:4000>
 - PostgreSQL: localhost:5432
 
 ### 3. Run migrations and seed (first time)
@@ -121,7 +123,7 @@ See [.env.example](.env.example) for all available variables with descriptions.
 Key variables:
 
 | Variable | Purpose |
-|---|---|
+| --- | --- |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `API_SECRET` | Bearer token for service-to-service calls |
 | `ADMIN_PASSWORD_HASH` | bcrypt hash of the single admin password |
@@ -138,7 +140,7 @@ Key variables:
 
 Watch Warden scores every candidate title using a weighted formula:
 
-```
+```text
 finalScore = (
   externalTrendScore × 0.45 +
   localInterestScore × 0.35 +
@@ -148,17 +150,20 @@ finalScore = (
 ```
 
 **Score components:**
+
 - `externalTrendScore` (0–1): Normalized from TMDB popularity or Trakt watchers
 - `localInterestScore` (0–1): Derived from Tautulli watch history (recency, completion, household engagement)
 - `freshnessScore` (0–1): Decays over 14 days since last trend snapshot
 - `editorialBoost` (0–1): Manual admin editorial override
 
 **Hard rules** (exclusions):
+
 - Title is already in the Plex library
 - Title already has a pending Jellyseerr request
 - Title was permanently rejected
 
 **Penalties** (multipliers):
+
 - Stale trend (>14 days old): ×0.6
 - Recently rejected (<30 days): decays from ×0.5 → ×1.0
 
@@ -168,7 +173,7 @@ All weights are configurable via Settings → Scoring Weights.
 
 Titles flow through a lifecycle state:
 
-```
+```text
 CANDIDATE → SUGGESTED → APPROVED → REQUESTED → AVAILABLE → ACTIVE_TRENDING
                 ↓                                                   ↓
             REJECTED                                        CLEANUP_ELIGIBLE → EXPIRED
@@ -179,6 +184,7 @@ Any state → PINNED (overrides cleanup, never expires)
 ```
 
 **Lifecycle policies:**
+
 - `PERMANENT` — never eligible for cleanup
 - `TEMPORARY_TRENDING` — eligible when score drops + trend is stale
 - `WATCH_AND_EXPIRE` — eligible after household has watched
@@ -187,7 +193,7 @@ Any state → PINNED (overrides cleanup, never expires)
 ## Worker Jobs
 
 | Job | Default Schedule | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `trend-sync` | Every 6 hours | Fetch trending from TMDB/Trakt, upsert Titles + snapshots |
 | `tautulli-sync` | Every 4 hours | Fetch 30-day watch history, upsert LocalWatchSignals |
 | `scoring` | Every 2 hours | Score all candidates, upsert Suggestions |
@@ -201,11 +207,12 @@ Jobs can be manually triggered from the Admin → Jobs page.
 ## API Routes
 
 All routes (except `/health`, `/auth/login`) require authentication via:
+
 - Session cookie (web dashboard), OR
 - `Authorization: Bearer <API_SECRET>` header (service-to-service)
 
 | Method | Path | Description |
-|---|---|---|
+| --- | --- | --- |
 | GET | `/health` | Health check |
 | POST | `/auth/login` | Admin login |
 | POST | `/auth/logout` | Logout |
@@ -230,6 +237,7 @@ Watch Warden exports JSON files readable by Kometa (formerly PMM) for building d
 **Default export location:** `./exports/` (configurable with `EXPORT_OUTPUT_DIR`)
 
 **Export types:**
+
 - `active_trending_movies.json` — movies currently trending
 - `active_trending_shows.json` — shows currently trending
 - `cleanup_eligible_movies.json` — movies flagged for cleanup
@@ -266,6 +274,7 @@ pnpm --filter @watchwarden/scoring test:watch
 ```
 
 Tests cover:
+
 - Scoring engine: weighted formula, rule exclusions, penalties
 - Lifecycle state machine: all transitions, edge cases (PERMANENT policy, PINNED override)
 
@@ -294,7 +303,7 @@ docker compose up -d
 ## Tech Stack
 
 | Component | Technology |
-|---|---|
+| --- | --- |
 | Monorepo | pnpm workspaces + Turborepo |
 | API | Express.js 4 + TypeScript |
 | Worker | node-cron 3 + TypeScript |

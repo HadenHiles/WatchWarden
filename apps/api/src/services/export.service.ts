@@ -3,7 +3,7 @@ import path from "path";
 import { prisma } from "@watchwarden/db";
 import { createLogger } from "@watchwarden/config";
 import type { KometaExportFile, KometaExportItem } from "@watchwarden/types";
-import type { Title } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 const logger = createLogger("export-service");
 
@@ -86,7 +86,7 @@ export class ExportService {
         return { type: spec.type, itemCount: items.length, filePath };
     }
 
-    private toExportItem(t: Title): KometaExportItem {
+    private toExportItem(t: Prisma.TitleGetPayload<Record<string, never>>): KometaExportItem {
         return {
             tmdbId: t.tmdbId,
             tvdbId: t.tvdbId,
