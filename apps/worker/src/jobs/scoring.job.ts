@@ -16,7 +16,7 @@ export async function scoringJob(): Promise<void> {
     // Load scoring weights from settings
     const weightsSetting = await prisma.appSetting.findUnique({ where: { key: "score.weights" } });
     const weights: ScoreWeights = weightsSetting
-        ? (weightsSetting.value as ScoreWeights)
+        ? (weightsSetting.value as unknown as ScoreWeights)
         : DEFAULT_WEIGHTS;
 
     const exclusionsSetting = await prisma.appSetting.findUnique({ where: { key: "exclusions" } });
