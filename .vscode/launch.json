@@ -6,7 +6,8 @@
             "name": "Next.js (web)",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/next",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/next",
+            "runtimeArgs": [],
             "args": [
                 "dev",
                 "-p",
