@@ -1,4 +1,4 @@
-import { prisma } from "@watchwarden/db";
+import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { buildSourceAdapters } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { SourceTrendItem } from "@watchwarden/types";
@@ -6,9 +6,10 @@ import type { SourceTrendItem } from "@watchwarden/types";
 const logger = createLogger("trend-sync-job");
 
 export async function trendSyncJob(): Promise<void> {
+    const { sources } = await getIntegrationConfig();
     const adapters = buildSourceAdapters({
-        TMDB_API_KEY: process.env.TMDB_API_KEY,
-        TRAKT_CLIENT_ID: process.env.TRAKT_CLIENT_ID,
+        TMDB_API_KEY: sources.tmdbApiKey ?? undefined,
+        TRAKT_CLIENT_ID: sources.traktClientId ?? undefined,
     });
 
     if (adapters.length === 0) {

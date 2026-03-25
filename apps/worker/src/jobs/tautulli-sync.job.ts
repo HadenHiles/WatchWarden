@@ -1,21 +1,20 @@
-import { prisma } from "@watchwarden/db";
+import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { TautulliClient, aggregateHistoryToSignals } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 
 const logger = createLogger("tautulli-sync-job");
 
-function buildClient(): TautulliClient | null {
-    const baseUrl = process.env.TAUTULLI_BASE_URL;
-    const apiKey = process.env.TAUTULLI_API_KEY;
-    if (!baseUrl || !apiKey) {
+async function buildClient(): Promise<TautulliClient | null> {
+    const { tautulli } = await getIntegrationConfig();
+    if (!tautulli.baseUrl || !tautulli.apiKey) {
         logger.warn("Tautulli not configured — skipping sync");
         return null;
     }
-    return new TautulliClient({ baseUrl, apiKey });
+    return new TautulliClient({ baseUrl: tautulli.baseUrl, apiKey: tautulli.apiKey });
 }
 
 export async function tautulliSyncJob(): Promise<void> {
-    const client = buildClient();
+    const client = await buildClient();
     if (!client) return;
 
     const healthy = await client.healthCheck();

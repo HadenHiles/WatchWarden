@@ -1,4 +1,4 @@
-import { prisma } from "@watchwarden/db";
+import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { JellyseerrClient } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 
@@ -6,18 +6,17 @@ const logger = createLogger("library-sync-job");
 
 const JELLYSEERR_STATUS_AVAILABLE = 5;
 
-function buildClient(): JellyseerrClient | null {
-    const baseUrl = process.env.JELLYSEERR_BASE_URL;
-    const apiKey = process.env.JELLYSEERR_API_KEY;
-    if (!baseUrl || !apiKey) {
+async function buildClient(): Promise<JellyseerrClient | null> {
+    const { jellyseerr } = await getIntegrationConfig();
+    if (!jellyseerr.baseUrl || !jellyseerr.apiKey) {
         logger.warn("Jellyseerr not configured — skipping library sync");
         return null;
     }
-    return new JellyseerrClient({ baseUrl, apiKey });
+    return new JellyseerrClient({ baseUrl: jellyseerr.baseUrl, apiKey: jellyseerr.apiKey });
 }
 
 export async function librarySyncJob(): Promise<void> {
-    const client = buildClient();
+    const client = await buildClient();
     if (!client) return;
 
     // Fetch all requests (paginated)

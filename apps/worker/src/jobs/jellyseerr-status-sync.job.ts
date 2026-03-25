@@ -1,4 +1,4 @@
-import { prisma } from "@watchwarden/db";
+import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { JellyseerrService } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 
@@ -16,18 +16,17 @@ function mapJellyseerrStatus(code: number): string {
     }
 }
 
-function buildService(): JellyseerrService | null {
-    const baseUrl = process.env.JELLYSEERR_BASE_URL;
-    const apiKey = process.env.JELLYSEERR_API_KEY;
-    if (!baseUrl || !apiKey) {
+async function buildService(): Promise<JellyseerrService | null> {
+    const { jellyseerr } = await getIntegrationConfig();
+    if (!jellyseerr.baseUrl || !jellyseerr.apiKey) {
         logger.warn("Jellyseerr not configured — skipping status sync");
         return null;
     }
-    return new JellyseerrService({ baseUrl, apiKey });
+    return new JellyseerrService({ baseUrl: jellyseerr.baseUrl, apiKey: jellyseerr.apiKey });
 }
 
 export async function jellyseerrStatusSyncJob(): Promise<void> {
-    const service = buildService();
+    const service = await buildService();
     if (!service) return;
 
     const pendingRequests = await prisma.requestRecord.findMany({
