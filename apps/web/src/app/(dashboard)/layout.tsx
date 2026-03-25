@@ -6,7 +6,7 @@ import { Header } from "@/components/Header";
 async function isSetupComplete(): Promise<boolean> {
     try {
         const res = await fetch(
-            `${process.env.API_URL ?? "http://localhost:4000"}/settings/setup-status`,
+            `${process.env.API_URL ?? "http://localhost:4000"}/auth/setup-status`,
             {
                 headers: { Authorization: `Bearer ${process.env.API_SECRET ?? ""}` },
                 cache: "no-store",

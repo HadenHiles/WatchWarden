@@ -2,20 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:4000";
+const API_SECRET = process.env.API_SECRET ?? "";
+
+/** Gets the admin username — from DB (set during onboarding) or env fallback. */
+async function getAdminUsername(): Promise<string> {
+    try {
+        const res = await fetch(`${API_BASE}/auth/admin-username`, { cache: "no-store" });
+        const json = await res.json();
+        if (json.data?.username) return json.data.username;
+    } catch {
+        // fall through to env
+    }
+    return process.env.ADMIN_USERNAME ?? "admin";
+}
 
 export async function POST(request: NextRequest) {
     const body = await request.json();
 
-    // Inject the admin username server-side — the UI only collects the password
-    const loginBody = {
-        username: process.env.ADMIN_USERNAME ?? "admin",
-        password: body.password,
-    };
+    const username = await getAdminUsername();
+    const loginBody = { username, password: body.password };
 
-    // Forward login to the backend API
     const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_SECRET}` },
         body: JSON.stringify(loginBody),
     });
 
@@ -24,7 +33,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(error, { status: res.status });
     }
 
-    // Set iron-session
     const session = await getSession();
     session.authenticated = true;
     await session.save();

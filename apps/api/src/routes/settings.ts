@@ -6,19 +6,12 @@ import { validateBody } from "../middleware/validation";
 
 export const settingsRouter = Router();
 
-// GET /settings/setup-status — returns whether the initial onboarding wizard has been completed
-settingsRouter.get("/setup-status", async (_req, res) => {
-    const setting = await prisma.appSetting.findUnique({ where: { key: "setup.complete" } });
-    res.json({ success: true, data: { complete: setting?.value === true } });
-});
-
-// POST /settings/test-connection — tests connectivity to Tautulli or Jellyseerr
+// POST /settings/test-connection — tests connectivity to Tautulli or Jellyseerr (used from settings page)
 settingsRouter.post("/test-connection", async (req, res) => {
     const { type, baseUrl, apiKey } = req.body as {
         type: string;
         baseUrl: string;
         apiKey: string;
-        botUserId?: number;
     };
 
     if (!type || !baseUrl || !apiKey) {
@@ -53,11 +46,14 @@ settingsRouter.post("/test-connection", async (req, res) => {
     return res.status(400).json({ success: false, error: `Unknown integration type: ${type}` });
 });
 
-// GET /settings — returns all settings grouped by category
+// Internal-only keys that should never be returned to the UI
+const INTERNAL_KEYS = new Set(["setup.complete", "admin.credentials"]);
+
+// GET /settings — returns all settings grouped by category (excludes internal keys)
 settingsRouter.get("/", async (_req, res) => {
     const settings = await prisma.appSetting.findMany({ orderBy: { category: "asc" } });
     const grouped = settings.reduce<Record<string, unknown>>((acc, s) => {
-        acc[s.key] = s.value;
+        if (!INTERNAL_KEYS.has(s.key)) acc[s.key] = s.value;
         return acc;
     }, {});
     res.json({ success: true, data: grouped });

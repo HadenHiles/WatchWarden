@@ -1,6 +1,4 @@
-import { requireAuth } from "@/lib/auth";
-
-export default async function SetupLayout({ children }: { children: React.ReactNode }) {
-    await requireAuth();
+// No auth required — onboarding runs before any admin account exists.
+export default function SetupLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
 }

@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, ChevronRight, ChevronLeft, Loader2, Wifi, WifiOff } from "lucide-react";
-import { apiUrl } from "@/lib/api-client";
+import { CheckCircle, ChevronRight, ChevronLeft, Loader2, Wifi, WifiOff, Eye, EyeOff } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+interface AdminForm {
+    username: string;
+    password: string;
+    confirm: string;
+}
 
 interface TautulliForm {
     baseUrl: string;
@@ -42,11 +47,12 @@ interface TestStatus {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const STEPS = ["welcome", "tautulli", "jellyseerr", "sources", "schedules", "done"] as const;
+const STEPS = ["welcome", "admin", "tautulli", "jellyseerr", "sources", "schedules", "done"] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
     welcome: "Welcome",
+    admin: "Admin Account",
     tautulli: "Tautulli",
     jellyseerr: "Jellyseerr",
     sources: "Trend Sources",
@@ -79,25 +85,15 @@ const INPUT_CLS =
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function saveSetting(key: string, value: unknown, category: string) {
-    await fetch(apiUrl(`/settings/${encodeURIComponent(key)}`), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value, category }),
-        credentials: "include",
-    });
-}
-
 async function testConnection(
     type: string,
     baseUrl: string,
     apiKey: string,
 ): Promise<{ success: boolean; message?: string }> {
-    const res = await fetch(apiUrl("/settings/test-connection"), {
+    const res = await fetch("/api/setup/test-connection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type, baseUrl, apiKey }),
-        credentials: "include",
     });
     return res.json();
 }
@@ -171,6 +167,10 @@ export function OnboardingWizard() {
     const [stepIdx, setStepIdx] = useState(0);
     const currentStep = STEPS[stepIdx];
 
+    const [admin, setAdmin] = useState<AdminForm>({ username: "admin", password: "", confirm: "" });
+    const [adminErrors, setAdminErrors] = useState<{ password?: string; confirm?: string }>({});
+    const [showPassword, setShowPassword] = useState(false);
+
     const [tautulli, setTautulli] = useState<TautulliForm>({ baseUrl: "", apiKey: "" });
     const [tautulliTest, setTautulliTest] = useState<TestStatus>({ state: null, message: "" });
 
@@ -181,38 +181,64 @@ export function OnboardingWizard() {
     const [schedules, setSchedules] = useState<SchedulesForm>(DEFAULT_SCHEDULES);
 
     const [saving, setSaving] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+
+    function validateAdmin(): boolean {
+        const errs: typeof adminErrors = {};
+        if (admin.password.length < 8) errs.password = "Password must be at least 8 characters";
+        if (admin.password !== admin.confirm) errs.confirm = "Passwords do not match";
+        setAdminErrors(errs);
+        return Object.keys(errs).length === 0;
+    }
 
     async function handleNext() {
-        setSaving(true);
-        try {
-            if (currentStep === "tautulli" && (tautulli.baseUrl || tautulli.apiKey)) {
-                await saveSetting("tautulli", tautulli, "integrations");
+        if (currentStep === "admin" && !validateAdmin()) return;
+
+        if (currentStep === "schedules") {
+            // Final step — submit everything at once
+            setSaving(true);
+            setSubmitError(null);
+            try {
+                const payload = {
+                    admin: { username: admin.username, password: admin.password },
+                    ...(tautulli.baseUrl || tautulli.apiKey ? { tautulli } : {}),
+                    ...(jellyseerr.baseUrl || jellyseerr.apiKey
+                        ? {
+                              jellyseerr: {
+                                  ...jellyseerr,
+                                  botUserId: parseInt(jellyseerr.botUserId, 10) || 2,
+                              },
+                          }
+                        : {}),
+                    ...(sources.tmdbApiKey || sources.traktClientId ? { sources } : {}),
+                    refreshIntervals: schedules,
+                };
+
+                const res = await fetch("/api/setup/submit", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+
+                const json = await res.json();
+                if (!res.ok) {
+                    setSubmitError(json.error ?? "Setup failed — please try again");
+                    return;
+                }
+
+                setStepIdx((i) => i + 1); // go to done
+            } finally {
+                setSaving(false);
             }
-            if (currentStep === "jellyseerr" && (jellyseerr.baseUrl || jellyseerr.apiKey)) {
-                await saveSetting(
-                    "jellyseerr",
-                    {
-                        ...jellyseerr,
-                        botUserId: parseInt(jellyseerr.botUserId, 10) || 2,
-                    },
-                    "integrations",
-                );
-            }
-            if (currentStep === "sources" && (sources.tmdbApiKey || sources.traktClientId)) {
-                await saveSetting("sources", sources, "integrations");
-            }
-            if (currentStep === "schedules") {
-                await saveSetting("refreshIntervals", schedules, "scheduler");
-            }
-            if (currentStep === "done") {
-                await saveSetting("setup.complete", true, "system");
-                router.push("/dashboard/suggestions/movies");
-                return;
-            }
-            setStepIdx((i) => i + 1);
-        } finally {
-            setSaving(false);
+            return;
         }
+
+        if (currentStep === "done") {
+            router.push("/login");
+            return;
+        }
+
+        setStepIdx((i) => i + 1);
     }
 
     async function handleTestTautulli() {
@@ -227,7 +253,7 @@ export function OnboardingWizard() {
         setJellyseerrTest({ state: result.success ? "ok" : "fail", message: result.message ?? "" });
     }
 
-    const configSteps = (["tautulli", "jellyseerr", "sources", "schedules"] as const).map(
+    const configSteps = (["admin", "tautulli", "jellyseerr", "sources", "schedules"] as const).map(
         (s) => STEP_LABELS[s],
     );
     const currentConfigIdx = configSteps.indexOf(STEP_LABELS[currentStep]);
@@ -270,24 +296,17 @@ export function OnboardingWizard() {
                         <>
                             <h1 className="text-2xl font-bold text-white mb-2">Welcome to Watch Warden</h1>
                             <p className="text-gray-400 mb-6 text-sm leading-relaxed">
-                                Let&#39;s get your integrations configured. Every step is optional — you can skip anything and update
-                                it later from the Settings page.
+                                Let&#39;s get everything set up. You&#39;ll create your admin account and configure
+                                your integrations. Every step after admin is optional — skip anything and update it
+                                later from Settings.
                             </p>
                             <ul className="space-y-2.5 mb-6">
                                 {[
-                                    {
-                                        label: "Tautulli",
-                                        desc: "Local watch history & engagement signals",
-                                    },
+                                    { label: "Admin Account", desc: "Username and password for the dashboard" },
+                                    { label: "Tautulli", desc: "Local watch history & engagement signals" },
                                     { label: "Jellyseerr", desc: "Automated media requests" },
-                                    {
-                                        label: "Trend Sources",
-                                        desc: "TMDB & Trakt API keys for trending data",
-                                    },
-                                    {
-                                        label: "Schedules",
-                                        desc: "Job cron schedules (pre-filled with defaults)",
-                                    },
+                                    { label: "Trend Sources", desc: "TMDB & Trakt API keys for trending data" },
+                                    { label: "Schedules", desc: "Job cron schedules (pre-filled with defaults)" },
                                 ].map(({ label, desc }) => (
                                     <li key={label} className="flex items-start gap-3 text-sm text-gray-300">
                                         <ChevronRight className="w-4 h-4 mt-0.5 text-brand-400 flex-shrink-0" />
@@ -298,12 +317,14 @@ export function OnboardingWizard() {
                                 ))}
                             </ul>
                             <div className="rounded-lg border border-yellow-700/50 bg-yellow-900/20 p-3 text-xs text-yellow-300 mb-6 leading-relaxed">
-                                <strong>Accessing from a remote IP?</strong> If you&#39;re connecting over Tailscale or your
-                                LAN (e.g.{" "}
+                                <strong>Accessing from a remote IP?</strong> If you&#39;re connecting over Tailscale
+                                or your LAN (e.g.{" "}
                                 <code className="text-yellow-200 bg-yellow-900/40 px-1 rounded">192.168.x.x</code>),
-                                update <code className="text-yellow-200 bg-yellow-900/40 px-1 rounded">NEXTAUTH_URL</code>{" "}
-                                in your <code className="text-yellow-200 bg-yellow-900/40 px-1 rounded">.env</code> to
-                                match that address before logging in from another device.
+                                make sure{" "}
+                                <code className="text-yellow-200 bg-yellow-900/40 px-1 rounded">NEXTAUTH_URL</code>{" "}
+                                in your{" "}
+                                <code className="text-yellow-200 bg-yellow-900/40 px-1 rounded">.env</code> matches
+                                that address.
                             </div>
                             <button
                                 onClick={() => setStepIdx(1)}
@@ -315,13 +336,76 @@ export function OnboardingWizard() {
                         </>
                     )}
 
+                    {/* ── Admin Account ────────────────────────────────────── */}
+                    {currentStep === "admin" && (
+                        <>
+                            <h2 className="text-xl font-bold text-white mb-1">Admin Account</h2>
+                            <p className="text-gray-400 text-sm mb-5 leading-relaxed">
+                                Create the administrator account you&#39;ll use to log in to the dashboard.
+                            </p>
+                            <div className="space-y-4">
+                                <Field label="Username">
+                                    <input
+                                        type="text"
+                                        value={admin.username}
+                                        onChange={(e) => setAdmin((f) => ({ ...f, username: e.target.value }))}
+                                        placeholder="admin"
+                                        autoComplete="username"
+                                        className={INPUT_CLS}
+                                    />
+                                </Field>
+                                <Field label="Password">
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+                                            value={admin.password}
+                                            onChange={(e) => {
+                                                setAdmin((f) => ({ ...f, password: e.target.value }));
+                                                setAdminErrors((e2) => ({ ...e2, password: undefined }));
+                                            }}
+                                            placeholder="At least 8 characters"
+                                            autoComplete="new-password"
+                                            className={INPUT_CLS + " pr-10"}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword((v) => !v)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                        >
+                                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                    {adminErrors.password && (
+                                        <p className="text-xs text-red-400 mt-1">{adminErrors.password}</p>
+                                    )}
+                                </Field>
+                                <Field label="Confirm Password">
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        value={admin.confirm}
+                                        onChange={(e) => {
+                                            setAdmin((f) => ({ ...f, confirm: e.target.value }));
+                                            setAdminErrors((e2) => ({ ...e2, confirm: undefined }));
+                                        }}
+                                        placeholder="Repeat password"
+                                        autoComplete="new-password"
+                                        className={INPUT_CLS}
+                                    />
+                                    {adminErrors.confirm && (
+                                        <p className="text-xs text-red-400 mt-1">{adminErrors.confirm}</p>
+                                    )}
+                                </Field>
+                            </div>
+                        </>
+                    )}
+
                     {/* ── Tautulli ─────────────────────────────────────────── */}
                     {currentStep === "tautulli" && (
                         <>
                             <h2 className="text-xl font-bold text-white mb-1">Tautulli</h2>
                             <p className="text-gray-400 text-sm mb-5 leading-relaxed">
-                                Provides local watch history and engagement signals for scoring. Skip if you don&#39;t use
-                                Tautulli.
+                                Provides local watch history and engagement signals for scoring. Skip if you
+                                don&#39;t use Tautulli.
                             </p>
                             <div className="space-y-4">
                                 <Field label="Base URL" hint="e.g. http://192.168.8.3:8181">
@@ -363,8 +447,8 @@ export function OnboardingWizard() {
                         <>
                             <h2 className="text-xl font-bold text-white mb-1">Jellyseerr</h2>
                             <p className="text-gray-400 text-sm mb-5 leading-relaxed">
-                                Used to submit approved media requests and sync their status. Skip if you don&#39;t use
-                                Jellyseerr.
+                                Used to submit approved media requests and sync their status. Skip if you
+                                don&#39;t use Jellyseerr.
                             </p>
                             <div className="space-y-4">
                                 <Field label="Base URL" hint="e.g. http://192.168.8.3:5055">
@@ -423,10 +507,7 @@ export function OnboardingWizard() {
                                 API credentials for external trending data. Both are free and optional.
                             </p>
                             <div className="space-y-4">
-                                <Field
-                                    label="TMDB API Key"
-                                    hint="Free at themoviedb.org → Settings → API"
-                                >
+                                <Field label="TMDB API Key" hint="Free at themoviedb.org → Settings → API">
                                     <input
                                         type="password"
                                         value={sources.tmdbApiKey}
@@ -480,6 +561,11 @@ export function OnboardingWizard() {
                                     </div>
                                 ))}
                             </div>
+                            {submitError && (
+                                <p className="mt-4 text-sm text-red-400 rounded-lg bg-red-900/20 border border-red-800 px-3 py-2">
+                                    {submitError}
+                                </p>
+                            )}
                         </>
                     )}
 
@@ -492,9 +578,13 @@ export function OnboardingWizard() {
                             <h2 className="text-xl font-bold text-white text-center mb-2">
                                 You&#39;re all set!
                             </h2>
-                            <p className="text-gray-400 text-sm text-center mb-8 leading-relaxed">
-                                Your integrations are configured. You can update any of these settings at any time from
-                                the Settings page in the sidebar.
+                            <p className="text-gray-400 text-sm text-center mb-2 leading-relaxed">
+                                Your account and integrations are configured. Sign in with the credentials you just
+                                created.
+                            </p>
+                            <p className="text-gray-500 text-xs text-center mb-8">
+                                Username:{" "}
+                                <span className="text-gray-300 font-mono">{admin.username}</span>
                             </p>
                         </>
                     )}
@@ -514,16 +604,21 @@ export function OnboardingWizard() {
                             )}
                             <button
                                 onClick={handleNext}
-                                disabled={saving}
+                                disabled={saving || (currentStep === "admin" && !admin.username)}
                                 className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 font-semibold transition-colors disabled:opacity-50 text-sm"
                             >
                                 {saving ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : currentStep === "done" ? (
-                                    "Go to Dashboard"
+                                    "Go to Login"
+                                ) : currentStep === "schedules" ? (
+                                    <>
+                                        Finish Setup
+                                        <ChevronRight className="w-4 h-4" />
+                                    </>
                                 ) : (
                                     <>
-                                        {currentStep === "schedules" ? "Finish" : "Next"}
+                                        Next
                                         <ChevronRight className="w-4 h-4" />
                                     </>
                                 )}
@@ -535,3 +630,5 @@ export function OnboardingWizard() {
         </div>
     );
 }
+
+
