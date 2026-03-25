@@ -200,9 +200,8 @@ export default function SettingsPage() {
                                                     setValues((v) => ({ ...v, [compoundKey]: e.target.value }))
                                                 }
                                                 placeholder={placeholder}
-                                                className={`rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500 ${
-                                                    type === "number" ? "w-32" : "w-56"
-                                                } ${type === "text" && key === "refreshIntervals" ? "font-mono text-xs" : ""}`}
+                                                className={`rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500 ${type === "number" ? "w-32" : "w-56"
+                                                    } ${type === "text" && key === "refreshIntervals" ? "font-mono text-xs" : ""}`}
                                                 step={type === "number" ? "0.01" : undefined}
                                             />
                                         )}

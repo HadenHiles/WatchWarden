@@ -154,9 +154,8 @@ function TestButton({
             </button>
             {message && (
                 <span
-                    className={`text-xs ${
-                        state === "ok" ? "text-green-400" : state === "fail" ? "text-red-400" : "text-gray-400"
-                    }`}
+                    className={`text-xs ${state === "ok" ? "text-green-400" : state === "fail" ? "text-red-400" : "text-gray-400"
+                        }`}
                 >
                     {message}
                 </span>
@@ -253,13 +252,12 @@ export function OnboardingWizard() {
                             {configSteps.map((label, i) => (
                                 <div
                                     key={label}
-                                    className={`h-1 flex-1 rounded-full transition-colors ${
-                                        i < currentConfigIdx
+                                    className={`h-1 flex-1 rounded-full transition-colors ${i < currentConfigIdx
                                             ? "bg-brand-500"
                                             : i === currentConfigIdx
-                                              ? "bg-brand-400"
-                                              : "bg-gray-700"
-                                    }`}
+                                                ? "bg-brand-400"
+                                                : "bg-gray-700"
+                                        }`}
                                 />
                             ))}
                         </div>
