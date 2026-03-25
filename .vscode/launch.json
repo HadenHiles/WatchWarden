@@ -7,10 +7,16 @@
             "type": "node",
             "request": "launch",
             "program": "${workspaceFolder}/node_modules/.bin/next",
-            "args": ["dev", "-p", "3000"],
+            "args": [
+                "dev",
+                "-p",
+                "3000"
+            ],
             "cwd": "${workspaceFolder}/apps/web",
             "envFile": "${workspaceFolder}/.env",
-            "env": { "NODE_ENV": "development" },
+            "env": {
+                "NODE_ENV": "development"
+            },
             "console": "integratedTerminal",
             "serverReadyAction": {
                 "pattern": "Local:\\s+(https?://\\S+)",
@@ -25,10 +31,14 @@
             "request": "launch",
             "runtimeExecutable": "node",
             "runtimeArgs": [
-                "--require", "ts-node/register",
-                "--require", "tsconfig-paths/register"
+                "--require",
+                "ts-node/register",
+                "--require",
+                "tsconfig-paths/register"
             ],
-            "args": ["${workspaceFolder}/apps/api/src/index.ts"],
+            "args": [
+                "${workspaceFolder}/apps/api/src/index.ts"
+            ],
             "cwd": "${workspaceFolder}/apps/api",
             "envFile": "${workspaceFolder}/.env",
             "env": {
@@ -37,7 +47,9 @@
             },
             "console": "integratedTerminal",
             "sourceMaps": true,
-            "outFiles": ["${workspaceFolder}/apps/api/dist/**/*.js"]
+            "outFiles": [
+                "${workspaceFolder}/apps/api/dist/**/*.js"
+            ]
         },
         {
             // Job worker — ts-node with path aliases, full source-map debug support
@@ -46,10 +58,14 @@
             "request": "launch",
             "runtimeExecutable": "node",
             "runtimeArgs": [
-                "--require", "ts-node/register",
-                "--require", "tsconfig-paths/register"
+                "--require",
+                "ts-node/register",
+                "--require",
+                "tsconfig-paths/register"
             ],
-            "args": ["${workspaceFolder}/apps/worker/src/index.ts"],
+            "args": [
+                "${workspaceFolder}/apps/worker/src/index.ts"
+            ],
             "cwd": "${workspaceFolder}/apps/worker",
             "envFile": "${workspaceFolder}/.env",
             "env": {
@@ -58,20 +74,29 @@
             },
             "console": "integratedTerminal",
             "sourceMaps": true,
-            "outFiles": ["${workspaceFolder}/apps/worker/dist/**/*.js"]
+            "outFiles": [
+                "${workspaceFolder}/apps/worker/dist/**/*.js"
+            ]
         }
     ],
     "compounds": [
         {
             // Launches web + api together with individual debug sessions
             "name": "Web + API",
-            "configurations": ["Next.js (web)", "API (ts-node)"],
+            "configurations": [
+                "Next.js (web)",
+                "API (ts-node)"
+            ],
             "stopAll": true
         },
         {
             // Launches all three services with individual debug sessions
             "name": "Web + API + Worker",
-            "configurations": ["Next.js (web)", "API (ts-node)", "Worker (ts-node)"],
+            "configurations": [
+                "Next.js (web)",
+                "API (ts-node)",
+                "Worker (ts-node)"
+            ],
             "stopAll": true
         }
     ]
