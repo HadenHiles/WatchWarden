@@ -18,7 +18,8 @@
         "allowSyntheticDefaultImports": true,
         "resolveJsonModule": true,
         "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true
+        "forceConsistentCasingInFileNames": true,
+        "preserveSymlinks": true
     },
     "exclude": [
         "node_modules"
