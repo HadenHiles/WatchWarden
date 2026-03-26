@@ -20,6 +20,7 @@ import {
     Briefcase,
     Download,
     Inbox,
+    Clapperboard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +49,12 @@ const NAV_SECTIONS = [
             { href: "/dashboard/cleanup", label: "Cleanup", icon: Trash2 },
             { href: "/dashboard/pinned", label: "Pinned", icon: Pin },
             { href: "/dashboard/expired", label: "Expired", icon: Archive },
+        ],
+    },
+    {
+        label: "Plex",
+        items: [
+            { href: "/dashboard/plex/collections", label: "Collections", icon: Clapperboard },
         ],
     },
     {

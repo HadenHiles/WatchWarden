@@ -105,11 +105,14 @@ model Title {
   cleanupEligible Boolean         @default(false)
   cleanupReason   String?
 
-  // Library / request state (synced from Jellyseerr)
+  // Library / request state
   inLibrary        Boolean   @default(false)
   libraryCheckedAt DateTime?
   isRequested      Boolean   @default(false)
   jellyseerrId     Int?
+
+  // Plex direct integration
+  plexRatingKey    String?   // Plex internal ratingKey; set by plex-library-sync job
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -241,8 +244,28 @@ model RequestRecord {
   @@index([jellyseerrRequestId])
 }
 
+// ─── PlexCollection ──────────────────────────────────────────────────────────
+// A WatchWarden-managed Plex collection.  One row per collection the worker
+// should keep in sync with Plex.
+
+model PlexCollection {
+  id          String    @id @default(cuid())
+  name        String    // Display name in Plex
+  plexKey     String?   // Plex collection ratingKey (null until first sync)
+  sectionId   String    // Plex library section key
+  mediaType   MediaType
+  filter      String    @default("ACTIVE_TRENDING") // "ACTIVE_TRENDING" | "PINNED" | "APPROVED"
+  enabled     Boolean   @default(true)
+  lastSyncAt  DateTime?
+  itemCount   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([sectionId])
+}
+
 // ─── PublishedExport ─────────────────────────────────────────────────────────
-// Metadata record for each generated Kometa export file.
+// Metadata record for each generated export file.
 
 model PublishedExport {
   id          String   @id @default(cuid())

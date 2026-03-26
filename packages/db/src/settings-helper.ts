@@ -4,6 +4,7 @@ export interface IntegrationConfig {
     tautulli: { baseUrl: string | null; apiKey: string | null };
     jellyseerr: { baseUrl: string | null; apiKey: string | null; botUserId: number | null };
     sources: { tmdbApiKey: string | null; traktClientId: string | null };
+    plex: { baseUrl: string | null; token: string | null };
 }
 
 /**
@@ -13,13 +14,14 @@ export interface IntegrationConfig {
  */
 export async function getIntegrationConfig(): Promise<IntegrationConfig> {
     const rows = await prisma.appSetting.findMany({
-        where: { key: { in: ["tautulli", "jellyseerr", "sources"] } },
+        where: { key: { in: ["tautulli", "jellyseerr", "sources", "plex"] } },
     });
     const db = Object.fromEntries(rows.map((r) => [r.key, r.value as Record<string, unknown>]));
 
     const t = db.tautulli as { baseUrl?: string; apiKey?: string } | undefined;
     const j = db.jellyseerr as { baseUrl?: string; apiKey?: string; botUserId?: number } | undefined;
     const s = db.sources as { tmdbApiKey?: string; traktClientId?: string } | undefined;
+    const p = db.plex as { baseUrl?: string; token?: string } | undefined;
 
     return {
         tautulli: {
@@ -38,6 +40,10 @@ export async function getIntegrationConfig(): Promise<IntegrationConfig> {
         sources: {
             tmdbApiKey: s?.tmdbApiKey || process.env.TMDB_API_KEY || null,
             traktClientId: s?.traktClientId || process.env.TRAKT_CLIENT_ID || null,
+        },
+        plex: {
+            baseUrl: p?.baseUrl || process.env.PLEX_BASE_URL || null,
+            token: p?.token || process.env.PLEX_TOKEN || null,
         },
     };
 }

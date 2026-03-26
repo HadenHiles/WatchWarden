@@ -14,6 +14,12 @@ export type { JellyseerrClientConfig } from "./jellyseerr/client";
 export { JellyseerrService } from "./jellyseerr/service";
 export type { RequestMediaInput, RequestMediaResult } from "./jellyseerr/service";
 
+// Plex
+export { PlexClient } from "./plex/client";
+export type { PlexClientConfig, PlexSection, PlexMediaItem, PlexCollection, PlexIdentity } from "./plex/client";
+export { PlexService } from "./plex/service";
+export type { CollectionSyncResult } from "./plex/service";
+
 // Source adapters
 export type { SourceAdapter } from "./sources/adapter";
 export { TmdbTrendingAdapter } from "./sources/tmdb.adapter";

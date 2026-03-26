@@ -31,6 +31,8 @@ export const workerEnvSchema = baseEnvSchema.extend({
     JELLYSEERR_BASE_URL: z.string().url().optional(),
     JELLYSEERR_API_KEY: z.string().optional(),
     JELLYSEERR_BOT_USER_ID: z.coerce.number().int().positive().optional(),
+    PLEX_BASE_URL: z.string().url().optional(),
+    PLEX_TOKEN: z.string().optional(),
     TMDB_API_KEY: z.string().optional(),
     TRAKT_CLIENT_ID: z.string().optional(),
     TREND_SYNC_CRON: z.string().default("0 */6 * * *"),
@@ -40,6 +42,8 @@ export const workerEnvSchema = baseEnvSchema.extend({
     LIBRARY_SYNC_CRON: z.string().default("0 */3 * * *"),
     LIFECYCLE_EVAL_CRON: z.string().default("0 4 * * *"),
     EXPORT_CRON: z.string().default("15 */6 * * *"),
+    PLEX_LIBRARY_SYNC_CRON: z.string().default("0 */4 * * *"),
+    PLEX_SYNC_CRON: z.string().default("45 */6 * * *"),
 });
 
 export const webEnvSchema = z.object({

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@watchwarden/db";
-import { TautulliClient, JellyseerrClient } from "@watchwarden/integrations";
+import { TautulliClient, JellyseerrClient, PlexClient } from "@watchwarden/integrations";
 import { validateBody } from "../middleware/validation";
 
 export const settingsRouter = Router();
@@ -36,6 +36,22 @@ settingsRouter.post("/test-connection", async (req, res) => {
                 success: health.healthy,
                 message: health.healthy
                     ? `Connected — Jellyseerr v${health.version}`
+                    : (health.error ?? "Connection failed"),
+            });
+        } catch (e) {
+            return res.json({ success: false, message: String(e) });
+        }
+    }
+
+    if (type === "plex") {
+        try {
+            // apiKey field is reused as token for Plex
+            const client = new PlexClient({ baseUrl, token: apiKey, timeout: 8_000 });
+            const health = await client.healthCheck();
+            return res.json({
+                success: health.healthy,
+                message: health.healthy
+                    ? `Connected — Plex Media Server v${health.version}`
                     : (health.error ?? "Connection failed"),
             });
         } catch (e) {

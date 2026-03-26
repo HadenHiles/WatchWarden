@@ -45,6 +45,13 @@ const KNOWN_SETTINGS: SettingSection[] = [
         ],
     },
     {
+        section: "Plex",
+        keys: [
+            { key: "plex", subKey: "baseUrl", label: "Server URL", type: "url", placeholder: "http://192.168.8.3:32400" },
+            { key: "plex", subKey: "token", label: "Plex Token", type: "password", placeholder: "xxxxxxxxxxxxxxxxxxxx" },
+        ],
+    },
+    {
         section: "Tautulli",
         keys: [
             { key: "tautulli", subKey: "baseUrl", label: "Base URL", type: "url", placeholder: "http://192.168.8.3:8181" },
@@ -74,9 +81,11 @@ const KNOWN_SETTINGS: SettingSection[] = [
             { key: "refreshIntervals", subKey: "tautulliSyncCron", label: "Tautulli Sync", type: "text", placeholder: "0 */2 * * *" },
             { key: "refreshIntervals", subKey: "scoringCron", label: "Scoring", type: "text", placeholder: "30 */6 * * *" },
             { key: "refreshIntervals", subKey: "jellyseerrStatusSyncCron", label: "Jellyseerr Status Sync", type: "text", placeholder: "0 * * * *" },
-            { key: "refreshIntervals", subKey: "librarySyncCron", label: "Library Sync", type: "text", placeholder: "0 */3 * * *" },
+            { key: "refreshIntervals", subKey: "librarySyncCron", label: "Library Sync (Jellyseerr)", type: "text", placeholder: "0 */3 * * *" },
             { key: "refreshIntervals", subKey: "lifecycleEvalCron", label: "Lifecycle Evaluation", type: "text", placeholder: "0 4 * * *" },
             { key: "refreshIntervals", subKey: "exportCron", label: "Export", type: "text", placeholder: "15 */6 * * *" },
+            { key: "refreshIntervals", subKey: "plexLibrarySyncCron", label: "Plex Library Scan", type: "text", placeholder: "0 */4 * * *" },
+            { key: "refreshIntervals", subKey: "plexSyncCron", label: "Plex Collection Sync", type: "text", placeholder: "45 */6 * * *" },
         ],
     },
 ];

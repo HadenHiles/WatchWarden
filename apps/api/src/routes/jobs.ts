@@ -12,6 +12,8 @@ const JOB_NAMES = [
     "library-sync",
     "lifecycle-eval",
     "export",
+    "plex-library-sync",
+    "plex-sync",
 ] as const;
 
 // GET /jobs — summary status for all jobs

@@ -9,6 +9,8 @@ import { jellyseerrStatusSyncJob } from "./jobs/jellyseerr-status-sync.job";
 import { librarySyncJob } from "./jobs/library-sync.job";
 import { lifecycleEvalJob } from "./jobs/lifecycle-eval.job";
 import { exportJob } from "./jobs/export.job";
+import { plexLibrarySyncJob } from "./jobs/plex-library-sync.job";
+import { plexSyncJob } from "./jobs/plex-sync.job";
 
 const logger = createLogger("scheduler");
 
@@ -23,6 +25,8 @@ export function buildScheduler(env: WorkerEnv) {
         { name: "library-sync", cron: env.LIBRARY_SYNC_CRON, fn: librarySyncJob },
         { name: "lifecycle-eval", cron: env.LIFECYCLE_EVAL_CRON, fn: lifecycleEvalJob },
         { name: "export", cron: env.EXPORT_CRON, fn: exportJob },
+        { name: "plex-library-sync", cron: env.PLEX_LIBRARY_SYNC_CRON, fn: plexLibrarySyncJob },
+        { name: "plex-sync", cron: env.PLEX_SYNC_CRON, fn: plexSyncJob },
     ];
 
     const scheduledTasks = tasks.map(({ name, cron: cronExpr, fn }) => {

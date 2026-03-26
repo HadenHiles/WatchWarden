@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
 import type { ApiEnv } from "@watchwarden/config";
 import { prisma } from "@watchwarden/db";
-import { TautulliClient, JellyseerrClient } from "@watchwarden/integrations";
+import { TautulliClient, JellyseerrClient, PlexClient } from "@watchwarden/integrations";
 import { AppError } from "../middleware/error";
 import { z } from "zod";
 
@@ -55,11 +55,12 @@ export function authRouter(env: ApiEnv) {
             return res.status(409).json({ success: false, error: "Setup is already complete" });
         }
 
-        const { admin, tautulli, jellyseerr, sources, refreshIntervals } = req.body as {
+        const { admin, tautulli, jellyseerr, sources, plex, refreshIntervals } = req.body as {
             admin?: { username?: string; password?: string };
             tautulli?: { baseUrl?: string; apiKey?: string };
             jellyseerr?: { baseUrl?: string; apiKey?: string; botUserId?: number };
             sources?: { tmdbApiKey?: string; traktClientId?: string };
+            plex?: { baseUrl?: string; token?: string };
             refreshIntervals?: Record<string, string>;
         };
 
@@ -90,6 +91,14 @@ export function authRouter(env: ApiEnv) {
                 where: { key: "sources" },
                 update: { value: sources as object },
                 create: { key: "sources", value: sources as object, category: "integrations" },
+            });
+        }
+
+        if (plex?.baseUrl || plex?.token) {
+            writes.push({
+                where: { key: "plex" },
+                update: { value: plex as object },
+                create: { key: "plex", value: plex as object, category: "integrations" },
             });
         }
 
@@ -144,6 +153,22 @@ export function authRouter(env: ApiEnv) {
                     success: health.healthy,
                     message: health.healthy
                         ? `Connected — Jellyseerr v${health.version}`
+                        : (health.error ?? "Connection failed"),
+                });
+            } catch (e) {
+                return res.json({ success: false, message: String(e) });
+            }
+        }
+
+        if (type === "plex") {
+            try {
+                // apiKey field is reused as token for Plex
+                const client = new PlexClient({ baseUrl, token: apiKey, timeout: 8_000 });
+                const health = await client.healthCheck();
+                return res.json({
+                    success: health.healthy,
+                    message: health.healthy
+                        ? `Connected — Plex Media Server v${health.version}`
                         : (health.error ?? "Connection failed"),
                 });
             } catch (e) {
