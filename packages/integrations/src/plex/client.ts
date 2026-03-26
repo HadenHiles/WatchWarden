@@ -45,11 +45,9 @@ const PLEX_TYPE_SHOW = 2;
 
 export class PlexClient {
     private readonly http: AxiosInstance;
-    private readonly token: string;
     private readonly baseUrl: string;
 
     constructor(config: PlexClientConfig) {
-        this.token = config.token;
         this.baseUrl = config.baseUrl.replace(/\/$/, "");
 
         this.http = axios.create({
