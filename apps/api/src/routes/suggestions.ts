@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@watchwarden/db";
-import { AppError } from "../middleware/error";
+import { AppError, asyncHandler } from "../middleware/error";
 import { validateQuery } from "../middleware/validation";
 
 export const suggestionsRouter = Router();
@@ -21,7 +21,7 @@ const listQuerySchema = z.object({
 });
 
 // GET /suggestions
-suggestionsRouter.get("/", validateQuery(listQuerySchema), async (req, res) => {
+suggestionsRouter.get("/", validateQuery(listQuerySchema), asyncHandler(async (req, res) => {
     const q = req.query as unknown as z.infer<typeof listQuerySchema>;
 
     const titleWhere = {
@@ -70,10 +70,10 @@ suggestionsRouter.get("/", validateQuery(listQuerySchema), async (req, res) => {
         success: true,
         data: { items, total, page: q.page, pageSize: q.pageSize, totalPages: Math.ceil(total / q.pageSize) },
     });
-});
+}));
 
 // GET /suggestions/:id
-suggestionsRouter.get("/:id", async (req, res) => {
+suggestionsRouter.get("/:id", asyncHandler(async (req, res) => {
     const suggestion = await prisma.suggestion.findUnique({
         where: { id: req.params.id },
         include: {
@@ -89,4 +89,4 @@ suggestionsRouter.get("/:id", async (req, res) => {
     });
     if (!suggestion) throw new AppError(404, "Suggestion not found");
     return res.json({ success: true, data: suggestion });
-});
+}));

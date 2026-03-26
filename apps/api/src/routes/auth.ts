@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import type { ApiEnv } from "@watchwarden/config";
 import { prisma } from "@watchwarden/db";
 import { TautulliClient, JellyseerrClient, PlexClient } from "@watchwarden/integrations";
-import { AppError } from "../middleware/error";
+import { AppError, asyncHandler } from "../middleware/error";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -24,28 +24,28 @@ export function authRouter(env: ApiEnv) {
 
     // ── GET /auth/setup-status ─────────────────────────────────────────────
     // Fully public — used by the onboarding wizard and dashboard layout guard.
-    router.get("/setup-status", async (_req: Request, res: Response) => {
+    router.get("/setup-status", asyncHandler(async (_req: Request, res: Response) => {
         const setting = await prisma.appSetting.findUnique({ where: { key: "setup.complete" } });
         res.json({ success: true, data: { complete: setting?.value === true } });
-    });
+    }));
 
     // ── GET /auth/admin-username ───────────────────────────────────────────
     // Public — returns the admin username from DB or env so the login page
     // can display it as a hint without exposing the password hash.
-    router.get("/admin-username", async (_req: Request, res: Response) => {
+    router.get("/admin-username", asyncHandler(async (_req: Request, res: Response) => {
         const creds = await prisma.appSetting.findUnique({ where: { key: "admin.credentials" } });
         const username =
             creds?.value && typeof creds.value === "object"
                 ? (creds.value as { username: string }).username
                 : env.ADMIN_USERNAME;
         res.json({ success: true, data: { username } });
-    });
+    }));
 
     // ── POST /auth/setup ───────────────────────────────────────────────────
     // One-time first-run setup.  Requires API_SECRET bearer token (injected
     // server-side by the Next.js /api/setup/submit route — never from browser).
     // Fails with 409 if setup is already complete.
-    router.post("/setup", async (req: Request, res: Response) => {
+    router.post("/setup", asyncHandler(async (req: Request, res: Response) => {
         if (!hasApiSecret(req)) {
             return res.status(401).json({ success: false, error: "Unauthorized" });
         }
@@ -119,12 +119,12 @@ export function authRouter(env: ApiEnv) {
         await prisma.$transaction(writes.map((args) => prisma.appSetting.upsert(args)));
 
         return res.json({ success: true });
-    });
+    }));
 
     // ── POST /auth/test-connection ─────────────────────────────────────────
     // Called during onboarding (server-side, with API_SECRET) to verify
     // Tautulli / Jellyseerr credentials before saving them.
-    router.post("/test-connection", async (req: Request, res: Response) => {
+    router.post("/test-connection", asyncHandler(async (req: Request, res: Response) => {
         if (!hasApiSecret(req)) {
             return res.status(401).json({ success: false, error: "Unauthorized" });
         }
@@ -177,12 +177,12 @@ export function authRouter(env: ApiEnv) {
         }
 
         return res.status(400).json({ success: false, error: `Unknown type: ${type}` });
-    });
+    }));
 
     // ── POST /auth/change-password ─────────────────────────────────────
     // Requires an active admin session OR API_SECRET bearer token (server-side proxy).
     // Saves new hash to admin.credentials and marks password.changed = true.
-    router.post("/change-password", async (req: Request, res: Response) => {
+    router.post("/change-password", asyncHandler(async (req: Request, res: Response) => {
         if (!req.session.adminAuthenticated && !hasApiSecret(req)) {
             return res.status(401).json({ success: false, error: "Not authenticated" });
         }
@@ -215,12 +215,12 @@ export function authRouter(env: ApiEnv) {
         ]);
 
         return res.json({ success: true });
-    });
+    }));
 
     // ── POST /auth/login ───────────────────────────────────────────────────
     // Checks DB admin.credentials first, falls back to env vars.
     // Also returns whether the password has been changed from the default.
-    router.post("/login", async (req: Request, res: Response) => {
+    router.post("/login", asyncHandler(async (req: Request, res: Response) => {
         const result = loginSchema.safeParse(req.body);
         if (!result.success) {
             throw new AppError(400, "Username and password required");
@@ -259,7 +259,7 @@ export function authRouter(env: ApiEnv) {
         const needsPasswordChange = changed?.value !== true;
 
         return res.json({ success: true, data: { username, needsPasswordChange } });
-    });
+    }));
 
     // ── POST /auth/logout ──────────────────────────────────────────────────
     router.post("/logout", (req: Request, res: Response) => {

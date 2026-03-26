@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "@watchwarden/db";
-import { AppError } from "../middleware/error";
+import { AppError, asyncHandler } from "../middleware/error";
 
 export const jobsRouter = Router();
 
@@ -17,7 +17,7 @@ const JOB_NAMES = [
 ] as const;
 
 // GET /jobs — summary status for all jobs
-jobsRouter.get("/", async (_req, res) => {
+jobsRouter.get("/", asyncHandler(async (_req, res) => {
     const summaries = await Promise.all(
         JOB_NAMES.map(async (jobName) => {
             const recentRuns = await prisma.jobRun.findMany({
@@ -42,10 +42,10 @@ jobsRouter.get("/", async (_req, res) => {
     );
 
     res.json({ success: true, data: summaries });
-});
+}));
 
 // GET /jobs/:jobName/history
-jobsRouter.get("/:jobName/history", async (req, res) => {
+jobsRouter.get("/:jobName/history", asyncHandler(async (req, res) => {
     const { jobName } = req.params;
     const page = parseInt(String(req.query.page ?? 1), 10);
     const pageSize = Math.min(parseInt(String(req.query.pageSize ?? 20), 10), 100);
@@ -64,11 +64,11 @@ jobsRouter.get("/:jobName/history", async (req, res) => {
         success: true,
         data: { items: runs, total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
     });
-});
+}));
 
 // POST /jobs/:jobName/trigger — signals the worker to run a job immediately
 // The worker polls the DB for a "trigger" signal via AppSetting.
-jobsRouter.post("/:jobName/trigger", async (req, res) => {
+jobsRouter.post("/:jobName/trigger", asyncHandler(async (req, res) => {
     const { jobName } = req.params;
     if (!JOB_NAMES.includes(jobName as (typeof JOB_NAMES)[number])) {
         throw new AppError(404, `Unknown job: ${jobName}`);
@@ -85,4 +85,4 @@ jobsRouter.post("/:jobName/trigger", async (req, res) => {
     });
 
     res.json({ success: true, data: { queued: jobName } });
-});
+}));

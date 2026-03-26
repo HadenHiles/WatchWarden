@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@watchwarden/db";
+import { asyncHandler } from "../middleware/error";
 import { validateQuery } from "../middleware/validation";
 
 export const auditRouter = Router();
@@ -14,7 +15,7 @@ const listQuerySchema = z.object({
 });
 
 // GET /audit
-auditRouter.get("/", validateQuery(listQuerySchema), async (req, res) => {
+auditRouter.get("/", validateQuery(listQuerySchema), asyncHandler(async (req, res) => {
     const q = req.query as unknown as z.infer<typeof listQuerySchema>;
 
     const where = {
@@ -40,4 +41,4 @@ auditRouter.get("/", validateQuery(listQuerySchema), async (req, res) => {
         success: true,
         data: { items, total, page: q.page, pageSize: q.pageSize, totalPages: Math.ceil(total / q.pageSize) },
     });
-});
+}));

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@watchwarden/db";
-import { AppError } from "../middleware/error";
+import { AppError, asyncHandler } from "../middleware/error";
 import { validateQuery } from "../middleware/validation";
 
 export const titlesRouter = Router();
@@ -19,7 +19,7 @@ const listQuerySchema = z.object({
 });
 
 // GET /titles
-titlesRouter.get("/", validateQuery(listQuerySchema), async (req, res) => {
+titlesRouter.get("/", validateQuery(listQuerySchema), asyncHandler(async (req, res) => {
     const q = req.query as unknown as z.infer<typeof listQuerySchema>;
 
     const where = {
@@ -45,10 +45,10 @@ titlesRouter.get("/", validateQuery(listQuerySchema), async (req, res) => {
         success: true,
         data: { items, total, page: q.page, pageSize: q.pageSize, totalPages: Math.ceil(total / q.pageSize) },
     });
-});
+}));
 
 // GET /titles/:id
-titlesRouter.get("/:id", async (req, res) => {
+titlesRouter.get("/:id", asyncHandler(async (req, res) => {
     const title = await prisma.title.findUnique({
         where: { id: req.params.id },
         include: {
@@ -60,10 +60,10 @@ titlesRouter.get("/:id", async (req, res) => {
     });
     if (!title) throw new AppError(404, "Title not found");
     res.json({ success: true, data: title });
-});
+}));
 
 // PATCH /titles/:id/lifecycle — admin can directly update lifecycle fields
-titlesRouter.patch("/:id/lifecycle", async (req, res) => {
+titlesRouter.patch("/:id/lifecycle", asyncHandler(async (req, res) => {
     const allowed = ["lifecyclePolicy", "isTemporary", "isPinned", "keepUntil", "cleanupEligible", "cleanupReason"];
     const update = Object.fromEntries(
         Object.entries(req.body as Record<string, unknown>).filter(([k]) => allowed.includes(k))
@@ -74,4 +74,4 @@ titlesRouter.patch("/:id/lifecycle", async (req, res) => {
         data: update,
     });
     res.json({ success: true, data: title });
-});
+}));

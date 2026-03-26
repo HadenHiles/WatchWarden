@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@watchwarden/db";
+import { asyncHandler } from "../middleware/error";
 import { validateBody } from "../middleware/validation";
 
 export const plexRouter = Router();
@@ -9,12 +10,12 @@ const VALID_FILTERS = ["ACTIVE_TRENDING", "PINNED", "APPROVED"] as const;
 const VALID_MEDIA_TYPES = ["MOVIE", "SHOW"] as const;
 
 // GET /plex/collections — list all PlexCollection rows
-plexRouter.get("/collections", async (_req, res) => {
+plexRouter.get("/collections", asyncHandler(async (_req, res) => {
     const collections = await prisma.plexCollection.findMany({
         orderBy: [{ mediaType: "asc" }, { name: "asc" }],
     });
     res.json({ success: true, data: collections });
-});
+}));
 
 const createCollectionSchema = z.object({
     name: z.string().min(1).max(100),
@@ -25,7 +26,7 @@ const createCollectionSchema = z.object({
 });
 
 // POST /plex/collections — create a new managed collection
-plexRouter.post("/collections", validateBody(createCollectionSchema), async (req, res) => {
+plexRouter.post("/collections", validateBody(createCollectionSchema), asyncHandler(async (req, res) => {
     const body = req.body as z.infer<typeof createCollectionSchema>;
 
     const existing = await prisma.plexCollection.findFirst({
@@ -40,7 +41,7 @@ plexRouter.post("/collections", validateBody(createCollectionSchema), async (req
 
     const collection = await prisma.plexCollection.create({ data: body });
     return res.status(201).json({ success: true, data: collection });
-});
+}));
 
 const updateCollectionSchema = z.object({
     name: z.string().min(1).max(100).optional(),
@@ -50,7 +51,7 @@ const updateCollectionSchema = z.object({
 });
 
 // PATCH /plex/collections/:id — update a collection
-plexRouter.patch("/collections/:id", validateBody(updateCollectionSchema), async (req, res) => {
+plexRouter.patch("/collections/:id", validateBody(updateCollectionSchema), asyncHandler(async (req, res) => {
     const collection = await prisma.plexCollection.findUnique({ where: { id: req.params.id } });
     if (!collection) {
         return res.status(404).json({ success: false, error: "Collection not found" });
@@ -61,21 +62,21 @@ plexRouter.patch("/collections/:id", validateBody(updateCollectionSchema), async
         data: req.body as z.infer<typeof updateCollectionSchema>,
     });
     return res.json({ success: true, data: updated });
-});
+}));
 
 // DELETE /plex/collections/:id — remove WatchWarden's tracking of a collection
 // (does NOT delete the collection from Plex)
-plexRouter.delete("/collections/:id", async (req, res) => {
+plexRouter.delete("/collections/:id", asyncHandler(async (req, res) => {
     const collection = await prisma.plexCollection.findUnique({ where: { id: req.params.id } });
     if (!collection) {
         return res.status(404).json({ success: false, error: "Collection not found" });
     }
     await prisma.plexCollection.delete({ where: { id: req.params.id } });
     return res.json({ success: true });
-});
+}));
 
 // GET /plex/sections — proxy to Plex API to list library sections (used in the UI)
-plexRouter.get("/sections", async (_req, res) => {
+plexRouter.get("/sections", asyncHandler(async (_req, res) => {
     const { getIntegrationConfig } = await import("@watchwarden/db");
     const { PlexClient } = await import("@watchwarden/integrations");
 
@@ -94,11 +95,11 @@ plexRouter.get("/sections", async (_req, res) => {
             error: err instanceof Error ? err.message : "Failed to reach Plex",
         });
     }
-});
+}));
 
 // GET /plex/collections/feed — all collections + top pending suggestions for each
 // Used by the suggestions page to render one row per collection.
-plexRouter.get("/collections/feed", async (_req, res) => {
+plexRouter.get("/collections/feed", asyncHandler(async (_req, res) => {
     const collections = await prisma.plexCollection.findMany({
         where: { enabled: true },
         orderBy: [{ mediaType: "asc" }, { name: "asc" }],
@@ -142,4 +143,4 @@ plexRouter.get("/collections/feed", async (_req, res) => {
     );
 
     res.json({ success: true, data: feed });
-});
+}));

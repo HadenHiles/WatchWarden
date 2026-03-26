@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "@watchwarden/db";
+import { asyncHandler } from "../middleware/error";
 
 export const statsRouter = Router();
 
@@ -16,7 +17,7 @@ const JOB_NAMES = [
 ] as const;
 
 // GET /stats — summary counts for the overview dashboard
-statsRouter.get("/", async (_req, res) => {
+statsRouter.get("/", asyncHandler(async (_req, res) => {
     const [
         pendingMovies,
         pendingShows,
@@ -69,4 +70,4 @@ statsRouter.get("/", async (_req, res) => {
             recentDecisions,
         },
     });
-});
+}));

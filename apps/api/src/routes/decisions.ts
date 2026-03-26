@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@watchwarden/db";
 import { validateBody } from "../middleware/validation";
-import { AppError } from "../middleware/error";
+import { AppError, asyncHandler } from "../middleware/error";
 import { DecisionService } from "../services/decision.service";
 
 export const decisionsRouter = Router();
@@ -26,14 +26,14 @@ const bulkDecisionSchema = z.object({
 const service = new DecisionService();
 
 // POST /decisions — single decision
-decisionsRouter.post("/", validateBody(decisionSchema), async (req, res) => {
+decisionsRouter.post("/", validateBody(decisionSchema), asyncHandler(async (req, res) => {
     const input = req.body as z.infer<typeof decisionSchema>;
     const result = await service.applyDecision(input);
     res.json({ success: true, data: result });
-});
+}));
 
 // POST /decisions/bulk — bulk decision
-decisionsRouter.post("/bulk", validateBody(bulkDecisionSchema), async (req, res) => {
+decisionsRouter.post("/bulk", validateBody(bulkDecisionSchema), asyncHandler(async (req, res) => {
     const { suggestionIds, action, reason, snoozeDays, extendDays } = req.body as z.infer<typeof bulkDecisionSchema>;
 
     const results = await Promise.allSettled(
@@ -46,10 +46,10 @@ decisionsRouter.post("/bulk", validateBody(bulkDecisionSchema), async (req, res)
     const failed = results.filter((r) => r.status === "rejected").length;
 
     res.json({ success: true, data: { total: suggestionIds.length, succeeded, failed } });
-});
+}));
 
 // GET /decisions — list recent decisions
-decisionsRouter.get("/", async (req, res) => {
+decisionsRouter.get("/", asyncHandler(async (req, res) => {
     const page = parseInt(String(req.query.page ?? 1), 10);
     const pageSize = Math.min(parseInt(String(req.query.pageSize ?? 25), 10), 100);
 
@@ -71,10 +71,10 @@ decisionsRouter.get("/", async (req, res) => {
         success: true,
         data: { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
     });
-});
+}));
 
 // GET /decisions/:suggestionId — all decisions for a suggestion
-decisionsRouter.get("/:suggestionId", async (req, res) => {
+decisionsRouter.get("/:suggestionId", asyncHandler(async (req, res) => {
     const suggestion = await prisma.suggestion.findUnique({
         where: { id: req.params.suggestionId },
     });
@@ -86,4 +86,4 @@ decisionsRouter.get("/:suggestionId", async (req, res) => {
     });
 
     res.json({ success: true, data: decisions });
-});
+}));
