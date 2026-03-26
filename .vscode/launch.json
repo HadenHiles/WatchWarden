@@ -10,6 +10,7 @@
             "runtimeArgs": [],
             "args": [
                 "dev",
+                "--turbo",
                 "-p",
                 "3000"
             ],

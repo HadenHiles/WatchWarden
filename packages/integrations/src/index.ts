@@ -19,4 +19,3 @@ export type { SourceAdapter } from "./sources/adapter";
 export { TmdbTrendingAdapter } from "./sources/tmdb.adapter";
 export { TraktTrendingAdapter } from "./sources/trakt.adapter";
 export { buildSourceAdapters } from "./sources/registry";
-export { buildSourceAdapters } from "./sources/registry";

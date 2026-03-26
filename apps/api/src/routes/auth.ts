@@ -109,7 +109,7 @@ export function authRouter(env: ApiEnv) {
 
         await prisma.$transaction(writes.map((args) => prisma.appSetting.upsert(args)));
 
-        res.json({ success: true });
+        return res.json({ success: true });
     });
 
     // ── POST /auth/test-connection ─────────────────────────────────────────
@@ -158,7 +158,7 @@ export function authRouter(env: ApiEnv) {
     // Requires an active admin session OR API_SECRET bearer token (server-side proxy).
     // Saves new hash to admin.credentials and marks password.changed = true.
     router.post("/change-password", async (req: Request, res: Response) => {
-        if (!req.session.adminAuthenticated && !verifyApiSecret(req)) {
+        if (!req.session.adminAuthenticated && !hasApiSecret(req)) {
             return res.status(401).json({ success: false, error: "Not authenticated" });
         }
 

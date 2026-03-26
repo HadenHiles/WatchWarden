@@ -40,7 +40,11 @@ export function buildScheduler(env: WorkerEnv) {
 
     // Trigger-polling: check for manual trigger signals every 30 seconds
     const triggerPoll = cron.schedule("*/30 * * * * *", async () => {
-        await runner.checkAndRunTriggers(tasks);
+        try {
+            await runner.checkAndRunTriggers(tasks);
+        } catch (err) {
+            logger.warn("Trigger poll failed (DB unavailable?)", { error: err instanceof Error ? err.message : String(err) });
+        }
     });
 
     return {
