@@ -274,8 +274,10 @@ export function OnboardingWizard() {
                         <>
                             <h1 className="text-2xl font-bold text-white mb-2">Welcome to Watch Warden</h1>
                             <p className="text-gray-400 mb-6 text-sm leading-relaxed">
-                                Let&#39;s get your integrations set up. Every step is optional — skip anything
-                                and update it later from Settings.
+                                Watch Warden scores titles using trending data and your household&#39;s watch
+                                history, then keeps your library stocked with playlists actually worth browsing.
+                                Connect your data sources below — every step is optional and can be updated
+                                later from Settings.
                             </p>
                             <ul className="space-y-2.5 mb-6">
                                 {[
@@ -492,7 +494,8 @@ export function OnboardingWizard() {
                                 You&#39;re all set!
                             </h2>
                             <p className="text-gray-400 text-sm text-center mb-8 leading-relaxed">
-                                Your integrations are configured. Taking you to the dashboard.
+                                Watch Warden is ready. Your playlists will start taking shape as data syncs
+                                in the background.
                             </p>
                         </>
                     )}

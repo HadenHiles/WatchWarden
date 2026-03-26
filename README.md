@@ -1,6 +1,8 @@
 # Watch Warden
 
-A production-ready, self-hosted Docker application for orchestrating home media server requests. Watch Warden helps a Plex/Jellyseerr admin curate trending TV and movie requests using external trend sources, local family watch behavior from Tautulli, approval/rejection workflows, Jellyseerr request automation, Kometa export for Plex collections, and lifecycle/cleanup policy modeling for Maintainerr.
+**Automated playlists, actually worth watching.**
+
+Watch Warden is a self-hosted tool that scores every movie and TV show using real trending data and your household's watch history, then drives the full pipeline — Jellyseerr request automation, Kometa Plex collections, and Maintainerr cleanup — on a schedule you control.
 
 ## Architecture Overview
 

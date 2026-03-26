@@ -10,7 +10,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
     title: "Watch Warden",
-    description: "Home media server admin orchestration",
+    description: "Automated playlists, actually worth watching.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
