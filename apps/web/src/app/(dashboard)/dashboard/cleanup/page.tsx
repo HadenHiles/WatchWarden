@@ -1,5 +1,2 @@
-import { TitlesPage } from "@/components/TitlesPage";
-
-export default function Page() {
-  return <TitlesPage heading="Cleanup Eligible" cleanupEligible={true} />;
-}
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/library"); }

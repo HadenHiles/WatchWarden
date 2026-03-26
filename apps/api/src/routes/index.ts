@@ -12,6 +12,7 @@ import { requestsRouter } from "./requests";
 import { exportsRouter } from "./exports";
 import { auditRouter } from "./audit";
 import { plexRouter } from "./plex";
+import { statsRouter } from "./stats";
 import { requireAuth } from "../middleware/auth";
 
 export function createRouter(env: ApiEnv) {
@@ -32,6 +33,7 @@ export function createRouter(env: ApiEnv) {
     router.use("/exports", requireAuth, exportsRouter);
     router.use("/audit", requireAuth, auditRouter);
     router.use("/plex", requireAuth, plexRouter);
+    router.use("/stats", requireAuth, statsRouter);
 
     return router;
 }

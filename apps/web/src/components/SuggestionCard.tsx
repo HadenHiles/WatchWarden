@@ -32,6 +32,7 @@ export interface SuggestionCardData {
         inLibrary: boolean;
         isRequested: boolean;
         cleanupEligible: boolean;
+        trendSnapshots?: Array<{ source: string; trendScore: number }>;
     };
 }
 

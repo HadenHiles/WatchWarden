@@ -8,11 +8,36 @@ import { apiUrl } from "@/lib/api-client";
 const fetcher = (url: string) =>
     fetch(url, { credentials: "include" }).then((r) => r.json());
 
-interface SuggestionsPageProps {
-    mediaType: "MOVIE" | "SHOW";
+// ─── Source helpers ───────────────────────────────────────────────────────────
+
+const SOURCE_ORDER = ["TMDB", "Trakt", "Other"] as const;
+type SourceLabel = (typeof SOURCE_ORDER)[number];
+
+function getPrimarySourceLabel(trendSnapshots?: Array<{ source: string; trendScore: number }>): SourceLabel {
+    if (!trendSnapshots?.length) return "Other";
+    const top = [...trendSnapshots].sort((a, b) => b.trendScore - a.trendScore)[0];
+    if (top.source.startsWith("tmdb_")) return "TMDB";
+    if (top.source.startsWith("trakt_")) return "Trakt";
+    return "Other";
 }
 
-export function SuggestionsPage({ mediaType }: SuggestionsPageProps) {
+function groupBySource(items: SuggestionCardData[]): Array<[SourceLabel, SuggestionCardData[]]> {
+    const grouped: Partial<Record<SourceLabel, SuggestionCardData[]>> = {};
+    for (const item of items) {
+        const label = getPrimarySourceLabel(item.title.trendSnapshots);
+        (grouped[label] ??= []).push(item);
+    }
+    return SOURCE_ORDER.filter((l) => grouped[l]?.length).map((l) => [l, grouped[l]!]);
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+interface SuggestionsPageProps {
+    mediaType: "MOVIE" | "SHOW";
+    hideHeading?: boolean;
+}
+
+export function SuggestionsPage({ mediaType, hideHeading }: SuggestionsPageProps) {
     const [sortBy, setSortBy] = useState<"finalScore" | "generatedAt">("finalScore");
     const [statusFilter, setStatusFilter] = useState<string>("PENDING");
     const [page, setPage] = useState(1);
@@ -34,6 +59,7 @@ export function SuggestionsPage({ mediaType }: SuggestionsPageProps) {
     const items = data?.data?.items ?? [];
     const pagination = data?.data;
     const allSelected = items.length > 0 && items.every((s) => selectedIds.has(s.id));
+    const groups = groupBySource(items);
 
     function toggleAll() {
         setSelectedIds(allSelected ? new Set() : new Set(items.map((s) => s.id)));
@@ -66,13 +92,38 @@ export function SuggestionsPage({ mediaType }: SuggestionsPageProps) {
     }
 
     return (
-        <div className="space-y-5 max-w-3xl">
-            <div className="flex items-center justify-between">
-                <h1 className="text-lg font-semibold text-white tracking-tight">
-                    {mediaType === "MOVIE" ? "Movie" : "TV Show"} Suggestions
-                </h1>
+        <div className="space-y-5">
+            {!hideHeading && (
+                <div className="flex items-center justify-between">
+                    <h1 className="text-lg font-semibold text-white tracking-tight">
+                        {mediaType === "MOVIE" ? "Movie" : "TV Show"} Suggestions
+                    </h1>
 
-                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); setSelectedIds(new Set()); }}
+                            className="text-xs rounded-lg bg-gray-800/80 border border-gray-700/60 text-gray-400 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-brand-500/60 hover:border-gray-600 transition-colors"
+                        >
+                            <option value="PENDING">Pending</option>
+                            <option value="APPROVED">Approved</option>
+                            <option value="REJECTED">Rejected</option>
+                            <option value="SNOOZED">Snoozed</option>
+                        </select>
+
+                        <select
+                            value={sortBy}
+                            onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
+                            className="text-xs rounded-lg bg-gray-800/80 border border-gray-700/60 text-gray-400 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-brand-500/60 hover:border-gray-600 transition-colors"
+                        >
+                            <option value="finalScore">By Score</option>
+                            <option value="generatedAt">By Date</option>
+                        </select>
+                    </div>
+                </div>
+            )}
+            {hideHeading && (
+                <div className="flex items-center gap-2 justify-end">
                     <select
                         value={statusFilter}
                         onChange={(e) => { setStatusFilter(e.target.value); setPage(1); setSelectedIds(new Set()); }}
@@ -93,7 +144,7 @@ export function SuggestionsPage({ mediaType }: SuggestionsPageProps) {
                         <option value="generatedAt">By Date</option>
                     </select>
                 </div>
-            </div>
+            )}
 
             {/* Bulk action bar */}
             {selectedIds.size > 0 && (
@@ -140,15 +191,31 @@ export function SuggestionsPage({ mediaType }: SuggestionsPageProps) {
                             className="w-4 h-4 accent-brand-500 cursor-pointer rounded" />
                         <span className="text-xs text-gray-600">Select all on this page</span>
                     </div>
-                    <div className="space-y-3">
-                        {items.map((s) => (
-                            <div key={s.id} className="flex items-start gap-2.5">
-                                <div className="pt-3.5 flex-shrink-0">
-                                    <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleOne(s.id)}
-                                        className="w-4 h-4 accent-brand-500 cursor-pointer" />
+                    <div className="space-y-6">
+                        {groups.map(([label, groupItems]) => (
+                            <div key={label}>
+                                {/* Source group header */}
+                                <div className="flex items-center gap-3 mb-3">
+                                    <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                                        {label}
+                                    </span>
+                                    <span className="text-[11px] text-gray-700 tabular-nums">
+                                        {groupItems.length}
+                                    </span>
+                                    <div className="flex-1 h-px bg-gray-800/60" />
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <SuggestionCard suggestion={s} onDecision={handleDecision} />
+                                <div className="space-y-3">
+                                    {groupItems.map((s) => (
+                                        <div key={s.id} className="flex items-start gap-2.5">
+                                            <div className="pt-3.5 flex-shrink-0">
+                                                <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleOne(s.id)}
+                                                    className="w-4 h-4 accent-brand-500 cursor-pointer" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <SuggestionCard suggestion={s} onDecision={handleDecision} />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         ))}
@@ -178,3 +245,4 @@ export function SuggestionsPage({ mediaType }: SuggestionsPageProps) {
         </div>
     );
 }
+

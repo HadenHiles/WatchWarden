@@ -51,7 +51,15 @@ suggestionsRouter.get("/", validateQuery(listQuerySchema), async (req, res) => {
             skip: (q.page - 1) * q.pageSize,
             take: q.pageSize,
             include: {
-                title: true,
+                title: {
+                    include: {
+                        trendSnapshots: {
+                            select: { source: true, trendScore: true },
+                            orderBy: { trendScore: "desc" },
+                            take: 5,
+                        },
+                    },
+                },
                 decisions: { orderBy: { createdAt: "desc" }, take: 1 },
             },
         }),

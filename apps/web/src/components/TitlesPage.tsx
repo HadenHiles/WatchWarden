@@ -33,9 +33,10 @@ interface TitlesPageProps {
     status?: string;
     cleanupEligible?: boolean;
     isPinned?: boolean;
+    hideHeading?: boolean;
 }
 
-export function TitlesPage({ heading, status, cleanupEligible, isPinned }: TitlesPageProps) {
+export function TitlesPage({ heading, status, cleanupEligible, isPinned, hideHeading }: TitlesPageProps) {
     const [mediaFilter, setMediaFilter] = useState<"ALL" | "MOVIE" | "SHOW">("ALL");
     const [page, setPage] = useState(1);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -69,9 +70,26 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <h1 className="text-lg font-semibold text-white tracking-tight">{heading}</h1>
-                <div className="flex gap-1.5">
+            {!hideHeading ? (
+                <div className="flex items-center justify-between">
+                    <h1 className="text-lg font-semibold text-white tracking-tight">{heading}</h1>
+                    <div className="flex gap-1.5">
+                        {(["ALL", "MOVIE", "SHOW"] as const).map((t) => (
+                            <button
+                                key={t}
+                                onClick={() => setMediaFilter(t)}
+                                className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${mediaFilter === t
+                                    ? "bg-brand-500/10 border-brand-500/30 text-brand-400 font-medium"
+                                    : "bg-gray-800/60 border-gray-700/60 text-gray-500 hover:text-gray-200 hover:border-gray-600"
+                                    }`}
+                            >
+                                {t === "ALL" ? "All" : t === "MOVIE" ? "Movies" : "Shows"}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            ) : (
+                <div className="flex gap-1.5 justify-end">
                     {(["ALL", "MOVIE", "SHOW"] as const).map((t) => (
                         <button
                             key={t}
@@ -85,7 +103,7 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned }: Title
                         </button>
                     ))}
                 </div>
-            </div>
+            )}
 
             {isLoading && (
                 <div className="space-y-2">

@@ -1,5 +1,2 @@
-import { TitlesPage } from "@/components/TitlesPage";
-
-export default function Page() {
-  return <TitlesPage heading="Approved Titles" status="APPROVED" />;
-}
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/library"); }

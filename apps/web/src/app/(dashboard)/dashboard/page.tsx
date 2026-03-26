@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation";
+import { OverviewPage } from "@/components/OverviewPage";
 
 export default function DashboardRootPage() {
-    redirect("/dashboard/suggestions/movies");
+    return <OverviewPage />;
 }
+

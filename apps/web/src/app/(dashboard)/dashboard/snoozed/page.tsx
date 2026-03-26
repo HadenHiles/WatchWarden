@@ -1,5 +1,2 @@
-import { TitlesPage } from "@/components/TitlesPage";
-
-export default function Page() {
-  return <TitlesPage heading="Snoozed Titles" status="SNOOZED" />;
-}
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/library"); }

@@ -1,5 +1,3 @@
-import { SuggestionsPage } from "@/components/SuggestionsPage";
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/dashboard/suggestions?tab=shows"); }
 
-export default function ShowSuggestionsPage() {
-    return <SuggestionsPage mediaType="SHOW" />;
-}
