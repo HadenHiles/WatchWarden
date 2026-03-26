@@ -54,7 +54,7 @@ export default function LoginPage() {
                         priority
                     />
                     <div className="text-center">
-                        <p className="text-xs text-gray-500 mt-0.5">Home media orchestration</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Automated playlists, actually worth watching.</p>
                     </div>
                 </div>
 
