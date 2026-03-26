@@ -150,7 +150,7 @@ export default function SettingsPage() {
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex items-center gap-2 text-sm rounded-lg px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 text-sm rounded-lg px-4 py-2 bg-brand-500 hover:bg-brand-600 text-gray-950 transition-colors disabled:opacity-50"
                     >
                         <Save className="w-4 h-4" />
                         {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}

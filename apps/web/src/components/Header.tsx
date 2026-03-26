@@ -13,13 +13,12 @@ export function Header() {
     }
 
     return (
-        <header className="h-14 flex items-center justify-between px-6 bg-gray-900 border-b border-gray-800 shrink-0">
-            <div />
+        <header className="h-12 flex items-center justify-end px-6 bg-gray-950/80 border-b border-gray-800/60 backdrop-blur-sm shrink-0">
             <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-800/60 transition-all"
             >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
                 Sign out
             </button>
         </header>

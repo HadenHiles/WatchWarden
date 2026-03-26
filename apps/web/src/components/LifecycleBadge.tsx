@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
 
 const POLICY_STYLES: Record<string, string> = {
-    PERMANENT: "bg-green-900/50 text-green-300 border border-green-800",
-    TEMPORARY_TRENDING: "bg-blue-900/50 text-blue-300 border border-blue-800",
-    WATCH_AND_EXPIRE: "bg-orange-900/50 text-orange-300 border border-orange-800",
-    PINNED: "bg-pink-900/50 text-pink-300 border border-pink-800",
+    PERMANENT: "bg-green-950/60 text-green-400 border border-green-900/60",
+    TEMPORARY_TRENDING: "bg-sky-950/60 text-sky-400 border border-sky-900/60",
+    WATCH_AND_EXPIRE: "bg-orange-950/60 text-orange-400 border border-orange-900/60",
+    PINNED: "bg-pink-950/60 text-pink-400 border border-pink-900/60",
 };
 
 const POLICY_LABELS: Record<string, string> = {
@@ -26,7 +26,7 @@ export function LifecycleBadge({ policy, className }: LifecycleBadgeProps) {
     return (
         <span
             className={cn(
-                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                "inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium",
                 style,
                 className
             )}

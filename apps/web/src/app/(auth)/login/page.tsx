@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -37,16 +38,30 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-950">
-            <div className="w-full max-w-sm space-y-6 p-8 bg-gray-900 rounded-2xl border border-gray-800 shadow-2xl">
-                <div className="text-center space-y-1">
-                    <h1 className="text-2xl font-bold text-white">Watch Warden</h1>
-                    <p className="text-sm text-gray-400">Admin login</p>
+        <div className="min-h-screen flex items-center justify-center bg-gray-950 relative overflow-hidden">
+            {/* Subtle radial glow */}
+            <div className="absolute inset-0 bg-gradient-radial from-brand-500/5 via-transparent to-transparent pointer-events-none" />
+
+            <div className="relative w-full max-w-sm space-y-8 px-8 py-10 bg-gray-900/70 rounded-2xl border border-gray-800/80 shadow-2xl backdrop-blur-sm">
+                {/* Logo + wordmark */}
+                <div className="flex flex-col items-center gap-4">
+                    <Image
+                        src="/images/watch-warden.png"
+                        alt="Watch Warden"
+                        width={72}
+                        height={72}
+                        className="object-contain"
+                        priority
+                    />
+                    <div className="text-center">
+                        <h1 className="text-xl font-semibold text-white tracking-tight">Watch Warden</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">Home media orchestration</p>
+                    </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
+                    <div className="space-y-1.5">
+                        <label htmlFor="password" className="block text-xs font-medium text-gray-400 uppercase tracking-wider">
                             Admin Password
                         </label>
                         <input
@@ -56,13 +71,13 @@ export default function LoginPage() {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                             autoFocus
-                            className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                            placeholder="••••••••"
+                            className="w-full rounded-lg bg-gray-800/80 border border-gray-700/60 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-brand-500/60 focus:border-brand-500/40 transition-all"
+                            placeholder="Enter password"
                         />
                     </div>
 
                     {error && (
-                        <p className="text-sm text-red-400 rounded-lg bg-red-900/20 border border-red-800 px-3 py-2">
+                        <p className="text-xs text-red-400 rounded-lg bg-red-950/40 border border-red-900/60 px-3 py-2.5">
                             {error}
                         </p>
                     )}
@@ -70,7 +85,7 @@ export default function LoginPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-medium py-2 transition-colors"
+                        className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 active:bg-brand-700 disabled:opacity-50 text-gray-950 font-semibold text-sm py-2.5 transition-all shadow-lg shadow-brand-500/20"
                     >
                         {loading ? "Signing in…" : "Sign in"}
                     </button>
@@ -78,4 +93,6 @@ export default function LoginPage() {
             </div>
         </div>
     );
+}
+
 }

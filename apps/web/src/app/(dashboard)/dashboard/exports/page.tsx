@@ -56,7 +56,7 @@ export default function ExportsPage() {
                 <button
                     onClick={triggerGenerate}
                     disabled={generating}
-                    className="flex items-center gap-2 text-sm rounded-lg px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 text-sm rounded-lg px-4 py-2 bg-brand-500 hover:bg-brand-600 text-gray-950 transition-colors disabled:opacity-50"
                 >
                     <RefreshCw className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
                     {generating ? "Generating…" : "Generate Now"}

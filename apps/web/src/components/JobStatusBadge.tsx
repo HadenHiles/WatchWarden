@@ -6,18 +6,18 @@ interface JobStatusBadgeProps {
 }
 
 const STYLES: Record<string, string> = {
-    RUNNING: "bg-blue-900 text-blue-300 animate-pulse",
-    COMPLETED: "bg-green-900 text-green-300",
-    FAILED: "bg-red-900 text-red-300",
-    SKIPPED: "bg-gray-800 text-gray-500",
+    RUNNING: "bg-sky-950/80 text-sky-400 animate-pulse",
+    COMPLETED: "bg-green-950/80 text-green-400",
+    FAILED: "bg-red-950/80 text-red-400",
+    SKIPPED: "bg-gray-900/80 text-gray-600",
 };
 
 export function JobStatusBadge({ status, className }: JobStatusBadgeProps) {
     return (
         <span
             className={cn(
-                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                STYLES[status] ?? "bg-gray-700 text-gray-400",
+                "inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium",
+                STYLES[status] ?? "bg-gray-800 text-gray-500",
                 className
             )}
         >

@@ -3,21 +3,36 @@
 @tailwind utilities;
 
 :root {
-  --sidebar-width: 240px;
+  --sidebar-width: 260px;
 }
 
 body {
   @apply bg-gray-950 text-gray-100;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
-  @apply bg-gray-900;
+  @apply bg-transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-700 rounded-full;
+  @apply bg-gray-700/50 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-600;
+}
+
+/* Smooth color transitions on interactive elements */
+button, a, input, select, textarea {
+  @apply transition-colors duration-150;
+}
+
+/* Poster image fade-in */
+img {
+  @apply transition-opacity duration-300;
 }

@@ -74,7 +74,7 @@ const CRON_LABELS: [keyof SchedulesForm, string][] = [
 ];
 
 const INPUT_CLS =
-    "w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500 placeholder-gray-500";
+    "w-full rounded-lg bg-gray-800/80 border border-gray-700/60 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/60 focus:border-brand-500/40 placeholder-gray-600 transition-all";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -268,7 +268,7 @@ export function OnboardingWizard() {
                     </div>
                 )}
 
-                <div className="rounded-2xl border border-gray-800 bg-gray-900 p-8 shadow-xl">
+                <div className="rounded-2xl border border-gray-800/60 bg-gray-900/70 p-8 shadow-2xl backdrop-blur-sm">
                     {/* ── Welcome ─────────────────────────────────────────── */}
                     {currentStep === "welcome" && (
                         <>
@@ -304,7 +304,7 @@ export function OnboardingWizard() {
                             </div>
                             <button
                                 onClick={() => setStepIdx(1)}
-                                className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-3 font-semibold transition-colors text-sm"
+                                className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-gray-950 px-4 py-3 font-semibold transition-colors text-sm"
                             >
                                 Get Started
                                 <ChevronRight className="w-4 h-4" />
@@ -513,7 +513,7 @@ export function OnboardingWizard() {
                             <button
                                 onClick={handleNext}
                                 disabled={saving}
-                                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 font-semibold transition-colors disabled:opacity-50 text-sm"
+                                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-gray-950 px-4 py-2.5 font-semibold transition-colors disabled:opacity-50 text-sm"
                             >
                                 {saving ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
