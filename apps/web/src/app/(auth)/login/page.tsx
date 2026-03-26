@@ -70,6 +70,8 @@ export default function LoginPage() {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                             autoFocus
+                            autoComplete="current-password"
+                            suppressHydrationWarning
                             className="w-full rounded-lg bg-gray-800/80 border border-gray-700/60 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-brand-500/60 focus:border-brand-500/40 transition-all"
                             placeholder="Enter password"
                         />
