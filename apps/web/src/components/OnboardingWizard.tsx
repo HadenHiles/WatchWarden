@@ -2,15 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, ChevronRight, ChevronLeft, Loader2, Wifi, WifiOff, Eye, EyeOff } from "lucide-react";
+import { CheckCircle, ChevronRight, ChevronLeft, Loader2, Wifi, WifiOff } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-interface AdminForm {
-    username: string;
-    password: string;
-    confirm: string;
-}
 
 interface TautulliForm {
     baseUrl: string;
@@ -47,12 +41,11 @@ interface TestStatus {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const STEPS = ["welcome", "admin", "tautulli", "jellyseerr", "sources", "schedules", "done"] as const;
+const STEPS = ["welcome", "tautulli", "jellyseerr", "sources", "schedules", "done"] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
     welcome: "Welcome",
-    admin: "Admin Account",
     tautulli: "Tautulli",
     jellyseerr: "Jellyseerr",
     sources: "Trend Sources",
@@ -167,10 +160,6 @@ export function OnboardingWizard() {
     const [stepIdx, setStepIdx] = useState(0);
     const currentStep = STEPS[stepIdx];
 
-    const [admin, setAdmin] = useState<AdminForm>({ username: "admin", password: "", confirm: "" });
-    const [adminErrors, setAdminErrors] = useState<{ password?: string; confirm?: string }>({});
-    const [showPassword, setShowPassword] = useState(false);
-
     const [tautulli, setTautulli] = useState<TautulliForm>({ baseUrl: "", apiKey: "" });
     const [tautulliTest, setTautulliTest] = useState<TestStatus>({ state: null, message: "" });
 
@@ -183,32 +172,21 @@ export function OnboardingWizard() {
     const [saving, setSaving] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
 
-    function validateAdmin(): boolean {
-        const errs: typeof adminErrors = {};
-        if (admin.password.length < 8) errs.password = "Password must be at least 8 characters";
-        if (admin.password !== admin.confirm) errs.confirm = "Passwords do not match";
-        setAdminErrors(errs);
-        return Object.keys(errs).length === 0;
-    }
-
     async function handleNext() {
-        if (currentStep === "admin" && !validateAdmin()) return;
-
         if (currentStep === "schedules") {
             // Final step — submit everything at once
             setSaving(true);
             setSubmitError(null);
             try {
                 const payload = {
-                    admin: { username: admin.username, password: admin.password },
                     ...(tautulli.baseUrl || tautulli.apiKey ? { tautulli } : {}),
                     ...(jellyseerr.baseUrl || jellyseerr.apiKey
                         ? {
-                              jellyseerr: {
-                                  ...jellyseerr,
-                                  botUserId: parseInt(jellyseerr.botUserId, 10) || 2,
-                              },
-                          }
+                            jellyseerr: {
+                                ...jellyseerr,
+                                botUserId: parseInt(jellyseerr.botUserId, 10) || 2,
+                            },
+                        }
                         : {}),
                     ...(sources.tmdbApiKey || sources.traktClientId ? { sources } : {}),
                     refreshIntervals: schedules,
@@ -234,7 +212,7 @@ export function OnboardingWizard() {
         }
 
         if (currentStep === "done") {
-            router.push("/login");
+            router.push("/dashboard/suggestions/movies");
             return;
         }
 
@@ -253,7 +231,7 @@ export function OnboardingWizard() {
         setJellyseerrTest({ state: result.success ? "ok" : "fail", message: result.message ?? "" });
     }
 
-    const configSteps = (["admin", "tautulli", "jellyseerr", "sources", "schedules"] as const).map(
+    const configSteps = (["tautulli", "jellyseerr", "sources", "schedules"] as const).map(
         (s) => STEP_LABELS[s],
     );
     const currentConfigIdx = configSteps.indexOf(STEP_LABELS[currentStep]);
@@ -279,10 +257,10 @@ export function OnboardingWizard() {
                                 <div
                                     key={label}
                                     className={`h-1 flex-1 rounded-full transition-colors ${i < currentConfigIdx
-                                            ? "bg-brand-500"
-                                            : i === currentConfigIdx
-                                                ? "bg-brand-400"
-                                                : "bg-gray-700"
+                                        ? "bg-brand-500"
+                                        : i === currentConfigIdx
+                                            ? "bg-brand-400"
+                                            : "bg-gray-700"
                                         }`}
                                 />
                             ))}
@@ -296,13 +274,11 @@ export function OnboardingWizard() {
                         <>
                             <h1 className="text-2xl font-bold text-white mb-2">Welcome to Watch Warden</h1>
                             <p className="text-gray-400 mb-6 text-sm leading-relaxed">
-                                Let&#39;s get everything set up. You&#39;ll create your admin account and configure
-                                your integrations. Every step after admin is optional — skip anything and update it
-                                later from Settings.
+                                Let&#39;s get your integrations set up. Every step is optional — skip anything
+                                and update it later from Settings.
                             </p>
                             <ul className="space-y-2.5 mb-6">
                                 {[
-                                    { label: "Admin Account", desc: "Username and password for the dashboard" },
                                     { label: "Tautulli", desc: "Local watch history & engagement signals" },
                                     { label: "Jellyseerr", desc: "Automated media requests" },
                                     { label: "Trend Sources", desc: "TMDB & Trakt API keys for trending data" },
@@ -333,69 +309,6 @@ export function OnboardingWizard() {
                                 Get Started
                                 <ChevronRight className="w-4 h-4" />
                             </button>
-                        </>
-                    )}
-
-                    {/* ── Admin Account ────────────────────────────────────── */}
-                    {currentStep === "admin" && (
-                        <>
-                            <h2 className="text-xl font-bold text-white mb-1">Admin Account</h2>
-                            <p className="text-gray-400 text-sm mb-5 leading-relaxed">
-                                Create the administrator account you&#39;ll use to log in to the dashboard.
-                            </p>
-                            <div className="space-y-4">
-                                <Field label="Username">
-                                    <input
-                                        type="text"
-                                        value={admin.username}
-                                        onChange={(e) => setAdmin((f) => ({ ...f, username: e.target.value }))}
-                                        placeholder="admin"
-                                        autoComplete="username"
-                                        className={INPUT_CLS}
-                                    />
-                                </Field>
-                                <Field label="Password">
-                                    <div className="relative">
-                                        <input
-                                            type={showPassword ? "text" : "password"}
-                                            value={admin.password}
-                                            onChange={(e) => {
-                                                setAdmin((f) => ({ ...f, password: e.target.value }));
-                                                setAdminErrors((e2) => ({ ...e2, password: undefined }));
-                                            }}
-                                            placeholder="At least 8 characters"
-                                            autoComplete="new-password"
-                                            className={INPUT_CLS + " pr-10"}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword((v) => !v)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                        >
-                                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                        </button>
-                                    </div>
-                                    {adminErrors.password && (
-                                        <p className="text-xs text-red-400 mt-1">{adminErrors.password}</p>
-                                    )}
-                                </Field>
-                                <Field label="Confirm Password">
-                                    <input
-                                        type={showPassword ? "text" : "password"}
-                                        value={admin.confirm}
-                                        onChange={(e) => {
-                                            setAdmin((f) => ({ ...f, confirm: e.target.value }));
-                                            setAdminErrors((e2) => ({ ...e2, confirm: undefined }));
-                                        }}
-                                        placeholder="Repeat password"
-                                        autoComplete="new-password"
-                                        className={INPUT_CLS}
-                                    />
-                                    {adminErrors.confirm && (
-                                        <p className="text-xs text-red-400 mt-1">{adminErrors.confirm}</p>
-                                    )}
-                                </Field>
-                            </div>
                         </>
                     )}
 
@@ -578,13 +491,8 @@ export function OnboardingWizard() {
                             <h2 className="text-xl font-bold text-white text-center mb-2">
                                 You&#39;re all set!
                             </h2>
-                            <p className="text-gray-400 text-sm text-center mb-2 leading-relaxed">
-                                Your account and integrations are configured. Sign in with the credentials you just
-                                created.
-                            </p>
-                            <p className="text-gray-500 text-xs text-center mb-8">
-                                Username:{" "}
-                                <span className="text-gray-300 font-mono">{admin.username}</span>
+                            <p className="text-gray-400 text-sm text-center mb-8 leading-relaxed">
+                                Your integrations are configured. Taking you to the dashboard.
                             </p>
                         </>
                     )}
@@ -604,13 +512,13 @@ export function OnboardingWizard() {
                             )}
                             <button
                                 onClick={handleNext}
-                                disabled={saving || (currentStep === "admin" && !admin.username)}
+                                disabled={saving}
                                 className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 font-semibold transition-colors disabled:opacity-50 text-sm"
                             >
                                 {saving ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : currentStep === "done" ? (
-                                    "Go to Login"
+                                    "Go to Dashboard"
                                 ) : currentStep === "schedules" ? (
                                     <>
                                         Finish Setup

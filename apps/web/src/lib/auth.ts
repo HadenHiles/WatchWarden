@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 export interface SessionData {
     authenticated: boolean;
+    needsPasswordChange?: boolean;
 }
 
 const sessionOptions = {
@@ -26,4 +27,5 @@ export async function requireAuth() {
     if (!session.authenticated) {
         redirect("/login");
     }
+    return session;
 }

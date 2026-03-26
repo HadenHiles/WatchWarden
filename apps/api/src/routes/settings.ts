@@ -47,7 +47,7 @@ settingsRouter.post("/test-connection", async (req, res) => {
 });
 
 // Internal-only keys that should never be returned to the UI
-const INTERNAL_KEYS = new Set(["setup.complete", "admin.credentials"]);
+const INTERNAL_KEYS = new Set(["setup.complete", "admin.credentials", "password.changed"]);
 
 // GET /settings — returns all settings grouped by category (excludes internal keys)
 settingsRouter.get("/", async (_req, res) => {

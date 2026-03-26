@@ -33,9 +33,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(error, { status: res.status });
     }
 
+    const data = await res.json();
     const session = await getSession();
     session.authenticated = true;
+    session.needsPasswordChange = data.data?.needsPasswordChange === true;
     await session.save();
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, needsPasswordChange: session.needsPasswordChange });
 }

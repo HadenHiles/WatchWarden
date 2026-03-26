@@ -63,23 +63,11 @@ export function authRouter(env: ApiEnv) {
             refreshIntervals?: Record<string, string>;
         };
 
-        if (!admin?.username || !admin?.password) {
-            return res.status(400).json({ success: false, error: "Admin username and password are required" });
-        }
-        if (admin.password.length < 8) {
-            return res.status(400).json({ success: false, error: "Password must be at least 8 characters" });
-        }
-
-        const passwordHash = await bcrypt.hash(admin.password, 12);
-
         type UpsertArg = Parameters<typeof prisma.appSetting.upsert>[0];
-        const writes: UpsertArg[] = [
-            {
-                where: { key: "admin.credentials" },
-                update: { value: { username: admin.username, passwordHash } as object },
-                create: { key: "admin.credentials", value: { username: admin.username, passwordHash } as object, category: "system" },
-            },
-        ];
+        const writes: UpsertArg[] = [];
+
+        // Admin credentials are now handled via POST /auth/change-password — ignore if sent
+        void admin;
 
         if (tautulli?.baseUrl || tautulli?.apiKey) {
             writes.push({
@@ -166,8 +154,47 @@ export function authRouter(env: ApiEnv) {
         return res.status(400).json({ success: false, error: `Unknown type: ${type}` });
     });
 
+    // ── POST /auth/change-password ─────────────────────────────────────
+    // Requires an active admin session OR API_SECRET bearer token (server-side proxy).
+    // Saves new hash to admin.credentials and marks password.changed = true.
+    router.post("/change-password", async (req: Request, res: Response) => {
+        if (!req.session.adminAuthenticated && !verifyApiSecret(req)) {
+            return res.status(401).json({ success: false, error: "Not authenticated" });
+        }
+
+        const { password } = req.body as { password?: string };
+        if (!password || password.length < 8) {
+            return res.status(400).json({ success: false, error: "Password must be at least 8 characters" });
+        }
+
+        // Get current username from DB credentials or env fallback
+        const dbCreds = await prisma.appSetting.findUnique({ where: { key: "admin.credentials" } });
+        const username =
+            dbCreds?.value && typeof dbCreds.value === "object"
+                ? (dbCreds.value as { username: string }).username
+                : env.ADMIN_USERNAME;
+
+        const passwordHash = await bcrypt.hash(password, 12);
+
+        await prisma.$transaction([
+            prisma.appSetting.upsert({
+                where: { key: "admin.credentials" },
+                update: { value: { username, passwordHash } as object },
+                create: { key: "admin.credentials", value: { username, passwordHash } as object, category: "system" },
+            }),
+            prisma.appSetting.upsert({
+                where: { key: "password.changed" },
+                update: { value: true as unknown as object },
+                create: { key: "password.changed", value: true as unknown as object, category: "system" },
+            }),
+        ]);
+
+        return res.json({ success: true });
+    });
+
     // ── POST /auth/login ───────────────────────────────────────────────────
-    // Checks DB admin.credentials first; falls back to env vars.
+    // Checks DB admin.credentials first, falls back to env vars.
+    // Also returns whether the password has been changed from the default.
     router.post("/login", async (req: Request, res: Response) => {
         const result = loginSchema.safeParse(req.body);
         if (!result.success) {
@@ -202,7 +229,11 @@ export function authRouter(env: ApiEnv) {
         req.session.adminAuthenticated = true;
         req.session.userId = username;
 
-        return res.json({ success: true, data: { username } });
+        // Tell the caller whether the password still needs to be changed
+        const changed = await prisma.appSetting.findUnique({ where: { key: "password.changed" } });
+        const needsPasswordChange = changed?.value !== true;
+
+        return res.json({ success: true, data: { username, needsPasswordChange } });
     });
 
     // ── POST /auth/logout ──────────────────────────────────────────────────

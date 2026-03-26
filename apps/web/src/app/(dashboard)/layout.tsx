@@ -21,7 +21,9 @@ async function isSetupComplete(): Promise<boolean> {
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-    await requireAuth();
+    const session = await requireAuth();
+
+    if (session.needsPasswordChange) redirect("/change-password");
 
     const setupDone = await isSetupComplete();
     if (!setupDone) redirect("/onboarding");
