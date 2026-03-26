@@ -72,13 +72,10 @@ export function Sidebar() {
                 <Image
                     src="/images/watch-warden.png"
                     alt="Watch Warden"
-                    width={36}
-                    height={36}
+                    width={225}
+                    height={100}
                     className="flex-shrink-0 object-contain"
                 />
-                <span className="font-semibold text-white text-base tracking-tight">
-                    Watch Warden
-                </span>
             </div>
 
             {/* Nav */}
