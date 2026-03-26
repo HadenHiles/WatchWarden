@@ -26,6 +26,7 @@ interface FeedSuggestion {
         isRequested: boolean;
         plexRatingKey?: string | null;
         status: string;
+        streamingOn: string[];
         trendSnapshots: Array<{ source: string; trendScore: number }>;
     };
 }
@@ -41,14 +42,35 @@ interface FeedCollection {
     suggestions: FeedSuggestion[];
 }
 
-// ─── Source label helpers ─────────────────────────────────────────────────────
+// ─── Streaming provider helpers ──────────────────────────────────────────────
 
-function getSourceBadge(snapshots: Array<{ source: string; trendScore: number }>) {
-    if (!snapshots?.length) return null;
-    const top = [...snapshots].sort((a, b) => b.trendScore - a.trendScore)[0];
-    if (top.source.startsWith("tmdb_")) return { label: "TMDB", cls: "bg-blue-950/60 text-blue-300 border-blue-800/50" };
-    if (top.source.startsWith("trakt_")) return { label: "Trakt", cls: "bg-red-950/60 text-red-300 border-red-800/50" };
-    return { label: "Trend", cls: "bg-gray-800/60 text-gray-400 border-gray-700/50" };
+// Maps known provider names to a short label + Tailwind colour class.
+// Fallback is a neutral grey badge showing the provider name truncated.
+const PROVIDER_STYLES: Record<string, { label: string; cls: string }> = {
+    "Netflix":          { label: "Netflix",    cls: "bg-red-950/80 text-red-300 border-red-800/60" },
+    "Disney Plus":      { label: "Disney+",    cls: "bg-blue-950/80 text-blue-300 border-blue-800/60" },
+    "Disney+":          { label: "Disney+",    cls: "bg-blue-950/80 text-blue-300 border-blue-800/60" },
+    "Amazon Prime Video": { label: "Prime",   cls: "bg-sky-950/80 text-sky-300 border-sky-800/60" },
+    "Prime Video":      { label: "Prime",      cls: "bg-sky-950/80 text-sky-300 border-sky-800/60" },
+    "Apple TV Plus":    { label: "Apple TV+",  cls: "bg-gray-800/80 text-gray-200 border-gray-600/60" },
+    "Apple TV+":        { label: "Apple TV+",  cls: "bg-gray-800/80 text-gray-200 border-gray-600/60" },
+    "Crave":            { label: "Crave",       cls: "bg-purple-950/80 text-purple-300 border-purple-800/60" },
+    "Max":              { label: "Max",         cls: "bg-indigo-950/80 text-indigo-300 border-indigo-800/60" },
+    "HBO Max":          { label: "Max",         cls: "bg-indigo-950/80 text-indigo-300 border-indigo-800/60" },
+    "Hulu":             { label: "Hulu",        cls: "bg-green-950/80 text-green-300 border-green-800/60" },
+    "Peacock":          { label: "Peacock",     cls: "bg-yellow-950/80 text-yellow-300 border-yellow-800/60" },
+    "Paramount Plus":   { label: "Paramount+",  cls: "bg-blue-900/80 text-blue-200 border-blue-700/60" },
+    "Paramount+":       { label: "Paramount+",  cls: "bg-blue-900/80 text-blue-200 border-blue-700/60" },
+    "Tubi":             { label: "Tubi",        cls: "bg-orange-950/80 text-orange-300 border-orange-800/60" },
+    "CBC Gem":          { label: "CBC Gem",     cls: "bg-red-900/80 text-red-200 border-red-700/60" },
+    "Pluto TV":         { label: "Pluto TV",    cls: "bg-cyan-950/80 text-cyan-300 border-cyan-800/60" },
+};
+
+function getProviderBadge(providers: string[]) {
+    if (!providers?.length) return null;
+    // Show the first (highest-priority) provider
+    const name = providers[0];
+    return PROVIDER_STYLES[name] ?? { label: name.length > 12 ? name.slice(0, 11) + "…" : name, cls: "bg-gray-800/70 text-gray-400 border-gray-700/50" };
 }
 
 // ─── Single poster card ───────────────────────────────────────────────────────
@@ -70,7 +92,7 @@ function SuggestionPosterCard({
         ? `https://image.tmdb.org/t/p/w185${title.posterPath}`
         : null;
 
-    const sourceBadge = getSourceBadge(title.trendSnapshots);
+    const providerBadge = getProviderBadge(title.streamingOn);
 
     async function handle(action: "approve" | "reject") {
         if (loading || done) return;
@@ -118,9 +140,9 @@ function SuggestionPosterCard({
                             Requested
                         </span>
                     )}
-                    {sourceBadge && (
-                        <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border backdrop-blur-sm", sourceBadge.cls)}>
-                            {sourceBadge.label}
+                    {providerBadge && (
+                        <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border backdrop-blur-sm", providerBadge.cls)}>
+                            {providerBadge.label}
                         </span>
                     )}
                 </div>
@@ -329,7 +351,7 @@ export function CollectionFeedPage() {
                 <span className="flex items-center gap-1.5"><Check className="w-3 h-3 text-green-400" /> Approve + add to collection (or request if not in Plex)</span>
                 <span className="flex items-center gap-1.5"><X className="w-3 h-3 text-red-400" /> Reject</span>
                 <span className="flex items-center gap-1.5"><span className="px-1 rounded bg-teal-900/50 text-teal-300 border border-teal-800/40">In Plex</span> Already in your library</span>
-                <span className="flex items-center gap-1.5"><span className="px-1 rounded bg-blue-900/50 text-blue-300 border border-blue-800/40">TMDB</span> <span className="px-1 rounded bg-red-900/50 text-red-300 border border-red-800/40">Trakt</span> Trend source</span>
+                <span className="flex items-center gap-1.5"><span className="px-1 rounded bg-red-950/70 text-red-300 border border-red-800/40">Netflix</span> <span className="px-1 rounded bg-purple-950/70 text-purple-300 border border-purple-800/40">Crave</span> Streaming service (CA / US)</span>
             </div>
 
             {isLoading && (

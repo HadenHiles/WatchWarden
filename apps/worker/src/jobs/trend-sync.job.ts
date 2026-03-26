@@ -2,8 +2,49 @@ import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { buildSourceAdapters } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { SourceTrendItem } from "@watchwarden/types";
+import axios from "axios";
 
 const logger = createLogger("trend-sync-job");
+
+const TMDB_BASE = "https://api.themoviedb.org/3";
+// Preferred region order: CA first, US as fallback
+const PROVIDER_REGIONS = ["CA", "US"] as const;
+
+// ─── Watch provider enrichment ────────────────────────────────────────────────
+
+interface TmdbWatchProvider {
+    provider_id: number;
+    provider_name: string;
+    logo_path: string;
+}
+interface TmdbWatchProvidersResponse {
+    results: Partial<Record<string, { flatrate?: TmdbWatchProvider[]; free?: TmdbWatchProvider[] }>>;
+}
+
+async function fetchStreamingProviders(
+    tmdbId: number,
+    mediaType: "MOVIE" | "SHOW",
+    apiKey: string
+): Promise<string[]> {
+    try {
+        const segment = mediaType === "MOVIE" ? "movie" : "tv";
+        const { data } = await axios.get<TmdbWatchProvidersResponse>(
+            `${TMDB_BASE}/${segment}/${tmdbId}/watch/providers`,
+            { params: { api_key: apiKey }, timeout: 8_000 }
+        );
+        for (const region of PROVIDER_REGIONS) {
+            const entry = data.results[region];
+            if (!entry) continue;
+            const providers = [...(entry.flatrate ?? []), ...(entry.free ?? [])];
+            if (providers.length > 0) {
+                return providers.map((p) => p.provider_name);
+            }
+        }
+    } catch {
+        // Non-fatal — provider lookup is best-effort
+    }
+    return [];
+}
 
 export async function trendSyncJob(): Promise<void> {
     const { sources } = await getIntegrationConfig();
@@ -47,7 +88,7 @@ export async function trendSyncJob(): Promise<void> {
             }
 
             // Upsert the canonical Title record
-            const title = await upsertTitle(item);
+            const title = await upsertTitle(item, sources.tmdbApiKey ?? undefined);
 
             // Record the trend snapshot
             await prisma.externalTrendSnapshot.create({
@@ -82,7 +123,12 @@ export async function trendSyncJob(): Promise<void> {
     logger.info(`Trend sync complete`, { totalIngested });
 }
 
-async function upsertTitle(item: SourceTrendItem) {
+async function upsertTitle(item: SourceTrendItem, tmdbApiKey?: string) {
+    // Fetch streaming providers (CA preferred, US fallback)
+    const streamingOn = item.tmdbId && tmdbApiKey
+        ? await fetchStreamingProviders(item.tmdbId, item.mediaType, tmdbApiKey)
+        : [];
+
     // Try to find existing title by TMDB ID first, then IMDB ID
     const existing = item.tmdbId
         ? await prisma.title.findFirst({ where: { tmdbId: item.tmdbId } })
@@ -99,6 +145,7 @@ async function upsertTitle(item: SourceTrendItem) {
                 backdropPath: item.backdropPath ?? existing.backdropPath,
                 overview: item.overview ?? existing.overview,
                 genres: item.genres.length > 0 ? item.genres : existing.genres,
+                ...(streamingOn.length > 0 && { streamingOn }),
             },
         });
     }
@@ -116,6 +163,7 @@ async function upsertTitle(item: SourceTrendItem) {
             posterPath: item.posterPath,
             backdropPath: item.backdropPath,
             genres: item.genres,
+            streamingOn,
             status: "CANDIDATE",
         },
     });

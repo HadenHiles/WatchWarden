@@ -126,6 +126,7 @@ plexRouter.get("/collections/feed", async (_req, res) => {
                             isRequested: true,
                             plexRatingKey: true,
                             status: true,
+                            streamingOn: true,
                             trendSnapshots: {
                                 select: { source: true, trendScore: true },
                                 orderBy: { trendScore: "desc" },

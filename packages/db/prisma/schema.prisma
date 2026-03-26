@@ -96,6 +96,7 @@ model Title {
   posterPath    String?
   backdropPath  String?
   genres        String[]
+  streamingOn   String[]  // provider names, e.g. ["Netflix", "Disney+"] — CA primary, US fallback
 
   // Lifecycle and policy fields
   status          TitleStatus     @default(CANDIDATE)
