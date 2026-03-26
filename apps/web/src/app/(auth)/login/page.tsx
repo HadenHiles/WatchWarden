@@ -48,13 +48,12 @@ export default function LoginPage() {
                     <Image
                         src="/images/watch-warden.png"
                         alt="Watch Warden"
-                        width={72}
-                        height={72}
+                        width={240}
+                        height={140}
                         className="object-contain"
                         priority
                     />
                     <div className="text-center">
-                        <h1 className="text-xl font-semibold text-white tracking-tight">Watch Warden</h1>
                         <p className="text-xs text-gray-500 mt-0.5">Home media orchestration</p>
                     </div>
                 </div>
@@ -93,6 +92,4 @@ export default function LoginPage() {
             </div>
         </div>
     );
-}
-
 }

@@ -123,13 +123,3 @@ export function Sidebar() {
         </aside>
     );
 }
-
-                                );
-                            })}
-                        </ul >
-                    </div >
-                ))}
-            </nav >
-        </aside >
-    );
-}
