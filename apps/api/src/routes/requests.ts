@@ -55,3 +55,9 @@ requestsRouter.post("/:titleId/retry", async (req, res) => {
     const result = await requestService.submitRequest(req.params.titleId);
     res.json({ success: true, data: result });
 });
+
+// POST /requests/:titleId — submit a new request (idempotent — upserts if already exists)
+requestsRouter.post("/:titleId", async (req, res) => {
+    const result = await requestService.submitRequest(req.params.titleId);
+    res.json({ success: true, data: result });
+});

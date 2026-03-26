@@ -95,3 +95,50 @@ plexRouter.get("/sections", async (_req, res) => {
         });
     }
 });
+
+// GET /plex/collections/feed — all collections + top pending suggestions for each
+// Used by the suggestions page to render one row per collection.
+plexRouter.get("/collections/feed", async (_req, res) => {
+    const collections = await prisma.plexCollection.findMany({
+        where: { enabled: true },
+        orderBy: [{ mediaType: "asc" }, { name: "asc" }],
+    });
+
+    const feed = await Promise.all(
+        collections.map(async (col) => {
+            const suggestions = await prisma.suggestion.findMany({
+                where: {
+                    status: "PENDING",
+                    title: { mediaType: col.mediaType as "MOVIE" | "SHOW" },
+                },
+                orderBy: { finalScore: "desc" },
+                take: 30,
+                include: {
+                    title: {
+                        select: {
+                            id: true,
+                            title: true,
+                            year: true,
+                            mediaType: true,
+                            posterPath: true,
+                            overview: true,
+                            inLibrary: true,
+                            isRequested: true,
+                            plexRatingKey: true,
+                            status: true,
+                            trendSnapshots: {
+                                select: { source: true, trendScore: true },
+                                orderBy: { trendScore: "desc" },
+                                take: 3,
+                            },
+                        },
+                    },
+                },
+            });
+
+            return { ...col, suggestions };
+        })
+    );
+
+    res.json({ success: true, data: feed });
+});
