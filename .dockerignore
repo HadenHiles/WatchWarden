@@ -42,6 +42,5 @@ Thumbs.db
 # Worker local exports (not part of image)
 apps/worker/exports
 
-# Public sample exports (not needed in image)
+# Root-level sample data (not needed in image)
 /exports
-/public/images
