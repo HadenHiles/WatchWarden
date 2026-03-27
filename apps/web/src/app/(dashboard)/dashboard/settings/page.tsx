@@ -29,11 +29,12 @@ interface SettingSection {
 const KNOWN_SETTINGS: SettingSection[] = [
     {
         section: "Scoring Weights",
+        note: "Values must be between 0.0 and 1.0 and should sum to 1.0 (e.g. 0.45 + 0.35 + 0.10 + 0.10). The worker will normalize them if they don't.",
         keys: [
-            { key: "score.weights", subKey: "externalTrendScore", label: "External Trend Weight", type: "number" },
-            { key: "score.weights", subKey: "localInterestScore", label: "Local Interest Weight", type: "number" },
-            { key: "score.weights", subKey: "freshnessScore", label: "Freshness Weight", type: "number" },
-            { key: "score.weights", subKey: "editorialBoost", label: "Editorial Boost Weight", type: "number" },
+            { key: "score.weights", subKey: "externalTrendScore", label: "External Trend Weight", type: "number", hint: "0.0 – 1.0", placeholder: "0.45" },
+            { key: "score.weights", subKey: "localInterestScore", label: "Local Interest Weight", type: "number", hint: "0.0 – 1.0", placeholder: "0.35" },
+            { key: "score.weights", subKey: "freshnessScore", label: "Freshness Weight", type: "number", hint: "0.0 – 1.0", placeholder: "0.10" },
+            { key: "score.weights", subKey: "editorialBoost", label: "Editorial Boost Weight", type: "number", hint: "0.0 – 1.0", placeholder: "0.10" },
         ],
     },
     {

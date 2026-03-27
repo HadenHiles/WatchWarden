@@ -15,9 +15,22 @@ const DEFAULT_WEIGHTS: ScoreWeights = {
 export async function scoringJob(): Promise<void> {
     // Load scoring weights from settings
     const weightsSetting = await prisma.appSetting.findUnique({ where: { key: "score.weights" } });
-    const weights: ScoreWeights = weightsSetting
+    const rawWeights = weightsSetting
         ? (weightsSetting.value as unknown as ScoreWeights)
         : DEFAULT_WEIGHTS;
+
+    // Normalize weights so they always sum to 1.0 regardless of what the user saved.
+    // This handles cases where values were entered as whole numbers (e.g. 7, 3, 5, 2)
+    // instead of fractions (0.45, 0.35, 0.10, 0.10).
+    const weightsSum = Object.values(rawWeights).reduce((a, b) => a + b, 0);
+    const weights: ScoreWeights = weightsSum > 0 && Math.abs(weightsSum - 1) > 0.01
+        ? (() => {
+            logger.warn("Score weights do not sum to 1 — normalizing", { rawWeights, sum: weightsSum });
+            return Object.fromEntries(
+                Object.entries(rawWeights).map(([k, v]) => [k, v / weightsSum])
+            ) as unknown as ScoreWeights;
+        })()
+        : rawWeights;
 
     const exclusionsSetting = await prisma.appSetting.findUnique({ where: { key: "exclusions" } });
     const exclusions = exclusionsSetting?.value as {
