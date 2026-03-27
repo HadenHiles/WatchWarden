@@ -43,5 +43,5 @@ Thumbs.db
 apps/worker/exports
 
 # Public sample exports (not needed in image)
-exports
-public/images
+/exports
+/public/images
