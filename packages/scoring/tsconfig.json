@@ -3,13 +3,13 @@
     "compilerOptions": {
         "composite": true,
         "outDir": "./dist",
-        "rootDir": "./src"
-    },
-    "references": [
-        {
-            "path": "../types"
+        "rootDir": "./src",
+        "baseUrl": ".",
+        "paths": {
+            "@watchwarden/types": ["../types/dist"],
+            "@watchwarden/types/*": ["../types/dist/*"]
         }
-    ],
+    },
     "include": [
         "src/**/*"
     ],

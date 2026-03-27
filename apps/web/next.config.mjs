@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     output: "standalone",
+    eslint: {
+        // Linting is run separately; don't block production builds.
+        ignoreDuringBuilds: true,
+    },
     images: {
         remotePatterns: [
             { protocol: "https", hostname: "image.tmdb.org" },

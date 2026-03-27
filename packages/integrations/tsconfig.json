@@ -3,16 +3,17 @@
     "compilerOptions": {
         "composite": true,
         "outDir": "./dist",
-        "rootDir": "./src"
-    },
-    "references": [
-        {
-            "path": "../types"
-        },
-        {
-            "path": "../config"
+        "rootDir": "./src",
+        "baseUrl": ".",
+        "paths": {
+            "@watchwarden/config": ["../config/dist"],
+            "@watchwarden/config/*": ["../config/dist/*"],
+            "@watchwarden/types": ["../types/dist"],
+            "@watchwarden/types/*": ["../types/dist/*"],
+            "@watchwarden/db": ["../db/dist"],
+            "@watchwarden/db/*": ["../db/dist/*"]
         }
-    ],
+    },
     "include": [
         "src/**/*"
     ],

@@ -1,0 +1,47 @@
+# Dependencies
+**/node_modules
+**/.pnpm-store
+
+# Build outputs
+**/dist
+**/.next
+**/out
+**/*.tsbuildinfo
+
+# Dev environment
+.env
+.env.*
+!.env.example
+
+# Docker
+docker-compose.dev.yml
+
+# Logs
+**/logs
+**/*.log
+
+# Test artifacts
+**/coverage
+**/.nyc_output
+
+# Editor / OS
+.DS_Store
+.idea
+.vscode
+**/*.swp
+**/*.swo
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# CI
+.github
+
+# Worker local exports (not part of image)
+apps/worker/exports
+
+# Public sample exports (not needed in image)
+exports
+public/images

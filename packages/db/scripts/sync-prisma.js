@@ -19,5 +19,9 @@ console.log("Syncing generated Prisma client to pnpm virtual store…");
 console.log("  src:", rootPrismaDir);
 console.log("  dst:", pnpmPrismaDir);
 
-execSync(`cp -rf "${rootPrismaDir}/." "${pnpmPrismaDir}"`);
-console.log("Done.");
+if (path.resolve(rootPrismaDir) === path.resolve(pnpmPrismaDir)) {
+    console.log("src and dst are the same (hoisted node_modules), skipping copy.");
+} else {
+    execSync(`cp -rf "${rootPrismaDir}/." "${pnpmPrismaDir}"`);
+    console.log("Done.");
+}

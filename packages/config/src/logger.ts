@@ -6,7 +6,14 @@ const devFormat = combine(
     colorize(),
     timestamp({ format: "HH:mm:ss" }),
     errors({ stack: true }),
-    printf(({ level, message, timestamp: ts, service, ...meta }) => {
+    printf((info) => {
+        const { level, message, timestamp: ts, service, ...meta } = info as {
+            level: string;
+            message: string;
+            timestamp?: string;
+            service?: string;
+            [key: string]: unknown;
+        };
         const svc = service ? `[${String(service)}] ` : "";
         const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
         return `${String(ts)} ${level}: ${svc}${String(message)}${metaStr}`;

@@ -26,6 +26,12 @@ package-lock.json
 # ─── TypeScript build info ────────────────────────────────
 *.tsbuildinfo
 
+# ─── Compiled output in src/ (should be in dist/) ─────────
+packages/*/src/*.js
+packages/*/src/*.js.map
+packages/*/src/*.d.ts
+packages/*/src/*.d.ts.map
+
 # ─── Editor ───────────────────────────────────────────────
 .vscode/settings.json
 .idea/
