@@ -147,7 +147,11 @@ export class PlexClient {
                             title: string;
                             year?: number;
                             type: string;
+                            /** New-style Plex agent GUIDs (e.g. { id: "tmdb://12345" }) */
                             Guid?: Array<{ id: string }>;
+                            /** Legacy single-guid string for old Plex agents
+                             *  e.g. "com.plexapp.agents.themoviedb://12345?lang=en" */
+                            guid?: string;
                         }>;
                     };
                 }>(`/library/sections/${sectionId}/all`, {
@@ -155,19 +159,30 @@ export class PlexClient {
                         "X-Plex-Container-Start": String(offset),
                         "X-Plex-Container-Size": String(pageSize),
                     },
-                    params: { type: plexType },
+                    // includeGuids=1 ensures the Guid array is returned even on newer
+                    // Plex versions that may omit it from bulk section listings.
+                    params: { type: plexType, includeGuids: 1 },
                 });
 
                 const container = res.data.MediaContainer;
                 const items = container.Metadata ?? [];
 
                 for (const item of items) {
+                    // Prefer new-style Guid array; fall back to the legacy guid string
+                    // used by old Plex agents (com.plexapp.agents.themoviedb, etc.).
+                    const guids: Array<{ id: string }> =
+                        item.Guid?.length
+                            ? item.Guid
+                            : item.guid
+                                ? [{ id: item.guid }]
+                                : [];
+
                     allItems.push({
                         ratingKey: item.ratingKey,
                         title: item.title,
                         year: item.year,
                         type: item.type as PlexMediaItem["type"],
-                        guids: item.Guid ?? [],
+                        guids,
                     });
                 }
 

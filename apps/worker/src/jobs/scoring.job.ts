@@ -95,14 +95,61 @@ export async function scoringJob(): Promise<void> {
         if (result.excluded) {
             excluded++;
 
-            // If the title has an open suggestion, close it so it disappears from the UI.
-            // This handles titles that entered the library (or were requested) after their
-            // suggestion was already created.
-            if (title.suggestion && !["FULFILLED", "REJECTED"].includes(title.suggestion.status)) {
-                await prisma.suggestion.update({
-                    where: { id: title.suggestion.id },
-                    data: { status: "FULFILLED" },
+            // For in-library titles the exclusion is intentional for the suggestion feed
+            // (don't surface things already owned), but lifecycle evaluation still needs
+            // an up-to-date score so ACTIVE_TRENDING promotion can work.
+            // Re-score without exclusion rules and persist the result on the suggestion
+            // record (kept FULFILLED so it never surfaces in the UI).
+            if (title.inLibrary) {
+                const lifecycleResult = scoreTitle({
+                    externalTrendScore: latestSnapshot?.trendScore ?? 0,
+                    localInterestScore: watchSignal?.localInterestScore ?? 0,
+                    freshnessScore,
+                    editorialBoost: 0,
+                    weights,
+                    rules: {
+                        snapshotAt: latestSnapshot?.snapshotAt ?? null,
+                        lastRejectedAt: lastRejectionDecision?.createdAt ?? null,
+                        uniqueViewerCount: watchSignal?.uniqueViewerCount ?? 0,
+                        completionRate: watchSignal?.completionRate ?? 0,
+                        inLibrary: false,
+                        isRequested: false,
+                        isPermanentlyRejected: false,
+                        excludeInLibrary: false,
+                        excludeAlreadyRequested: false,
+                        excludePermanentlyRejected: false,
+                    },
                 });
+
+                await prisma.suggestion.upsert({
+                    where: { titleId: title.id },
+                    update: {
+                        externalTrendScore: lifecycleResult.breakdown.externalTrendScore,
+                        localInterestScore: lifecycleResult.breakdown.localInterestScore,
+                        freshnessScore: lifecycleResult.breakdown.freshnessScore,
+                        editorialBoost: lifecycleResult.breakdown.editorialBoost,
+                        finalScore: lifecycleResult.breakdown.finalScore,
+                        status: "FULFILLED",
+                        generatedAt: new Date(),
+                    },
+                    create: {
+                        titleId: title.id,
+                        externalTrendScore: lifecycleResult.breakdown.externalTrendScore,
+                        localInterestScore: lifecycleResult.breakdown.localInterestScore,
+                        freshnessScore: lifecycleResult.breakdown.freshnessScore,
+                        editorialBoost: lifecycleResult.breakdown.editorialBoost,
+                        finalScore: lifecycleResult.breakdown.finalScore,
+                        status: "FULFILLED",
+                    },
+                });
+            } else {
+                // Not in-library: just close the suggestion so it disappears from the UI.
+                if (title.suggestion && !["FULFILLED", "REJECTED"].includes(title.suggestion.status)) {
+                    await prisma.suggestion.update({
+                        where: { id: title.suggestion.id },
+                        data: { status: "FULFILLED" },
+                    });
+                }
             }
 
             continue;
