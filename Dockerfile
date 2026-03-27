@@ -112,11 +112,11 @@ COPY --from=builder /app/packages/scoring/package.json ./packages/scoring/
 # dropped by Docker COPY. Recreate them explicitly so the API and Worker can
 # resolve require('@watchwarden/config') etc. at runtime.
 RUN mkdir -p /app/node_modules/@watchwarden \
- && ln -sf /app/packages/config       /app/node_modules/@watchwarden/config \
- && ln -sf /app/packages/types        /app/node_modules/@watchwarden/types \
- && ln -sf /app/packages/db           /app/node_modules/@watchwarden/db \
- && ln -sf /app/packages/integrations /app/node_modules/@watchwarden/integrations \
- && ln -sf /app/packages/scoring      /app/node_modules/@watchwarden/scoring
+    && ln -sf /app/packages/config       /app/node_modules/@watchwarden/config \
+    && ln -sf /app/packages/types        /app/node_modules/@watchwarden/types \
+    && ln -sf /app/packages/db           /app/node_modules/@watchwarden/db \
+    && ln -sf /app/packages/integrations /app/node_modules/@watchwarden/integrations \
+    && ln -sf /app/packages/scoring      /app/node_modules/@watchwarden/scoring
 
 # ── Runtime config ─────────────────────────────────────────────────────────────
 COPY docker/supervisord.conf /etc/supervisor/conf.d/watchwarden.conf
