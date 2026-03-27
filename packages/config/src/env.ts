@@ -12,12 +12,19 @@ const baseEnvSchema = z.object({
     EXPORT_OUTPUT_DIR: z.string().default("./exports"),
 });
 
+// Default password hash is bcrypt of "password" (12 rounds).
+// The app forces a change on first login — this is only the bootstrap credential.
+const DEFAULT_PASSWORD_HASH = "$2a$12$k.s9xneegzdTGzbkhsQQqeQUISf8KqCfuIM6axc3zDwKR71Mvgwn.";
+// Default secrets are intentionally weak — a warning is logged at startup in production.
+const DEFAULT_SESSION_SECRET = "watch-warden-default-session-secret-change-me!!";
+const DEFAULT_API_SECRET = "watch-warden-default-api-secret-change!!";
+
 export const apiEnvSchema = baseEnvSchema.extend({
     PORT: z.coerce.number().int().positive().default(4000),
-    SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
-    API_SECRET: z.string().min(16, "API_SECRET must be at least 16 characters"),
-    ADMIN_USERNAME: z.string().min(1),
-    ADMIN_PASSWORD_HASH: z.string().min(1, "ADMIN_PASSWORD_HASH is required (bcrypt hash)"),
+    SESSION_SECRET: z.string().min(32).default(DEFAULT_SESSION_SECRET),
+    API_SECRET: z.string().min(16).default(DEFAULT_API_SECRET),
+    ADMIN_USERNAME: z.string().min(1).default("admin"),
+    ADMIN_PASSWORD_HASH: z.string().min(1).default(DEFAULT_PASSWORD_HASH),
     TAUTULLI_BASE_URL: z.string().url().optional(),
     TAUTULLI_API_KEY: z.string().optional(),
     JELLYSEERR_BASE_URL: z.string().url().optional(),
@@ -49,12 +56,10 @@ export const workerEnvSchema = baseEnvSchema.extend({
 export const webEnvSchema = z.object({
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
     API_URL: z.string().url().default("http://localhost:4000"),
-    API_SECRET: z.string().min(16),
-    NEXTAUTH_SECRET: z.string().min(16),
-    NEXTAUTH_URL: z.string().url().default("http://localhost:3000"),
-    ADMIN_USERNAME: z.string().min(1),
-    ADMIN_PASSWORD_HASH: z.string().min(1),
-    SESSION_SECRET: z.string().min(32),
+    API_SECRET: z.string().min(16).default(DEFAULT_API_SECRET),
+    ADMIN_USERNAME: z.string().min(1).default("admin"),
+    ADMIN_PASSWORD_HASH: z.string().min(1).default(DEFAULT_PASSWORD_HASH),
+    SESSION_SECRET: z.string().min(32).default(DEFAULT_SESSION_SECRET),
     NEXT_PUBLIC_APP_NAME: z.string().default("Watch Warden"),
 });
 

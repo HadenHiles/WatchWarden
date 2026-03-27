@@ -2,7 +2,8 @@ version: "3.9"
 
 # ─── Watch Warden ─────────────────────────────────────────────────────────────
 # Production / self-hosted Docker Compose.
-# Copy .env.example to .env and fill in your values before running.
+# Zero required env vars — runs out of the box with safe defaults.
+# For production, set SESSION_SECRET, API_SECRET, and POSTGRES_PASSWORD.
 # Start: docker compose up -d
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -15,7 +16,7 @@ services:
     environment:
       POSTGRES_DB: watchwarden
       POSTGRES_USER: watchwarden
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-watchwarden}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -34,18 +35,10 @@ services:
     container_name: watchwarden-api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://watchwarden:${POSTGRES_PASSWORD}@postgres:5432/watchwarden
+      DATABASE_URL: postgresql://watchwarden:${POSTGRES_PASSWORD:-watchwarden}@postgres:5432/watchwarden
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: 4000
-      SESSION_SECRET: ${SESSION_SECRET}
-      API_SECRET: ${API_SECRET}
-      ADMIN_USERNAME: ${ADMIN_USERNAME}
-      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
-      TAUTULLI_BASE_URL: ${TAUTULLI_BASE_URL}
-      TAUTULLI_API_KEY: ${TAUTULLI_API_KEY}
-      JELLYSEERR_BASE_URL: ${JELLYSEERR_BASE_URL}
-      JELLYSEERR_API_KEY: ${JELLYSEERR_API_KEY}
-      JELLYSEERR_BOT_USER_ID: ${JELLYSEERR_BOT_USER_ID}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      API_SECRET: ${API_SECRET:-}
       EXPORT_OUTPUT_DIR: /app/exports
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
@@ -70,24 +63,10 @@ services:
     container_name: watchwarden-worker
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://watchwarden:${POSTGRES_PASSWORD}@postgres:5432/watchwarden
+      DATABASE_URL: postgresql://watchwarden:${POSTGRES_PASSWORD:-watchwarden}@postgres:5432/watchwarden
       NODE_ENV: ${NODE_ENV:-production}
-      TAUTULLI_BASE_URL: ${TAUTULLI_BASE_URL}
-      TAUTULLI_API_KEY: ${TAUTULLI_API_KEY}
-      JELLYSEERR_BASE_URL: ${JELLYSEERR_BASE_URL}
-      JELLYSEERR_API_KEY: ${JELLYSEERR_API_KEY}
-      JELLYSEERR_BOT_USER_ID: ${JELLYSEERR_BOT_USER_ID}
-      TMDB_API_KEY: ${TMDB_API_KEY}
-      TRAKT_CLIENT_ID: ${TRAKT_CLIENT_ID}
       EXPORT_OUTPUT_DIR: /app/exports
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      TREND_SYNC_CRON: ${TREND_SYNC_CRON:-0 */6 * * *}
-      TAUTULLI_SYNC_CRON: ${TAUTULLI_SYNC_CRON:-0 */2 * * *}
-      SCORING_CRON: ${SCORING_CRON:-30 */6 * * *}
-      JELLYSEERR_STATUS_SYNC_CRON: ${JELLYSEERR_STATUS_SYNC_CRON:-0 * * * *}
-      LIBRARY_SYNC_CRON: ${LIBRARY_SYNC_CRON:-0 */3 * * *}
-      LIFECYCLE_EVAL_CRON: ${LIFECYCLE_EVAL_CRON:-0 4 * * *}
-      EXPORT_CRON: ${EXPORT_CRON:-15 */6 * * *}
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,14 +81,10 @@ services:
     container_name: watchwarden-web
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_APP_NAME: "Watch Warden"
       API_URL: http://api:4000
+      API_SECRET: ${API_SECRET:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      ADMIN_USERNAME: ${ADMIN_USERNAME}
-      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
-      SESSION_SECRET: ${SESSION_SECRET}
     ports:
       - "3000:3000"
     depends_on:

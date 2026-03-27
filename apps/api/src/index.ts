@@ -7,6 +7,16 @@ const env = validateEnv(apiEnvSchema);
 
 const logger = createLogger("api");
 
+if (env.NODE_ENV === "production") {
+    const DEFAULT_SESSION = "watch-warden-default-session-secret-change-me!!";
+    const DEFAULT_API = "watch-warden-default-api-secret-change!!";
+    if (env.SESSION_SECRET === DEFAULT_SESSION || env.API_SECRET === DEFAULT_API) {
+        logger.warn(
+            "⚠️  Running with default secrets in production. Set SESSION_SECRET and API_SECRET in your environment for security."
+        );
+    }
+}
+
 const app = createApp(env);
 
 app.listen(env.PORT, () => {
