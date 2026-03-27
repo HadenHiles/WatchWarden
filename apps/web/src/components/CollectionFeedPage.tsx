@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import useSWR from "swr";
 import { Check, X, Loader2, Film, RefreshCw, Plus, ChevronRight } from "lucide-react";
+import { TitleDetailsModal } from "./TitleDetailsModal";
 import { apiUrl } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -96,6 +97,7 @@ function SuggestionPosterCard({
     const { title } = suggestion;
     const [loading, setLoading] = useState<"approve" | "reject" | null>(null);
     const [done, setDone] = useState<"approve" | "reject" | null>(null);
+    const [detailsOpen, setDetailsOpen] = useState(false);
 
     const posterUrl = title.posterPath
         ? `https://image.tmdb.org/t/p/w185${title.posterPath}`
@@ -121,86 +123,95 @@ function SuggestionPosterCard({
     if (done === "reject") return null;
 
     return (
-        <div className={cn(
-            "relative flex-shrink-0 w-36 rounded-xl overflow-hidden bg-gray-900 border transition-all duration-200",
-            done === "approve"
-                ? "border-green-500/50 ring-1 ring-green-500/30"
-                : "border-gray-800/80 hover:border-gray-700/80"
-        )}>
-            {/* Poster */}
-            <div className="relative w-full aspect-[2/3] bg-gray-800">
-                {posterUrl ? (
-                    <Image src={posterUrl} alt={title.title} fill className="object-cover" sizes="144px" />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-700">
-                        <Film className="w-8 h-8" />
-                    </div>
-                )}
+        <>
+            <div className={cn(
+                "relative flex-shrink-0 w-36 rounded-xl overflow-hidden bg-gray-900 border transition-all duration-200",
+                done === "approve"
+                    ? "border-green-500/50 ring-1 ring-green-500/30"
+                    : "border-gray-800/80 hover:border-gray-700/80"
+            )}>
+                {/* Poster — click to open details */}
+                <div
+                    className="relative w-full aspect-[2/3] bg-gray-800 cursor-pointer"
+                    onClick={() => setDetailsOpen(true)}
+                    title="View details"
+                >
+                    {posterUrl ? (
+                        <Image src={posterUrl} alt={title.title} fill className="object-cover" sizes="144px" />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-700">
+                            <Film className="w-8 h-8" />
+                        </div>
+                    )}
 
-                {/* Overlay tags */}
-                <div className="absolute top-1.5 left-1.5 flex flex-col gap-1">
-                    {title.inLibrary && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-teal-900/90 text-teal-300 border border-teal-700/50 backdrop-blur-sm">
-                            In Plex
-                        </span>
-                    )}
-                    {title.isRequested && !title.inLibrary && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-900/90 text-purple-300 border border-purple-700/50 backdrop-blur-sm">
-                            Requested
-                        </span>
-                    )}
-                    {providerBadge && (
-                        <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border backdrop-blur-sm", providerBadge.cls)}>
-                            {providerBadge.label}
-                        </span>
+                    {/* Overlay tags */}
+                    <div className="absolute top-1.5 left-1.5 flex flex-col gap-1">
+                        {title.inLibrary && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-teal-900/90 text-teal-300 border border-teal-700/50 backdrop-blur-sm">
+                                In Plex
+                            </span>
+                        )}
+                        {title.isRequested && !title.inLibrary && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-900/90 text-purple-300 border border-purple-700/50 backdrop-blur-sm">
+                                Requested
+                            </span>
+                        )}
+                        {providerBadge && (
+                            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border backdrop-blur-sm", providerBadge.cls)}>
+                                {providerBadge.label}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Approved check overlay */}
+                    {done === "approve" && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-green-950/70 backdrop-blur-sm">
+                            <Check className="w-10 h-10 text-green-400" strokeWidth={3} />
+                        </div>
                     )}
                 </div>
 
-                {/* Approved check overlay */}
-                {done === "approve" && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-green-950/70 backdrop-blur-sm">
-                        <Check className="w-10 h-10 text-green-400" strokeWidth={3} />
-                    </div>
-                )}
-            </div>
+                {/* Title */}
+                <div className="px-2 pt-2 pb-1 min-h-0">
+                    <p className="text-xs font-medium text-white leading-snug line-clamp-2">
+                        {title.title}
+                        {title.year && <span className="text-gray-600 ml-1">({title.year})</span>}
+                    </p>
+                </div>
 
-            {/* Title */}
-            <div className="px-2 pt-2 pb-1 min-h-0">
-                <p className="text-xs font-medium text-white leading-snug line-clamp-2">
-                    {title.title}
-                    {title.year && <span className="text-gray-600 ml-1">({title.year})</span>}
-                </p>
+                {/* Actions */}
+                <div className="flex gap-1 px-2 pb-2 pt-1">
+                    <button
+                        onClick={() => handle("approve")}
+                        disabled={!!loading || !!done}
+                        title={title.inLibrary ? "Add to collection" : "Request + add to collection"}
+                        className={cn(
+                            "flex-1 flex items-center justify-center rounded-lg py-1.5 border transition-all disabled:opacity-50",
+                            done === "approve"
+                                ? "bg-green-500/20 border-green-500/40 text-green-400"
+                                : "bg-gray-800/60 border-gray-700/60 text-gray-400 hover:bg-green-950/60 hover:border-green-800/60 hover:text-green-400"
+                        )}
+                    >
+                        {loading === "approve"
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Check className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                        onClick={() => handle("reject")}
+                        disabled={!!loading || !!done}
+                        title="Reject"
+                        className="flex-1 flex items-center justify-center rounded-lg py-1.5 border bg-gray-800/60 border-gray-700/60 text-gray-400 hover:bg-red-950/60 hover:border-red-800/60 hover:text-red-400 transition-all disabled:opacity-50"
+                    >
+                        {loading === "reject"
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <X className="w-3.5 h-3.5" />}
+                    </button>
+                </div>
             </div>
-
-            {/* Actions */}
-            <div className="flex gap-1 px-2 pb-2 pt-1">
-                <button
-                    onClick={() => handle("approve")}
-                    disabled={!!loading || !!done}
-                    title={title.inLibrary ? "Add to collection" : "Request + add to collection"}
-                    className={cn(
-                        "flex-1 flex items-center justify-center rounded-lg py-1.5 border transition-all disabled:opacity-50",
-                        done === "approve"
-                            ? "bg-green-500/20 border-green-500/40 text-green-400"
-                            : "bg-gray-800/60 border-gray-700/60 text-gray-400 hover:bg-green-950/60 hover:border-green-800/60 hover:text-green-400"
-                    )}
-                >
-                    {loading === "approve"
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <Check className="w-3.5 h-3.5" />}
-                </button>
-                <button
-                    onClick={() => handle("reject")}
-                    disabled={!!loading || !!done}
-                    title="Reject"
-                    className="flex-1 flex items-center justify-center rounded-lg py-1.5 border bg-gray-800/60 border-gray-700/60 text-gray-400 hover:bg-red-950/60 hover:border-red-800/60 hover:text-red-400 transition-all disabled:opacity-50"
-                >
-                    {loading === "reject"
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <X className="w-3.5 h-3.5" />}
-                </button>
-            </div>
-        </div>
+            {detailsOpen && (
+                <TitleDetailsModal titleId={title.id} onClose={() => setDetailsOpen(false)} />
+            )}
+        </>
     );
 }
 

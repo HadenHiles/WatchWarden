@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { CheckCircle, XCircle, Clock, Pin, RotateCcw, PinOff, Flag, Trash2, CalendarPlus, Film } from "lucide-react";
+import { TitleDetailsModal } from "./TitleDetailsModal";
 import { StatusBadge } from "./StatusBadge";
 import { ScoreBreakdown } from "./ScoreBreakdown";
 import { cn, formatScore, scoreColor, formatDate } from "@/lib/utils";
@@ -49,6 +50,7 @@ export function SuggestionCard({ suggestion, onDecision }: SuggestionCardProps) 
     const [extendDays, setExtendDays] = useState(30);
     const [showSnoozeInput, setShowSnoozeInput] = useState(false);
     const [showExtendInput, setShowExtendInput] = useState(false);
+    const [detailsOpen, setDetailsOpen] = useState(false);
 
     async function applyDecision(action: string, options?: { reason?: string; snoozeDays?: number; extendDays?: number }) {
         setLoading(action);
@@ -76,7 +78,11 @@ export function SuggestionCard({ suggestion, onDecision }: SuggestionCardProps) 
     return (
         <div className="group relative flex gap-4 rounded-xl bg-gray-900 border border-gray-800/80 p-4 hover:border-gray-700/80 hover:bg-gray-900/90 transition-all duration-200">
             {/* Poster */}
-            <div className="flex-shrink-0 w-16 h-24 rounded-lg overflow-hidden bg-gray-800 shadow-lg">
+            <div
+                className="flex-shrink-0 w-16 h-24 rounded-lg overflow-hidden bg-gray-800 shadow-lg cursor-pointer hover:ring-2 hover:ring-brand-500/40 transition-all"
+                onClick={() => setDetailsOpen(true)}
+                title="View details"
+            >
                 {posterUrl ? (
                     <Image src={posterUrl} alt={title.title} width={64} height={96} className="object-cover w-full h-full" />
                 ) : (
@@ -232,5 +238,10 @@ export function SuggestionCard({ suggestion, onDecision }: SuggestionCardProps) 
                 <p className="text-[11px] text-gray-700">{formatDate(suggestion.generatedAt)}</p>
             </div>
         </div>
+        {
+        detailsOpen && (
+            <TitleDetailsModal titleId={title.id} onClose={() => setDetailsOpen(false)} />
+        )
+    }
     );
 }

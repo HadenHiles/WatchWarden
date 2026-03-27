@@ -91,6 +91,68 @@ plexRouter.delete("/collections/:id", asyncHandler(async (req, res) => {
     return res.json({ success: true });
 }));
 
+// GET /plex/collections/:id/items — resolve current member titles for a collection
+plexRouter.get("/collections/:id/items", asyncHandler(async (req, res) => {
+    const collection = await prisma.plexCollection.findUnique({ where: { id: req.params.id } });
+    if (!collection) {
+        return res.status(404).json({ success: false, error: "Collection not found" });
+    }
+
+    const select = {
+        id: true,
+        title: true,
+        year: true,
+        posterPath: true,
+        mediaType: true,
+        streamingOn: true,
+        trendSnapshots: {
+            select: { trendScore: true },
+            orderBy: { snapshotAt: "desc" as const },
+            take: 1,
+        },
+    };
+
+    let titles;
+    if (collection.collectionType === "TOP_TRENDING") {
+        if (!collection.streamingProviders.length) {
+            return res.json({ success: true, data: [] });
+        }
+        titles = await prisma.title.findMany({
+            where: {
+                mediaType: collection.mediaType,
+                inLibrary: true,
+                plexRatingKey: { not: null },
+                streamingOn: { hasSome: collection.streamingProviders },
+            },
+            select,
+        });
+    } else if (collection.filter === "PINNED") {
+        titles = await prisma.title.findMany({
+            where: { isPinned: true, mediaType: collection.mediaType, inLibrary: true, plexRatingKey: { not: null } },
+            select,
+        });
+    } else {
+        titles = await prisma.title.findMany({
+            where: {
+                status: collection.filter === "APPROVED" ? "APPROVED" : "ACTIVE_TRENDING",
+                mediaType: collection.mediaType,
+                inLibrary: true,
+                plexRatingKey: { not: null },
+            },
+            select,
+        });
+    }
+
+    const sorted = [...titles].sort(
+        (a, b) => (b.trendSnapshots[0]?.trendScore ?? 0) - (a.trendSnapshots[0]?.trendScore ?? 0)
+    );
+    const result = collection.collectionType === "TOP_TRENDING"
+        ? sorted.slice(0, collection.maxItems)
+        : sorted;
+
+    return res.json({ success: true, data: result });
+}));
+
 // GET /plex/sections — proxy to Plex API to list library sections (used in the UI)
 plexRouter.get("/sections", asyncHandler(async (_req, res) => {
     const { getIntegrationConfig } = await import("@watchwarden/db");

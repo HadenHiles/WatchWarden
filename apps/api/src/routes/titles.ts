@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { prisma } from "@watchwarden/db";
+import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { AppError, asyncHandler } from "../middleware/error";
 import { validateQuery } from "../middleware/validation";
 
@@ -45,6 +45,73 @@ titlesRouter.get("/", validateQuery(listQuerySchema), asyncHandler(async (req, r
         success: true,
         data: { items, total, page: q.page, pageSize: q.pageSize, totalPages: Math.ceil(total / q.pageSize) },
     });
+}));
+
+// GET /titles/:id/tmdb — returns locally-stored fields merged with TMDB-enriched data (cast, runtime, rating)
+titlesRouter.get("/:id/tmdb", asyncHandler(async (req, res) => {
+    const title = await prisma.title.findUnique({ where: { id: req.params.id } });
+    if (!title) throw new AppError(404, "Title not found");
+
+    const base = {
+        id: title.id,
+        title: title.title,
+        year: title.year,
+        mediaType: title.mediaType,
+        overview: title.overview,
+        posterPath: title.posterPath,
+        backdropPath: title.backdropPath,
+        genres: title.genres,
+        streamingOn: title.streamingOn,
+        inLibrary: title.inLibrary,
+        tmdbId: title.tmdbId,
+    };
+
+    const fallback = { ...base, runtime: null, seasonCount: null, episodeCount: null, voteAverage: null, cast: [] };
+
+    if (!title.tmdbId) {
+        return res.json({ success: true, data: fallback });
+    }
+
+    const config = await getIntegrationConfig();
+    if (!config.sources.tmdbApiKey) {
+        return res.json({ success: true, data: fallback });
+    }
+
+    const tmdbBase = "https://api.themoviedb.org/3";
+    const tmdbPath = title.mediaType === "MOVIE" ? `movie/${title.tmdbId}` : `tv/${title.tmdbId}`;
+
+    try {
+        const response = await fetch(
+            `${tmdbBase}/${tmdbPath}?api_key=${encodeURIComponent(config.sources.tmdbApiKey)}&append_to_response=credits&language=en-US`,
+            { signal: AbortSignal.timeout(8000) }
+        );
+        if (!response.ok) {
+            return res.json({ success: true, data: fallback });
+        }
+        const tmdb = await response.json() as Record<string, unknown>;
+        const rawCast = (
+            (tmdb.credits as { cast?: Array<{ name: string; character: string; profile_path: string | null }> } | undefined)?.cast ?? []
+        );
+        const cast = rawCast.slice(0, 8).map((c) => ({
+            name: c.name,
+            character: c.character,
+            profilePath: c.profile_path,
+        }));
+
+        return res.json({
+            success: true,
+            data: {
+                ...base,
+                runtime: title.mediaType === "MOVIE" ? ((tmdb.runtime as number | null) ?? null) : null,
+                seasonCount: title.mediaType === "SHOW" ? ((tmdb.number_of_seasons as number | null) ?? null) : null,
+                episodeCount: title.mediaType === "SHOW" ? ((tmdb.number_of_episodes as number | null) ?? null) : null,
+                voteAverage: ((tmdb.vote_average as number | null) ?? null) || null,
+                cast,
+            },
+        });
+    } catch {
+        return res.json({ success: true, data: fallback });
+    }
 }));
 
 // GET /titles/:id

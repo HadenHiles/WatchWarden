@@ -27,6 +27,23 @@ export class RequestService {
         if (!title) throw new Error(`Title ${titleId} not found`);
         if (!title.tmdbId) throw new Error("Title has no TMDB ID — cannot submit to Jellyseerr");
 
+        // If the title is already in the Plex library there is nothing to request.
+        if (title.inLibrary) {
+            logger.info("Title already in Plex library — skipping Jellyseerr request", { titleId });
+            return prisma.requestRecord.upsert({
+                where: { titleId },
+                update: { requestStatus: "AVAILABLE" },
+                create: { titleId, mediaType: title.mediaType, requestStatus: "AVAILABLE", requestedByBot: false },
+            });
+        }
+
+        // Avoid duplicate requests for titles that already have an active/completed record.
+        const existingRecord = await prisma.requestRecord.findUnique({ where: { titleId } });
+        if (existingRecord && !["FAILED", "DECLINED"].includes(existingRecord.requestStatus)) {
+            logger.info("Request already active — skipping duplicate submission", { titleId, status: existingRecord.requestStatus });
+            return existingRecord;
+        }
+
         // Upsert the request record to PENDING
         let record = await prisma.requestRecord.upsert({
             where: { titleId },
@@ -74,6 +91,14 @@ export class RequestService {
             });
 
             logger.info("Jellyseerr request submitted", { titleId, requestId: result.request.id });
+        } else if (result.success) {
+            // Jellyseerr reported the media is already available or already has an active request.
+            // Mark the record as PROCESSING so we don't re-submit on subsequent approvals.
+            record = await prisma.requestRecord.update({
+                where: { titleId },
+                data: { requestStatus: "PROCESSING" },
+            });
+            logger.info("Skipped Jellyseerr request — media already available/pending there", { titleId });
         } else {
             record = await prisma.requestRecord.update({
                 where: { titleId },

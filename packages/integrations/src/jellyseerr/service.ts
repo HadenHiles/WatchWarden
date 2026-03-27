@@ -67,17 +67,45 @@ export class JellyseerrService {
      */
     async requestMedia(input: RequestMediaInput): Promise<RequestMediaResult> {
         try {
-            const jellyseerrId = await this.resolveJellyseerrId(input.tmdbId, input.mediaType);
-            if (!jellyseerrId) {
+            // Fetch the media record from Jellyseerr — gives us the ID and current availability status.
+            const media =
+                input.mediaType === "movie"
+                    ? await this.client.getMovie(input.tmdbId)
+                    : await this.client.getTv(input.tmdbId);
+
+            if (!media?.id) {
                 return {
                     success: false,
                     error: `Could not find ${input.mediaType} TMDB ${input.tmdbId} in Jellyseerr`,
                 };
             }
 
+            // Jellyseerr mediaInfo.status codes:
+            // 1 = Unknown, 2 = Pending, 3 = Processing, 4 = PartiallyAvailable, 5 = Available
+            const mediaStatus = media.mediaInfo?.status ?? 1;
+            if (mediaStatus >= 4) {
+                logger.info("Media already available in Jellyseerr — skipping request", {
+                    tmdbId: input.tmdbId,
+                    mediaStatus,
+                });
+                return { success: true };
+            }
+
+            // If Jellyseerr already has a non-declined request, don't create a duplicate.
+            // Jellyseerr request status: 1 = Pending, 2 = Approved, 3 = Declined
+            const existingRequests = media.mediaInfo?.requests ?? [];
+            const activeRequest = existingRequests.find((r) => r.status !== 3);
+            if (activeRequest) {
+                logger.info("Active request already exists in Jellyseerr — skipping duplicate", {
+                    tmdbId: input.tmdbId,
+                    requestId: activeRequest.id,
+                });
+                return { success: true, request: activeRequest };
+            }
+
             const request = await this.client.createRequest({
                 mediaType: input.mediaType,
-                mediaId: jellyseerrId,
+                mediaId: media.id,
                 tvdbId: input.tvdbId,
                 userId: input.botUserId,
                 seasons: input.seasons,
