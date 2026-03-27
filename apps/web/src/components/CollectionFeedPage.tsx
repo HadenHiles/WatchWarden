@@ -61,9 +61,18 @@ const PROVIDER_STYLES: Record<string, { label: string; cls: string }> = {
     "Peacock": { label: "Peacock", cls: "bg-yellow-950/80 text-yellow-300 border-yellow-800/60" },
     "Paramount Plus": { label: "Paramount+", cls: "bg-blue-900/80 text-blue-200 border-blue-700/60" },
     "Paramount+": { label: "Paramount+", cls: "bg-blue-900/80 text-blue-200 border-blue-700/60" },
+    "Tubi TV": { label: "Tubi", cls: "bg-orange-950/80 text-orange-300 border-orange-800/60" },
     "Tubi": { label: "Tubi", cls: "bg-orange-950/80 text-orange-300 border-orange-800/60" },
     "CBC Gem": { label: "CBC Gem", cls: "bg-red-900/80 text-red-200 border-red-700/60" },
     "Pluto TV": { label: "Pluto TV", cls: "bg-cyan-950/80 text-cyan-300 border-cyan-800/60" },
+    "BritBox": { label: "BritBox", cls: "bg-blue-950/80 text-blue-200 border-blue-800/60" },
+    "AMC+": { label: "AMC+", cls: "bg-yellow-900/80 text-yellow-200 border-yellow-700/60" },
+    "hayu": { label: "hayu", cls: "bg-pink-950/80 text-pink-300 border-pink-800/60" },
+    "STARZ": { label: "STARZ", cls: "bg-gray-900/80 text-gray-200 border-gray-600/60" },
+    "STACKTV": { label: "STACKTV", cls: "bg-teal-950/80 text-teal-300 border-teal-800/60" },
+    "Super Channel On Demand": { label: "Super Channel", cls: "bg-violet-950/80 text-violet-300 border-violet-800/60" },
+    "Kanopy": { label: "Kanopy", cls: "bg-emerald-950/80 text-emerald-300 border-emerald-800/60" },
+    "Plex": { label: "Plex", cls: "bg-yellow-950/80 text-yellow-300 border-yellow-800/60" },
 };
 
 function getProviderBadge(providers: string[]) {

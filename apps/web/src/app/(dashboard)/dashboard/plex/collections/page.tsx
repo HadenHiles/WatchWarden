@@ -55,8 +55,38 @@ const FILTER_DESCRIPTIONS: Record<string, string> = {
 };
 
 const STREAMING_PROVIDERS = [
-    "Netflix", "Disney+", "Hulu", "Amazon Prime Video", "Apple TV+",
-    "Paramount+", "Max", "Peacock", "Crunchyroll", "Shudder",
+    // ── Global services available in Canada ─────────────────────────────────
+    "Netflix",
+    "Amazon Prime Video",
+    "Disney Plus",           // TMDB CA canonical name
+    "Apple TV Plus",         // TMDB CA canonical name
+    "Crave",                 // Major Canadian — Bell Media
+    "Max",
+    "Paramount Plus",        // TMDB CA canonical name
+    "Crunchyroll",
+    "Shudder",
+    "BritBox",
+    "AMC+",
+    "STARZ",
+    "Plex",
+    "Kanopy",
+    // ── Canadian-specific ────────────────────────────────────────────────────
+    "CBC Gem",               // Free — Canadian Broadcasting Corporation
+    "Tubi TV",              // TMDB CA canonical name
+    "Pluto TV",
+    "hayu",                  // Reality TV — TMDB uses lowercase
+    "STACKTV",               // Corus / Global / HGTV Canada etc.
+    "Super Channel On Demand",
+    // ── US-only (appear via US fallback in trend-sync) ────────────────────
+    "Hulu",
+    "Peacock",
+    // ── Alternate spellings stored by older TMDB responses ───────────────
+    "Prime Video",
+    "Disney+",
+    "Apple TV+",
+    "Paramount+",
+    "HBO Max",
+    "Tubi",
 ];
 
 const INPUT_CLS =
