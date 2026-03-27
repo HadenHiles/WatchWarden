@@ -92,12 +92,20 @@ COPY --from=builder /app/apps/web/.next/static      ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public            ./apps/web/public
 
 # ── Shared packages ────────────────────────────────────────────────────────────
-COPY --from=builder /app/packages/config/dist       ./packages/config/dist
-COPY --from=builder /app/packages/types/dist        ./packages/types/dist
-COPY --from=builder /app/packages/db/dist           ./packages/db/dist
-COPY --from=builder /app/packages/db/prisma         ./packages/db/prisma
-COPY --from=builder /app/packages/integrations/dist ./packages/integrations/dist
-COPY --from=builder /app/packages/scoring/dist      ./packages/scoring/dist
+# package.json files are required so Node can resolve the `main` entry point
+# when following pnpm's workspace symlinks (node_modules/@watchwarden/* →
+# ../../packages/*). Without them the API and Worker crash on startup.
+COPY --from=builder /app/packages/config/dist        ./packages/config/dist
+COPY --from=builder /app/packages/config/package.json ./packages/config/
+COPY --from=builder /app/packages/types/dist         ./packages/types/dist
+COPY --from=builder /app/packages/types/package.json  ./packages/types/
+COPY --from=builder /app/packages/db/dist            ./packages/db/dist
+COPY --from=builder /app/packages/db/package.json     ./packages/db/
+COPY --from=builder /app/packages/db/prisma          ./packages/db/prisma
+COPY --from=builder /app/packages/integrations/dist  ./packages/integrations/dist
+COPY --from=builder /app/packages/integrations/package.json ./packages/integrations/
+COPY --from=builder /app/packages/scoring/dist       ./packages/scoring/dist
+COPY --from=builder /app/packages/scoring/package.json ./packages/scoring/
 
 # ── Runtime config ─────────────────────────────────────────────────────────────
 COPY docker/supervisord.conf /etc/supervisor/conf.d/watchwarden.conf

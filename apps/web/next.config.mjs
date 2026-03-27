@@ -1,6 +1,18 @@
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     output: "standalone",
+    // Required for pnpm monorepo standalone builds: tells Next.js to use the
+    // monorepo root as the tracing root so that (a) server.js lands at
+    // apps/web/server.js inside the standalone output (matching the Dockerfile
+    // COPY target and supervisord command) and (b) public-file serving uses
+    // the correct dir, fixing the logo 404.
+    outputFileTracingRoot: path.join(__dirname, "../../"),
     eslint: {
         // Linting is run separately; don't block production builds.
         ignoreDuringBuilds: true,
