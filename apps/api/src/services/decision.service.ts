@@ -1,6 +1,7 @@
 import { prisma } from "@watchwarden/db";
 import type { DecisionAction, SuggestionStatus, TitleStatus } from "@watchwarden/types";
 import { AuditService } from "./audit.service";
+import { RequestService } from "./request.service";
 
 interface DecisionInput {
     suggestionId: string;
@@ -11,6 +12,7 @@ interface DecisionInput {
 }
 
 const auditService = new AuditService();
+const requestService = new RequestService();
 
 /**
  * Handles all admin decision actions on suggestions.
@@ -97,6 +99,23 @@ export class DecisionService {
             titleId: suggestion.titleId,
             details: { action: input.action, reason: input.reason },
         });
+
+        // Auto-submit a Jellyseerr request when a suggestion is approved
+        if (input.action === "APPROVE") {
+            try {
+                await requestService.submitRequest(suggestion.titleId);
+            } catch (err) {
+                // Non-fatal — the approval is recorded; the request can be retried manually
+                const message = err instanceof Error ? err.message : String(err);
+                await auditService.log({
+                    action: "JELLYSEERR_REQUEST_FAILED",
+                    entityType: "Suggestion",
+                    entityId: suggestion.id,
+                    titleId: suggestion.titleId,
+                    details: { error: message },
+                });
+            }
+        }
 
         return {
             suggestionId: suggestion.id,

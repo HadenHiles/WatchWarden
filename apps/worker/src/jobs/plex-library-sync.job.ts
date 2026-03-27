@@ -101,16 +101,30 @@ export async function plexLibrarySyncJob(): Promise<void> {
             continue;
         }
 
+        const newlyInLibrary = nowInLibrary && !title.inLibrary;
+
         await prisma.title.update({
             where: { id: title.id },
             data: {
                 inLibrary: nowInLibrary,
                 libraryCheckedAt: now,
                 plexRatingKey: plexKey,
-                // Auto-promote AVAILABLE titles to ACTIVE_TRENDING on next scoring cycle
-                // (no status change here — lifecycle-eval handles transitions)
+                // When a title is found in Plex for the first time, promote it to AVAILABLE
+                // so the scoring job excludes it and lifecycle-eval can proceed correctly.
+                ...(newlyInLibrary ? { status: "AVAILABLE" } : {}),
             },
         });
+
+        // Fulfill any open suggestions so they no longer appear in the suggestions list
+        if (newlyInLibrary) {
+            await prisma.suggestion.updateMany({
+                where: {
+                    titleId: title.id,
+                    status: { notIn: ["FULFILLED", "REJECTED"] },
+                },
+                data: { status: "FULFILLED" },
+            });
+        }
 
         if (nowInLibrary && !title.inLibrary) markedIn++;
         else if (!nowInLibrary && title.inLibrary) markedOut++;

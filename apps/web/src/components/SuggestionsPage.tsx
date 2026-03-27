@@ -45,7 +45,7 @@ export function SuggestionsPage({ mediaType, hideHeading }: SuggestionsPageProps
     const [bulkLoading, setBulkLoading] = useState(false);
 
     const url = apiUrl(
-        `/suggestions?mediaType=${mediaType}&status=${statusFilter}&sortBy=${sortBy}&pageSize=25&page=${page}`
+        `/suggestions?mediaType=${mediaType}&status=${statusFilter}&inLibrary=false&sortBy=${sortBy}&pageSize=25&page=${page}`
     );
     const { data, mutate, isLoading } = useSWR<{
         data: { items: SuggestionCardData[]; total: number; page: number; pageSize: number; totalPages: number };
@@ -109,6 +109,7 @@ export function SuggestionsPage({ mediaType, hideHeading }: SuggestionsPageProps
                             <option value="APPROVED">Approved</option>
                             <option value="REJECTED">Rejected</option>
                             <option value="SNOOZED">Snoozed</option>
+                            <option value="FULFILLED">Fulfilled</option>
                         </select>
 
                         <select
@@ -133,6 +134,7 @@ export function SuggestionsPage({ mediaType, hideHeading }: SuggestionsPageProps
                         <option value="APPROVED">Approved</option>
                         <option value="REJECTED">Rejected</option>
                         <option value="SNOOZED">Snoozed</option>
+                        <option value="FULFILLED">Fulfilled</option>
                     </select>
 
                     <select

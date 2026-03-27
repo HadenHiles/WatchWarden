@@ -251,19 +251,26 @@ model RequestRecord {
 // should keep in sync with Plex.
 
 model PlexCollection {
-  id          String    @id @default(cuid())
-  name        String    // Display name in Plex
-  plexKey     String?   // Plex collection ratingKey (null until first sync)
-  sectionId   String    // Plex library section key
-  mediaType   MediaType
-  filter      String    @default("ACTIVE_TRENDING") // "ACTIVE_TRENDING" | "PINNED" | "APPROVED"
-  enabled     Boolean   @default(true)
-  lastSyncAt  DateTime?
-  itemCount   Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  name              String    // Display name in Plex
+  plexKey           String?   // Plex collection ratingKey (null until first sync)
+  sectionId         String    // Plex library section key
+  mediaType         MediaType
+  // collectionType: "SMART" = scored suggestions + watch history
+  //                 "TOP_TRENDING" = top-N titles currently streaming on a provider
+  collectionType    String    @default("SMART")
+  // SMART collections use filter; TOP_TRENDING collections use streamingProvider + maxItems
+  filter            String    @default("ACTIVE_TRENDING") // "ACTIVE_TRENDING" | "PINNED" | "APPROVED"
+  streamingProvider String?   // e.g. "Netflix", "Disney Plus" — for TOP_TRENDING only
+  maxItems          Int       @default(5) // max titles to include (TOP_TRENDING)
+  enabled           Boolean   @default(true)
+  lastSyncAt        DateTime?
+  itemCount         Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([sectionId])
+  @@index([collectionType])
 }
 
 // ─── PublishedExport ─────────────────────────────────────────────────────────

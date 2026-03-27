@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import useSWR from "swr";
-import { Save, Settings2 } from "lucide-react";
+import { Save, Settings2, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { apiUrl } from "@/lib/api-client";
 
@@ -98,6 +98,12 @@ export default function SettingsPage() {
     const [values, setValues] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [maintainerrOpen, setMaintainerrOpen] = useState(false);
+
+    const botUserId: number | null =
+        data?.data?.jellyseerr && typeof (data.data.jellyseerr as Record<string, unknown>).botUserId === "number"
+            ? (data.data.jellyseerr as Record<string, unknown>).botUserId as number
+            : null;
 
     useEffect(() => {
         if (data?.data) {
@@ -222,6 +228,87 @@ export default function SettingsPage() {
                     </div>
                 </div>
             ))}
+
+            {/* Maintainerr suggestion panel */}
+            <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+                <button
+                    type="button"
+                    onClick={() => setMaintainerrOpen((o) => !o)}
+                    className="w-full px-4 py-3 border-b border-gray-800 bg-gray-800/50 flex items-center justify-between text-left hover:bg-gray-800/70 transition-colors"
+                >
+                    <div>
+                        <h2 className="font-semibold text-gray-200 text-sm">Maintainerr — Suggested Rules</h2>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                            Recommended cleanup rules to pair with WatchWarden&apos;s automation
+                        </p>
+                    </div>
+                    {maintainerrOpen ? (
+                        <ChevronUp className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    ) : (
+                        <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    )}
+                </button>
+
+                {maintainerrOpen && (
+                    <div className="p-4 space-y-4 text-sm">
+                        <p className="text-gray-400 leading-relaxed">
+                            WatchWarden requests titles via Jellyseerr using bot user{" "}
+                            <span className="text-white font-mono bg-gray-800 px-1.5 py-0.5 rounded text-xs">
+                                {botUserId !== null ? botUserId : "—"}
+                            </span>
+                            . Use Maintainerr to automatically remove those titles from Plex once they&apos;ve gone
+                            unwatched for a set period.
+                        </p>
+
+                        <div className="space-y-3">
+                            {/* Movies rule */}
+                            <div className="rounded-lg border border-gray-700/60 bg-gray-800/50 p-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-brand-400 uppercase tracking-wide">Movies</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                                    <div className="text-gray-500">Library</div>
+                                    <div className="text-gray-300">Movies</div>
+                                    <div className="text-gray-500">Requested by user</div>
+                                    <div className="text-gray-300 font-mono">
+                                        {botUserId !== null ? botUserId : <span className="text-yellow-500">configure bot user ID</span>}
+                                    </div>
+                                    <div className="text-gray-500">Not played in</div>
+                                    <div className="text-gray-300">30 days</div>
+                                    <div className="text-gray-500">Action</div>
+                                    <div className="text-gray-300">Delete from Plex</div>
+                                </div>
+                            </div>
+
+                            {/* Shows rule */}
+                            <div className="rounded-lg border border-gray-700/60 bg-gray-800/50 p-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-brand-400 uppercase tracking-wide">TV Shows</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                                    <div className="text-gray-500">Library</div>
+                                    <div className="text-gray-300">TV Shows</div>
+                                    <div className="text-gray-500">Requested by user</div>
+                                    <div className="text-gray-300 font-mono">
+                                        {botUserId !== null ? botUserId : <span className="text-yellow-500">configure bot user ID</span>}
+                                    </div>
+                                    <div className="text-gray-500">No episode watched in</div>
+                                    <div className="text-gray-300">45 days</div>
+                                    <div className="text-gray-500">Action</div>
+                                    <div className="text-gray-300">Delete from Plex</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                            These are suggestions only — configure them in Maintainerr under{" "}
+                            <span className="text-gray-400">Rules → New Rule</span>. Adjust the time thresholds to
+                            suit your household. Once a title is removed, WatchWarden may re-suggest it if it
+                            regains trending momentum.
+                        </p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

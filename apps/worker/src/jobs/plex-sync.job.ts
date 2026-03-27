@@ -5,7 +5,12 @@ import type { Prisma } from "@prisma/client";
 
 const logger = createLogger("plex-sync-job");
 
-const FILTER_QUERIES: Record<
+// ── SMART collection filter queries ──────────────────────────────────────────
+// Smart collections are populated from WatchWarden's scored suggestions +
+// family watch history.  The filter field selects which lifecycle status
+// determines membership.
+
+const SMART_FILTER_QUERIES: Record<
     string,
     (mediaType: "MOVIE" | "SHOW") => Prisma.TitleWhereInput
 > = {
@@ -30,10 +35,76 @@ const FILTER_QUERIES: Record<
 };
 
 /**
+ * Resolves the target ratingKeys for a SMART collection.
+ * Returns titles matching the filter sorted by highest recent trend score.
+ */
+async function resolveSmartKeys(
+    collection: { filter: string; mediaType: string },
+): Promise<string[]> {
+    const filterFn = SMART_FILTER_QUERIES[collection.filter];
+    if (!filterFn) {
+        logger.warn("Unknown SMART filter", { filter: collection.filter });
+        return [];
+    }
+    const titles = await prisma.title.findMany({
+        where: filterFn(collection.mediaType as "MOVIE" | "SHOW"),
+        select: {
+            plexRatingKey: true,
+            trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 1 },
+        },
+    });
+    return titles
+        .sort((a, b) => {
+            const scoreA = a.trendSnapshots[0]?.trendScore ?? 0;
+            const scoreB = b.trendSnapshots[0]?.trendScore ?? 0;
+            return scoreB - scoreA;
+        })
+        .map((t) => t.plexRatingKey!)
+        .filter(Boolean);
+}
+
+/**
+ * Resolves the target ratingKeys for a TOP_TRENDING collection.
+ * Finds in-library titles streaming on the specified provider, ordered by
+ * trend score, capped to maxItems.
+ */
+async function resolveTopTrendingKeys(
+    collection: { streamingProvider: string | null; mediaType: string; maxItems: number },
+): Promise<string[]> {
+    if (!collection.streamingProvider) {
+        logger.warn("TOP_TRENDING collection has no streamingProvider — skipping");
+        return [];
+    }
+
+    const titles = await prisma.title.findMany({
+        where: {
+            mediaType: collection.mediaType as "MOVIE" | "SHOW",
+            inLibrary: true,
+            plexRatingKey: { not: null },
+            streamingOn: { has: collection.streamingProvider },
+        },
+        select: {
+            plexRatingKey: true,
+            trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 1 },
+        },
+    });
+
+    return titles
+        .sort((a, b) => {
+            const scoreA = a.trendSnapshots[0]?.trendScore ?? 0;
+            const scoreB = b.trendSnapshots[0]?.trendScore ?? 0;
+            return scoreB - scoreA;
+        })
+        .slice(0, collection.maxItems > 0 ? collection.maxItems : undefined)
+        .map((t) => t.plexRatingKey!)
+        .filter(Boolean);
+}
+
+/**
  * Syncs all enabled PlexCollection rows to the actual Plex server.
  *
  * For each collection:
- *   1. Queries titles from WatchWarden DB using the collection's filter.
+ *   1. Resolves target ratingKeys based on collectionType (SMART or TOP_TRENDING).
  *   2. Calls PlexService.syncCollection() to create/update the Plex collection.
  *   3. Updates PlexCollection.plexKey, itemCount, and lastSyncAt.
  */
@@ -62,27 +133,20 @@ export async function plexSyncJob(): Promise<void> {
 
     for (const collection of collections) {
         try {
-            const filterFn = FILTER_QUERIES[collection.filter];
-            if (!filterFn) {
-                logger.warn("Unknown collection filter — skipping", {
-                    collectionId: collection.id,
-                    filter: collection.filter,
-                });
-                continue;
+            let targetKeys: string[];
+
+            if (collection.collectionType === "TOP_TRENDING") {
+                targetKeys = await resolveTopTrendingKeys(collection);
+            } else {
+                // Default to SMART behaviour
+                targetKeys = await resolveSmartKeys(collection);
             }
-
-            const titles = await prisma.title.findMany({
-                where: filterFn(collection.mediaType),
-                select: { plexRatingKey: true },
-            });
-
-            const targetKeys = titles
-                .map((t) => t.plexRatingKey!)
-                .filter(Boolean);
 
             logger.info("Syncing Plex collection", {
                 name: collection.name,
+                type: collection.collectionType,
                 filter: collection.filter,
+                provider: collection.streamingProvider,
                 targetCount: targetKeys.length,
             });
 

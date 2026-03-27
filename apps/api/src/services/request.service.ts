@@ -1,4 +1,4 @@
-import { prisma } from "@watchwarden/db";
+import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { JellyseerrService } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import { AuditService } from "./audit.service";
@@ -6,21 +6,23 @@ import { AuditService } from "./audit.service";
 const logger = createLogger("request-service");
 const auditService = new AuditService();
 
-function buildJellyseerrService(): JellyseerrService | null {
-    const baseUrl = process.env.JELLYSEERR_BASE_URL;
-    const apiKey = process.env.JELLYSEERR_API_KEY;
-    if (!baseUrl || !apiKey) {
-        logger.warn("Jellyseerr not configured — requests will be no-ops");
-        return null;
-    }
-    return new JellyseerrService({ baseUrl, apiKey });
-}
-
 export class RequestService {
-    private readonly jellyseerr = buildJellyseerrService();
-    private readonly botUserId = parseInt(process.env.JELLYSEERR_BOT_USER_ID ?? "0", 10);
-
     async submitRequest(titleId: string) {
+        // Always load credentials from DB so values saved via the setup wizard are used.
+        const { jellyseerr: jellyseerrConfig } = await getIntegrationConfig();
+        const { baseUrl, apiKey, botUserId } = jellyseerrConfig;
+
+        const jellyseerr =
+            baseUrl && apiKey
+                ? new JellyseerrService({ baseUrl, apiKey })
+                : null;
+
+        if (!jellyseerr) {
+            logger.warn("Jellyseerr not configured — requests will be no-ops", { titleId });
+        }
+
+        const resolvedBotUserId = botUserId ?? 0;
+
         const title = await prisma.title.findUnique({ where: { id: titleId } });
         if (!title) throw new Error(`Title ${titleId} not found`);
         if (!title.tmdbId) throw new Error("Title has no TMDB ID — cannot submit to Jellyseerr");
@@ -37,18 +39,18 @@ export class RequestService {
             },
         });
 
-        if (!this.jellyseerr) {
+        if (!jellyseerr) {
             logger.warn("Jellyseerr not configured — skipping actual request", { titleId });
             return record;
         }
 
         const mediaType = title.mediaType === "MOVIE" ? "movie" : "tv";
 
-        const result = await this.jellyseerr.requestMedia({
+        const result = await jellyseerr.requestMedia({
             tmdbId: title.tmdbId,
             tvdbId: title.tvdbId ?? undefined,
             mediaType,
-            botUserId: this.botUserId,
+            botUserId: resolvedBotUserId,
         });
 
         if (result.success && result.request) {

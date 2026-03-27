@@ -94,6 +94,17 @@ export async function scoringJob(): Promise<void> {
 
         if (result.excluded) {
             excluded++;
+
+            // If the title has an open suggestion, close it so it disappears from the UI.
+            // This handles titles that entered the library (or were requested) after their
+            // suggestion was already created.
+            if (title.suggestion && !["FULFILLED", "REJECTED"].includes(title.suggestion.status)) {
+                await prisma.suggestion.update({
+                    where: { id: title.suggestion.id },
+                    data: { status: "FULFILLED" },
+                });
+            }
+
             continue;
         }
 

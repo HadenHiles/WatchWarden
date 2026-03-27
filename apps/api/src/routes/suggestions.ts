@@ -8,10 +8,12 @@ export const suggestionsRouter = Router();
 
 const listQuerySchema = z.object({
     mediaType: z.enum(["MOVIE", "SHOW"]).optional(),
-    status: z.enum(["PENDING", "APPROVED", "REJECTED", "SNOOZED"]).optional(),
+    status: z.enum(["PENDING", "APPROVED", "REJECTED", "SNOOZED", "FULFILLED"]).optional(),
     minScore: z.coerce.number().min(0).max(1).optional(),
     isPinned: z.coerce.boolean().optional(),
-    inLibrary: z.coerce.boolean().optional(),
+    // Default false — suggestions for titles already in the library are never surfaced
+    // unless the caller explicitly opts in with inLibrary=true.
+    inLibrary: z.coerce.boolean().default(false),
     isRequested: z.coerce.boolean().optional(),
     cleanupEligible: z.coerce.boolean().optional(),
     sortBy: z.enum(["finalScore", "generatedAt", "title"]).default("finalScore"),
@@ -25,17 +27,19 @@ suggestionsRouter.get("/", validateQuery(listQuerySchema), asyncHandler(async (r
     const q = req.query as unknown as z.infer<typeof listQuerySchema>;
 
     const titleWhere = {
+        inLibrary: q.inLibrary,   // always present — defaults to false
         ...(q.mediaType ? { mediaType: q.mediaType } : {}),
         ...(q.isPinned !== undefined ? { isPinned: q.isPinned } : {}),
-        ...(q.inLibrary !== undefined ? { inLibrary: q.inLibrary } : {}),
         ...(q.isRequested !== undefined ? { isRequested: q.isRequested } : {}),
         ...(q.cleanupEligible !== undefined ? { cleanupEligible: q.cleanupEligible } : {}),
     };
 
     const where = {
-        ...(q.status ? { status: q.status } : {}),
+        // When no explicit status filter is given, exclude FULFILLED so the default
+        // view only shows actionable suggestions.
+        status: q.status ?? { notIn: ["FULFILLED" as const] },
         ...(q.minScore !== undefined ? { finalScore: { gte: q.minScore } } : {}),
-        title: Object.keys(titleWhere).length ? titleWhere : undefined,
+        title: titleWhere,
     };
 
     // Determine orderBy — title.title requires a relation sort

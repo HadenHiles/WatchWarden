@@ -8,6 +8,7 @@ export const plexRouter = Router();
 
 const VALID_FILTERS = ["ACTIVE_TRENDING", "PINNED", "APPROVED"] as const;
 const VALID_MEDIA_TYPES = ["MOVIE", "SHOW"] as const;
+const VALID_COLLECTION_TYPES = ["SMART", "TOP_TRENDING"] as const;
 
 // GET /plex/collections — list all PlexCollection rows
 plexRouter.get("/collections", asyncHandler(async (_req, res) => {
@@ -21,7 +22,12 @@ const createCollectionSchema = z.object({
     name: z.string().min(1).max(100),
     sectionId: z.string().min(1),
     mediaType: z.enum(VALID_MEDIA_TYPES),
+    collectionType: z.enum(VALID_COLLECTION_TYPES).default("SMART"),
+    // SMART fields
     filter: z.enum(VALID_FILTERS).default("ACTIVE_TRENDING"),
+    // TOP_TRENDING fields
+    streamingProvider: z.string().min(1).max(100).optional(),
+    maxItems: z.number().int().min(1).max(50).default(5),
     enabled: z.boolean().default(true),
 });
 
@@ -39,6 +45,13 @@ plexRouter.post("/collections", validateBody(createCollectionSchema), asyncHandl
         });
     }
 
+    if (body.collectionType === "TOP_TRENDING" && !body.streamingProvider) {
+        return res.status(400).json({
+            success: false,
+            error: "streamingProvider is required for TOP_TRENDING collections",
+        });
+    }
+
     const collection = await prisma.plexCollection.create({ data: body });
     return res.status(201).json({ success: true, data: collection });
 }));
@@ -46,7 +59,10 @@ plexRouter.post("/collections", validateBody(createCollectionSchema), asyncHandl
 const updateCollectionSchema = z.object({
     name: z.string().min(1).max(100).optional(),
     sectionId: z.string().min(1).optional(),
+    collectionType: z.enum(VALID_COLLECTION_TYPES).optional(),
     filter: z.enum(VALID_FILTERS).optional(),
+    streamingProvider: z.string().min(1).max(100).nullable().optional(),
+    maxItems: z.number().int().min(1).max(50).optional(),
     enabled: z.boolean().optional(),
 });
 
