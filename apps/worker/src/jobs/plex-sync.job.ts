@@ -65,14 +65,14 @@ async function resolveSmartKeys(
 
 /**
  * Resolves the target ratingKeys for a TOP_TRENDING collection.
- * Finds in-library titles streaming on the specified provider, ordered by
- * trend score, capped to maxItems.
+ * Finds in-library titles streaming on any of the specified providers, ordered
+ * by trend score, capped to maxItems.
  */
 async function resolveTopTrendingKeys(
-    collection: { streamingProvider: string | null; mediaType: string; maxItems: number },
+    collection: { streamingProviders: string[]; mediaType: string; maxItems: number },
 ): Promise<string[]> {
-    if (!collection.streamingProvider) {
-        logger.warn("TOP_TRENDING collection has no streamingProvider — skipping");
+    if (!collection.streamingProviders.length) {
+        logger.warn("TOP_TRENDING collection has no streamingProviders — skipping");
         return [];
     }
 
@@ -81,7 +81,7 @@ async function resolveTopTrendingKeys(
             mediaType: collection.mediaType as "MOVIE" | "SHOW",
             inLibrary: true,
             plexRatingKey: { not: null },
-            streamingOn: { has: collection.streamingProvider },
+            streamingOn: { hasSome: collection.streamingProviders },
         },
         select: {
             plexRatingKey: true,
@@ -146,7 +146,7 @@ export async function plexSyncJob(): Promise<void> {
                 name: collection.name,
                 type: collection.collectionType,
                 filter: collection.filter,
-                provider: collection.streamingProvider,
+                providers: collection.streamingProviders,
                 targetCount: targetKeys.length,
             });
 

@@ -259,10 +259,10 @@ model PlexCollection {
   // collectionType: "SMART" = scored suggestions + watch history
   //                 "TOP_TRENDING" = top-N titles currently streaming on a provider
   collectionType    String    @default("SMART")
-  // SMART collections use filter; TOP_TRENDING collections use streamingProvider + maxItems
-  filter            String    @default("ACTIVE_TRENDING") // "ACTIVE_TRENDING" | "PINNED" | "APPROVED"
-  streamingProvider String?   // e.g. "Netflix", "Disney Plus" — for TOP_TRENDING only
-  maxItems          Int       @default(5) // max titles to include (TOP_TRENDING)
+  // SMART collections use filter; TOP_TRENDING collections use streamingProviders + maxItems
+  filter             String   @default("ACTIVE_TRENDING") // "ACTIVE_TRENDING" | "PINNED" | "APPROVED"
+  streamingProviders String[] // e.g. ["Netflix", "Disney+"] — for TOP_TRENDING only
+  maxItems           Int      @default(5) // max titles to include (TOP_TRENDING)
   enabled           Boolean   @default(true)
   lastSyncAt        DateTime?
   itemCount         Int       @default(0)

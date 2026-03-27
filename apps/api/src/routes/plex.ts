@@ -26,7 +26,7 @@ const createCollectionSchema = z.object({
     // SMART fields
     filter: z.enum(VALID_FILTERS).default("ACTIVE_TRENDING"),
     // TOP_TRENDING fields
-    streamingProvider: z.string().min(1).max(100).optional(),
+    streamingProviders: z.array(z.string().min(1).max(100)).default([]),
     maxItems: z.number().int().min(1).max(50).default(5),
     enabled: z.boolean().default(true),
 });
@@ -45,10 +45,10 @@ plexRouter.post("/collections", validateBody(createCollectionSchema), asyncHandl
         });
     }
 
-    if (body.collectionType === "TOP_TRENDING" && !body.streamingProvider) {
+    if (body.collectionType === "TOP_TRENDING" && body.streamingProviders.length === 0) {
         return res.status(400).json({
             success: false,
-            error: "streamingProvider is required for TOP_TRENDING collections",
+            error: "At least one streaming provider is required for TOP_TRENDING collections",
         });
     }
 
@@ -61,7 +61,7 @@ const updateCollectionSchema = z.object({
     sectionId: z.string().min(1).optional(),
     collectionType: z.enum(VALID_COLLECTION_TYPES).optional(),
     filter: z.enum(VALID_FILTERS).optional(),
-    streamingProvider: z.string().min(1).max(100).nullable().optional(),
+    streamingProviders: z.array(z.string().min(1).max(100)).optional(),
     maxItems: z.number().int().min(1).max(50).optional(),
     enabled: z.boolean().optional(),
 });

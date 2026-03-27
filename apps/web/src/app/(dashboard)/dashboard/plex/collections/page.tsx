@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import useSWR from "swr";
 import {
     Plus,
@@ -35,7 +35,7 @@ interface PlexCollection {
     mediaType: "MOVIE" | "SHOW";
     collectionType: "SMART" | "TOP_TRENDING";
     filter: "ACTIVE_TRENDING" | "PINNED" | "APPROVED";
-    streamingProvider: string | null;
+    streamingProviders: string[];
     maxItems: number;
     enabled: boolean;
     lastSyncAt: string | null;
@@ -62,6 +62,46 @@ const STREAMING_PROVIDERS = [
 const INPUT_CLS =
     "w-full rounded-lg bg-gray-800/80 border border-gray-700/60 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/60 focus:border-brand-500/40 placeholder-gray-600 transition-all";
 
+/** Small inline component for adding providers via a text+datalist input */
+function ProviderInput({ current, onAdd }: { current: string[]; onAdd: (p: string) => void }) {
+    const ref = useRef<HTMLInputElement>(null);
+
+    function commit() {
+        const val = ref.current?.value.trim();
+        if (val) {
+            onAdd(val);
+            if (ref.current) ref.current.value = "";
+        }
+    }
+
+    return (
+        <div className="flex gap-2">
+            <input
+                ref={ref}
+                type="text"
+                list="providers-list"
+                placeholder="Add provider…"
+                className={INPUT_CLS}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); commit(); }
+                }}
+            />
+            <datalist id="providers-list">
+                {STREAMING_PROVIDERS.filter((p) => !current.includes(p)).map((p) => (
+                    <option key={p} value={p} />
+                ))}
+            </datalist>
+            <button
+                type="button"
+                onClick={commit}
+                className="flex-shrink-0 px-3 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:text-white hover:border-gray-500 transition-colors"
+            >
+                <Plus className="w-4 h-4" />
+            </button>
+        </div>
+    );
+}
+
 export default function PlexCollectionsPage() {
     const { data: collectionsData, mutate } = useSWR<{ data: PlexCollection[] }>(
         apiUrl("/plex/collections"),
@@ -82,7 +122,7 @@ export default function PlexCollectionsPage() {
         mediaType: "MOVIE" as "MOVIE" | "SHOW",
         collectionType: "SMART" as "SMART" | "TOP_TRENDING",
         filter: "ACTIVE_TRENDING" as "ACTIVE_TRENDING" | "PINNED" | "APPROVED",
-        streamingProvider: "",
+        streamingProviders: [] as string[],
         maxItems: 5,
     });
     const [creating, setCreating] = useState(false);
@@ -101,7 +141,7 @@ export default function PlexCollectionsPage() {
             mediaType: "MOVIE",
             collectionType: "SMART",
             filter: "ACTIVE_TRENDING",
-            streamingProvider: "",
+            streamingProviders: [] as string[],
             maxItems: 5,
         });
         setCreateError(null);
@@ -109,8 +149,8 @@ export default function PlexCollectionsPage() {
 
     async function handleCreate() {
         if (!form.name || !form.sectionId) return;
-        if (form.collectionType === "TOP_TRENDING" && !form.streamingProvider.trim()) {
-            setCreateError("Streaming provider is required for Top Trending collections");
+        if (form.collectionType === "TOP_TRENDING" && form.streamingProviders.length === 0) {
+            setCreateError("At least one streaming provider is required for Top Trending collections");
             return;
         }
         setCreating(true);
@@ -123,7 +163,7 @@ export default function PlexCollectionsPage() {
                 collectionType: form.collectionType,
                 ...(form.collectionType === "SMART"
                     ? { filter: form.filter }
-                    : { streamingProvider: form.streamingProvider.trim(), maxItems: form.maxItems }),
+                    : { streamingProviders: form.streamingProviders, maxItems: form.maxItems }),
             };
             const res = await fetch(apiUrl("/plex/collections"), {
                 method: "POST",
@@ -360,26 +400,39 @@ export default function PlexCollectionsPage() {
                             </div>
                         )}
 
-                        {/* TOP_TRENDING — provider + maxItems */}
+                        {/* TOP_TRENDING — providers tag input + maxItems */}
                         {form.collectionType === "TOP_TRENDING" && (
                             <>
                                 <div className="space-y-1.5 col-span-2">
-                                    <label className="text-xs text-gray-400">Streaming Provider</label>
-                                    <input
-                                        type="text"
-                                        list="providers-list"
-                                        value={form.streamingProvider}
-                                        onChange={(e) => setForm((f) => ({ ...f, streamingProvider: e.target.value }))}
-                                        placeholder="Netflix"
-                                        className={INPUT_CLS}
-                                    />
-                                    <datalist id="providers-list">
-                                        {STREAMING_PROVIDERS.map((p) => (
-                                            <option key={p} value={p} />
+                                    <label className="text-xs text-gray-400">Streaming Providers</label>
+                                    {/* Tag pills */}
+                                    <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                        {form.streamingProviders.map((p) => (
+                                            <span key={p} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-brand-500/15 border border-brand-500/30 text-brand-300">
+                                                {p}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setForm((f) => ({ ...f, streamingProviders: f.streamingProviders.filter((x) => x !== p) }))}
+                                                    className="leading-none text-brand-400 hover:text-red-400 transition-colors"
+                                                    aria-label={`Remove ${p}`}
+                                                >
+                                                    ×
+                                                </button>
+                                            </span>
                                         ))}
-                                    </datalist>
+                                    </div>
+                                    {/* Add provider input */}
+                                    <ProviderInput
+                                        current={form.streamingProviders}
+                                        onAdd={(p) => setForm((f) => ({
+                                            ...f,
+                                            streamingProviders: f.streamingProviders.includes(p)
+                                                ? f.streamingProviders
+                                                : [...f.streamingProviders, p],
+                                        }))}
+                                    />
                                     <p className="text-xs text-gray-600">
-                                        Must match the provider name stored on titles (e.g. &quot;Netflix&quot;, &quot;Disney+&quot;)
+                                        Provider names must match what&apos;s stored on titles (e.g. &quot;Netflix&quot;, &quot;Disney+&quot;)
                                     </p>
                                 </div>
                                 <div className="space-y-1.5">
@@ -394,7 +447,7 @@ export default function PlexCollectionsPage() {
                                         }
                                         className={INPUT_CLS}
                                     />
-                                    <p className="text-xs text-gray-600">Top N titles by trend score (1–50)</p>
+                                    <p className="text-xs text-gray-600">Top N titles by trend score, combined across providers (1–50)</p>
                                 </div>
                             </>
                         )}
@@ -489,9 +542,9 @@ export default function PlexCollectionsPage() {
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 flex-shrink-0">
                                                     {FILTER_LABELS[c.filter] ?? c.filter}
                                                 </span>
-                                            ) : c.streamingProvider ? (
+                                            ) : c.streamingProviders?.length ? (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 flex-shrink-0">
-                                                    {c.streamingProvider} · top {c.maxItems}
+                                                    {c.streamingProviders.join(", ")} · top {c.maxItems}
                                                 </span>
                                             ) : null}
                                         </div>
