@@ -5,19 +5,19 @@
         "baseUrl": ".",
         "paths": {
             "@watchwarden/config": [
-                "../../packages/config/src"
+                "../../packages/config/dist"
             ],
             "@watchwarden/db": [
-                "../../packages/db/src"
+                "../../packages/db/dist"
             ],
             "@watchwarden/integrations": [
-                "../../packages/integrations/src"
+                "../../packages/integrations/dist"
             ],
             "@watchwarden/scoring": [
-                "../../packages/scoring/src"
+                "../../packages/scoring/dist"
             ],
             "@watchwarden/types": [
-                "../../packages/types/src"
+                "../../packages/types/dist"
             ]
         }
     },
