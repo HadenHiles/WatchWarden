@@ -110,7 +110,7 @@ export default function JobsPage() {
                     const meta = JOB_META[job.jobName];
                     return (
                         <div key={job.jobName} className="rounded-xl bg-gray-900 border border-gray-800 overflow-hidden">
-                            <div className="flex items-center justify-between px-4 py-3">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3">
                                 <div className="space-y-0.5">
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm font-semibold text-white">

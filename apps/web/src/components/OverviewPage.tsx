@@ -99,7 +99,7 @@ export function OverviewPage() {
     const pendingTotal = (stats?.suggestions.pendingMovies ?? 0) + (stats?.suggestions.pendingShows ?? 0);
 
     return (
-        <div className="space-y-6 max-w-4xl">
+        <div className="space-y-6 max-w-4xl w-full">
             <div className="flex items-center justify-between">
                 <h1 className="text-lg font-semibold text-white tracking-tight">Overview</h1>
                 <button

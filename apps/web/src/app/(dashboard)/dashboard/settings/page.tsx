@@ -153,7 +153,7 @@ export default function SettingsPage() {
 
     return (
         <div className="space-y-6 max-w-2xl">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h1 className="text-xl font-bold text-white">Settings</h1>
                 <div className="flex items-center gap-3">
                     <Link
@@ -187,7 +187,7 @@ export default function SettingsPage() {
                             const compoundKey = `${key}::${subKey}`;
                             return (
                                 <div key={compoundKey} className="px-4 py-3 space-y-1">
-                                    <div className="flex items-center justify-between gap-4">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                                         <div className="flex-1 min-w-0">
                                             <label htmlFor={compoundKey} className="text-sm text-gray-300">
                                                 {label}
@@ -216,7 +216,7 @@ export default function SettingsPage() {
                                                     setValues((v) => ({ ...v, [compoundKey]: e.target.value }))
                                                 }
                                                 placeholder={placeholder}
-                                                className={`rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500 ${type === "number" ? "w-32" : "w-56"
+                                                className={`rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500 w-full sm:w-auto ${type === "number" ? "sm:w-32" : "sm:w-56"
                                                     } ${type === "text" && key === "refreshIntervals" ? "font-mono text-xs" : ""}`}
                                                 step={type === "number" ? "0.01" : undefined}
                                             />

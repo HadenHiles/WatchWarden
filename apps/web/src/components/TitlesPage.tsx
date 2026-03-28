@@ -71,7 +71,7 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned, hideHea
     return (
         <div className="space-y-4">
             {!hideHeading ? (
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <h1 className="text-lg font-semibold text-white tracking-tight">{heading}</h1>
                     <div className="flex gap-1.5">
                         {(["ALL", "MOVIE", "SHOW"] as const).map((t) => (
@@ -119,8 +119,8 @@ export function TitlesPage({ heading, status, cleanupEligible, isPinned, hideHea
                 </div>
             )}
 
-            <div className="rounded-xl border border-gray-800/60 overflow-hidden">
-                <table className="w-full text-sm">
+            <div className="rounded-xl border border-gray-800/60 overflow-x-auto">
+                <table className="w-full text-sm min-w-[640px]">
                     <thead className="bg-gray-800/40 text-gray-600 uppercase text-[10px] tracking-[0.1em]">
                         <tr>
                             <th className="px-4 py-3 text-left" colSpan={2}>Title</th>

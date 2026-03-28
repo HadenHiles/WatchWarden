@@ -94,7 +94,7 @@ export function SuggestionsPage({ mediaType, hideHeading }: SuggestionsPageProps
     return (
         <div className="space-y-5">
             {!hideHeading && (
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <h1 className="text-lg font-semibold text-white tracking-tight">
                         {mediaType === "MOVIE" ? "Movie" : "TV Show"} Suggestions
                     </h1>
@@ -150,7 +150,7 @@ export function SuggestionsPage({ mediaType, hideHeading }: SuggestionsPageProps
 
             {/* Bulk action bar */}
             {selectedIds.size > 0 && (
-                <div className="flex items-center gap-3 rounded-xl bg-gray-900/90 border border-brand-500/20 px-4 py-2.5 animate-fade-in">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-gray-900/90 border border-brand-500/20 px-4 py-2.5 animate-fade-in">
                     <span className="text-xs font-semibold text-brand-400">{selectedIds.size} selected</span>
                     <div className="w-px h-4 bg-gray-800" />
                     <button onClick={() => bulkDecision("APPROVE")} disabled={bulkLoading}

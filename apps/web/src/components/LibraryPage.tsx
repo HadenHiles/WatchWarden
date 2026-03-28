@@ -57,14 +57,14 @@ function LibraryContent() {
     return (
         <div className="space-y-4 max-w-5xl">
             {/* Status filter pills */}
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 pb-0.5">
                 {TABS.map((t) => (
                     <button
                         key={t.label}
                         onClick={() => selectTab(t.label)}
                         className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${activeTab === t.label
-                                ? "bg-brand-500/10 border-brand-500/30 text-brand-400 font-medium"
-                                : "bg-gray-800/60 border-gray-700/60 text-gray-500 hover:text-gray-200 hover:border-gray-600"
+                            ? "bg-brand-500/10 border-brand-500/30 text-brand-400 font-medium"
+                            : "bg-gray-800/60 border-gray-700/60 text-gray-500 hover:text-gray-200 hover:border-gray-600"
                             }`}
                     >
                         {t.label}
