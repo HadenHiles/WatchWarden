@@ -62,10 +62,22 @@ export async function jellyseerrStatusSyncJob(): Promise<void> {
                     where: { titleId: record.titleId, status: "APPROVED" },
                     data: { status: "FULFILLED" },
                 });
-            } else if (newStatus === "DECLINED") {
+            } else if (newStatus === "APPROVED") {
+                // Jellyseerr admin approved the request — ensure title reflects REQUESTED
                 await prisma.title.update({
                     where: { id: record.titleId },
-                    data: { status: "SUGGESTED" },
+                    data: { isRequested: true, status: "REQUESTED" },
+                });
+            } else if (newStatus === "DECLINED") {
+                // Jellyseerr admin declined the request — reset so it can be re-reviewed
+                await prisma.title.update({
+                    where: { id: record.titleId },
+                    data: { status: "SUGGESTED", isRequested: false },
+                });
+                // Reset the suggestion back to PENDING so it surfaces for review again
+                await prisma.suggestion.updateMany({
+                    where: { titleId: record.titleId, status: "APPROVED" },
+                    data: { status: "PENDING" },
                 });
             }
 

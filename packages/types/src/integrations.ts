@@ -143,5 +143,9 @@ export interface SourceTrendItem {
     region: string | null;
     rank: number | null;
     trendScore: number;
+    /** TMDB provider_id (string) — only populated by TmdbProviderDiscoveryAdapter */
+    providerId?: string | null;
+    /** Rank within the specific streaming platform — only populated by TmdbProviderDiscoveryAdapter */
+    providerRank?: number | null;
     rawMetadata: Record<string, unknown>;
 }

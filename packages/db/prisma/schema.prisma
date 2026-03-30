@@ -120,11 +120,12 @@ model Title {
   updatedAt DateTime @updatedAt
 
   // Relations
-  trendSnapshots ExternalTrendSnapshot[]
-  watchSignals   LocalWatchSignal[]
-  suggestion     Suggestion?
-  requestRecord  RequestRecord?
-  auditLogs      AuditLog[]
+  trendSnapshots     ExternalTrendSnapshot[]
+  watchSignals       LocalWatchSignal[]
+  suggestion         Suggestion?
+  requestRecord      RequestRecord?
+  auditLogs          AuditLog[]
+  collectionOverrides PlexCollectionTitle[]
 
   @@index([status])
   @@index([mediaType])
@@ -136,20 +137,24 @@ model Title {
 // Multiple snapshots may exist per title (from different sources/regions).
 
 model ExternalTrendSnapshot {
-  id          String   @id @default(cuid())
-  titleId     String
-  source      String   // e.g. "tmdb_trending_week", "trakt_trending"
-  region      String?  // "US" | "CA"
-  rank        Int?
-  trendScore  Float
-  rawMetadata Json
-  snapshotAt  DateTime @default(now())
-  expiresAt   DateTime?
+  id           String   @id @default(cuid())
+  titleId      String
+  source       String   // e.g. "tmdb_trending_week", "trakt_trending", "tmdb_provider_8_movie_CA"
+  region       String?  // "US" | "CA"
+  rank         Int?     // position in the overall trending list
+  trendScore   Float
+  // Provider-specific fields — populated by TmdbProviderDiscoveryAdapter only
+  providerId   String?  // TMDB provider_id as string, e.g. "8" for Netflix
+  providerRank Int?     // rank within the specific streaming platform (1 = #1 on that platform)
+  rawMetadata  Json
+  snapshotAt   DateTime @default(now())
+  expiresAt    DateTime?
 
   title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
 
   @@index([titleId])
   @@index([source, region])
+  @@index([providerId, providerRank])
   @@index([snapshotAt])
 }
 
@@ -259,18 +264,44 @@ model PlexCollection {
   // collectionType: "SMART" = scored suggestions + watch history
   //                 "TOP_TRENDING" = top-N titles currently streaming on a provider
   collectionType    String    @default("SMART")
-  // SMART collections use filter; TOP_TRENDING collections use streamingProviders + maxItems
+  // SMART collections use filter; TOP_TRENDING collections use streamingProviders + maxItemsPerProvider
   filter             String   @default("ACTIVE_TRENDING") // "ACTIVE_TRENDING" | "PINNED" | "APPROVED"
   streamingProviders String[] // e.g. ["Netflix", "Disney+"] — for TOP_TRENDING only
-  maxItems           Int      @default(5) // max titles to include (TOP_TRENDING)
+  // For TOP_TRENDING: max items per provider (total = maxItemsPerProvider * providers.length)
+  maxItemsPerProvider Int     @default(10)
   enabled           Boolean   @default(true)
+  // When true, automatically create Jellyseerr requests for collection titles not yet in library
+  autoRequest       Boolean   @default(false)
   lastSyncAt        DateTime?
   itemCount         Int       @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
+  titleOverrides    PlexCollectionTitle[]
+
   @@index([sectionId])
   @@index([collectionType])
+}
+
+// ─── PlexCollectionTitle ─────────────────────────────────────────────────────
+// Manual inclusion/exclusion overrides for a PlexCollection.
+// manuallyAdded = true: always include regardless of computed membership.
+// manuallyExcluded = true: always exclude regardless of computed membership.
+
+model PlexCollectionTitle {
+  id               String   @id @default(cuid())
+  collectionId     String
+  titleId          String
+  manuallyAdded    Boolean  @default(false)
+  manuallyExcluded Boolean  @default(false)
+  addedAt          DateTime @default(now())
+
+  collection PlexCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  title      Title          @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, titleId])
+  @@index([collectionId])
+  @@index([titleId])
 }
 
 // ─── PublishedExport ─────────────────────────────────────────────────────────

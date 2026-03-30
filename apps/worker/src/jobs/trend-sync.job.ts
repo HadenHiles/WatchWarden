@@ -98,6 +98,8 @@ export async function trendSyncJob(): Promise<void> {
                     region: item.region ?? null,
                     rank: item.rank,
                     trendScore: item.trendScore,
+                    providerId: item.providerId ?? null,
+                    providerRank: item.providerRank ?? null,
                     rawMetadata: item.rawMetadata as import("@prisma/client").Prisma.InputJsonValue,
                     snapshotAt: new Date(),
                     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),

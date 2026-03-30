@@ -17,6 +17,9 @@ import {
     AlertCircle,
     Sparkles,
     TrendingUp,
+    X,
+    Search,
+    Send,
 } from "lucide-react";
 import { apiUrl } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -38,8 +41,9 @@ interface PlexCollection {
     collectionType: "SMART" | "TOP_TRENDING";
     filter: "ACTIVE_TRENDING" | "PINNED" | "APPROVED";
     streamingProviders: string[];
-    maxItems: number;
+    maxItemsPerProvider: number;
     enabled: boolean;
+    autoRequest: boolean;
     lastSyncAt: string | null;
     itemCount: number;
 }
@@ -141,14 +145,82 @@ interface CollectionItem {
     posterPath: string | null;
     mediaType: "MOVIE" | "SHOW";
     streamingOn: string[];
-    trendSnapshots: Array<{ trendScore: number }>;
+    inLibrary: boolean;
+    isRequested: boolean;
+    manuallyAdded: boolean;
+    manuallyExcluded: boolean;
+    trendSnapshots: Array<{ trendScore: number; providerId: string | null; providerRank: number | null }>;
 }
 
-function CollectionItemsPanel({ collectionId }: { collectionId: string }) {
-    const { data, error } = useSWR<{ data: CollectionItem[] }>(
+function CollectionItemsPanel({ collectionId, mediaType }: { collectionId: string; mediaType: "MOVIE" | "SHOW" }) {
+    const { data, error, mutate } = useSWR<{ data: CollectionItem[] }>(
         apiUrl(`/plex/collections/${collectionId}/items`),
         fetcher
     );
+
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searchResults, setSearchResults] = useState<Array<{ id: string; title: string; year: number | null; posterPath: string | null }>>([]);
+    const [searching, setSearching] = useState(false);
+    const [addingId, setAddingId] = useState<string | null>(null);
+    const [removingId, setRemovingId] = useState<string | null>(null);
+
+    async function handleSearch(q: string) {
+        setSearchQuery(q);
+        if (q.length < 2) { setSearchResults([]); return; }
+        setSearching(true);
+        try {
+            const res = await fetch(apiUrl(`/titles?search=${encodeURIComponent(q)}&mediaType=${mediaType}&pageSize=10`), { credentials: "include" });
+            const json = await res.json();
+            setSearchResults(json.data?.items ?? []);
+        } finally {
+            setSearching(false);
+        }
+    }
+
+    async function handleAddTitle(titleId: string) {
+        setAddingId(titleId);
+        try {
+            await fetch(apiUrl(`/plex/collections/${collectionId}/titles`), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ titleId, action: "include" }),
+            });
+            setSearchQuery("");
+            setSearchResults([]);
+            await mutate();
+        } finally {
+            setAddingId(null);
+        }
+    }
+
+    async function handleRemoveTitle(titleId: string) {
+        setRemovingId(titleId);
+        try {
+            await fetch(apiUrl(`/plex/collections/${collectionId}/titles/${titleId}`), {
+                method: "DELETE",
+                credentials: "include",
+            });
+            await mutate();
+        } finally {
+            setRemovingId(null);
+        }
+    }
+
+    async function handleExcludeTitle(titleId: string) {
+        setRemovingId(titleId);
+        try {
+            await fetch(apiUrl(`/plex/collections/${collectionId}/titles`), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ titleId, action: "exclude" }),
+            });
+            await mutate();
+        } finally {
+            setRemovingId(null);
+        }
+    }
 
     if (!data && !error) {
         return (
@@ -160,47 +232,133 @@ function CollectionItemsPanel({ collectionId }: { collectionId: string }) {
 
     const items = data?.data ?? [];
 
-    if (items.length === 0) {
-        return (
-            <div className="border-t border-gray-700/40 p-6 text-center">
-                <p className="text-sm text-gray-500">No items in this collection yet.</p>
-                <p className="text-xs text-gray-600 mt-1">Items appear after the next sync runs or titles become available in Plex.</p>
-            </div>
-        );
-    }
-
     return (
         <div className="border-t border-gray-700/40">
-            <div className="px-4 py-2 bg-gray-900/40 flex items-center gap-2">
-                <List className="w-3.5 h-3.5 text-gray-500" />
-                <span className="text-xs text-gray-500">{items.length} title{items.length !== 1 ? "s" : ""} currently in collection</span>
+            <div className="px-4 py-2 bg-gray-900/40 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <List className="w-3.5 h-3.5 text-gray-500" />
+                    <span className="text-xs text-gray-500">{items.length} title{items.length !== 1 ? "s" : ""} in collection</span>
+                </div>
+                <span className="text-xs text-gray-600">Hover a poster to remove</span>
             </div>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-2 p-4 max-h-64 overflow-y-auto">
-                {items.map((item) => (
-                    <div key={item.id} className="group relative">
-                        {item.posterPath ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                                src={`https://image.tmdb.org/t/p/w185${item.posterPath}`}
-                                alt={item.title}
-                                className="w-full aspect-[2/3] rounded object-cover bg-gray-800"
-                                loading="lazy"
-                            />
-                        ) : (
-                            <div className="w-full aspect-[2/3] rounded bg-gray-800 flex items-center justify-center">
-                                {item.mediaType === "MOVIE"
-                                    ? <Film className="w-6 h-6 text-gray-600" />
-                                    : <Tv2 className="w-6 h-6 text-gray-600" />
-                                }
+
+            {/* Manual title search + add */}
+            <div className="px-4 py-2 border-b border-gray-700/30">
+                <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        placeholder="Search to manually add a title…"
+                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-gray-800/60 border border-gray-700/60 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                    />
+                    {searching && <Loader2 className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
+                </div>
+                {searchResults.length > 0 && (
+                    <div className="mt-1 rounded-lg border border-gray-700/60 bg-gray-900 overflow-hidden divide-y divide-gray-700/40 max-h-48 overflow-y-auto">
+                        {searchResults.map((r) => (
+                            <div key={r.id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-800/60 transition-colors">
+                                {r.posterPath ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={`https://image.tmdb.org/t/p/w92${r.posterPath}`} alt="" className="w-7 h-10 rounded object-cover bg-gray-800 flex-shrink-0" loading="lazy" />
+                                ) : (
+                                    <div className="w-7 h-10 rounded bg-gray-800 flex-shrink-0" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-white font-medium truncate">{r.title}</p>
+                                    {r.year && <p className="text-[10px] text-gray-500">{r.year}</p>}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddTitle(r.id)}
+                                    disabled={addingId === r.id}
+                                    className="flex-shrink-0 flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-brand-500/15 border border-brand-500/30 text-brand-400 hover:bg-brand-500/30 transition-colors disabled:opacity-40"
+                                >
+                                    {addingId === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                                    Add
+                                </button>
                             </div>
-                        )}
-                        <div className="absolute inset-0 rounded bg-gray-950/85 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-1 text-center pointer-events-none">
-                            <p className="text-[10px] text-white font-medium leading-tight line-clamp-3">{item.title}</p>
-                            {item.year && <p className="text-[9px] text-gray-400 mt-0.5">{item.year}</p>}
-                        </div>
+                        ))}
                     </div>
-                ))}
+                )}
             </div>
+
+            {items.length === 0 ? (
+                <div className="p-6 text-center">
+                    <p className="text-sm text-gray-500">No items in this collection yet.</p>
+                    <p className="text-xs text-gray-600 mt-1">Items appear after the next sync runs or use the search above to add titles manually.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-2 p-4 max-h-64 overflow-y-auto">
+                    {items.map((item) => (
+                        <div key={item.id} className="group relative">
+                            {item.posterPath ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={`https://image.tmdb.org/t/p/w185${item.posterPath}`}
+                                    alt={item.title}
+                                    className="w-full aspect-[2/3] rounded object-cover bg-gray-800"
+                                    loading="lazy"
+                                />
+                            ) : (
+                                <div className="w-full aspect-[2/3] rounded bg-gray-800 flex items-center justify-center">
+                                    {item.mediaType === "MOVIE"
+                                        ? <Film className="w-6 h-6 text-gray-600" />
+                                        : <Tv2 className="w-6 h-6 text-gray-600" />
+                                    }
+                                </div>
+                            )}
+                            {item.manuallyAdded && (
+                                <div className="absolute top-0.5 left-0.5">
+                                    <span className="text-[8px] px-1 py-0.5 rounded bg-brand-500/80 text-white font-medium">Added</span>
+                                </div>
+                            )}
+                            <div className="absolute inset-0 rounded bg-gray-950/85 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-1 text-center">
+                                <p className="text-[10px] text-white font-medium leading-tight line-clamp-2">{item.title}</p>
+                                {item.year && <p className="text-[9px] text-gray-400 mt-0.5">{item.year}</p>}
+                                <div className="flex gap-1 mt-1.5">
+                                    {item.manuallyAdded ? (
+                                        <button
+                                            type="button"
+                                            title="Remove manual addition"
+                                            onClick={() => handleRemoveTitle(item.id)}
+                                            disabled={removingId === item.id}
+                                            className="flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 transition-colors disabled:opacity-40"
+                                        >
+                                            {removingId === item.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <X className="w-2.5 h-2.5" />}
+                                            Remove
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            title="Exclude from collection"
+                                            onClick={() => handleExcludeTitle(item.id)}
+                                            disabled={removingId === item.id}
+                                            className="flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 transition-colors disabled:opacity-40"
+                                        >
+                                            {removingId === item.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <X className="w-2.5 h-2.5" />}
+                                            Exclude
+                                        </button>
+                                    )}
+                                    {item.manuallyExcluded && (
+                                        <button
+                                            type="button"
+                                            title="Clear exclusion"
+                                            onClick={() => handleRemoveTitle(item.id)}
+                                            disabled={removingId === item.id}
+                                            className="flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/40 transition-colors disabled:opacity-40"
+                                        >
+                                            <Send className="w-2.5 h-2.5" />
+                                            Restore
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -226,7 +384,8 @@ export default function PlexCollectionsPage() {
         collectionType: "SMART" as "SMART" | "TOP_TRENDING",
         filter: "ACTIVE_TRENDING" as "ACTIVE_TRENDING" | "PINNED" | "APPROVED",
         streamingProviders: [] as string[],
-        maxItems: 5,
+        maxItemsPerProvider: 10,
+        autoRequest: false,
     });
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
@@ -238,7 +397,8 @@ export default function PlexCollectionsPage() {
         name: "",
         filter: "ACTIVE_TRENDING" as "ACTIVE_TRENDING" | "PINNED" | "APPROVED",
         streamingProviders: [] as string[],
-        maxItems: 5,
+        maxItemsPerProvider: 10,
+        autoRequest: false,
     });
     const [editError, setEditError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -255,7 +415,8 @@ export default function PlexCollectionsPage() {
             collectionType: "SMART",
             filter: "ACTIVE_TRENDING",
             streamingProviders: [] as string[],
-            maxItems: 5,
+            maxItemsPerProvider: 10,
+            autoRequest: false,
         });
         setCreateError(null);
     }
@@ -274,9 +435,10 @@ export default function PlexCollectionsPage() {
                 sectionId: form.sectionId,
                 mediaType: form.mediaType,
                 collectionType: form.collectionType,
+                autoRequest: form.autoRequest,
                 ...(form.collectionType === "SMART"
                     ? { filter: form.filter }
-                    : { streamingProviders: form.streamingProviders, maxItems: form.maxItems }),
+                    : { streamingProviders: form.streamingProviders, maxItemsPerProvider: form.maxItemsPerProvider }),
             };
             const res = await fetch(apiUrl("/plex/collections"), {
                 method: "POST",
@@ -342,7 +504,8 @@ export default function PlexCollectionsPage() {
             name: c.name,
             filter: c.filter,
             streamingProviders: [...c.streamingProviders],
-            maxItems: c.maxItems,
+            maxItemsPerProvider: c.maxItemsPerProvider,
+            autoRequest: c.autoRequest,
         });
         setEditError(null);
     }
@@ -362,12 +525,12 @@ export default function PlexCollectionsPage() {
         setSaving(true);
         setEditError(null);
         try {
-            const payload: Record<string, unknown> = { name: editForm.name };
+            const payload: Record<string, unknown> = { name: editForm.name, autoRequest: editForm.autoRequest };
             if (col?.collectionType === "SMART") {
                 payload.filter = editForm.filter;
             } else if (col?.collectionType === "TOP_TRENDING") {
                 payload.streamingProviders = editForm.streamingProviders;
-                payload.maxItems = editForm.maxItems;
+                payload.maxItemsPerProvider = editForm.maxItemsPerProvider;
             }
             const res = await fetch(apiUrl(`/plex/collections/${editingId}`), {
                 method: "PATCH",
@@ -603,21 +766,44 @@ export default function PlexCollectionsPage() {
                                     </p>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs text-gray-400">Max Items</label>
+                                    <label className="text-xs text-gray-400">Max Items Per Provider</label>
                                     <input
                                         type="number"
                                         min={1}
                                         max={50}
-                                        value={form.maxItems}
+                                        value={form.maxItemsPerProvider}
                                         onChange={(e) =>
-                                            setForm((f) => ({ ...f, maxItems: Math.max(1, parseInt(e.target.value) || 5) }))
+                                            setForm((f) => ({ ...f, maxItemsPerProvider: Math.max(1, parseInt(e.target.value) || 10) }))
                                         }
                                         className={INPUT_CLS}
                                     />
-                                    <p className="text-xs text-gray-600">Top N titles by trend score, combined across providers (1–50)</p>
+                                    <p className="text-xs text-gray-600">Top N titles per provider, interleaved (#1 Netflix, #1 Prime, #1 Disney+, #2 Netflix…)</p>
                                 </div>
                             </>
                         )}
+
+                        {/* Auto-request toggle */}
+                        <div className="col-span-2 flex items-center justify-between rounded-lg border border-gray-700/60 bg-gray-800/40 px-4 py-3">
+                            <div>
+                                <p className="text-sm font-medium text-white">Auto-request in Jellyseerr</p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    Automatically submit Jellyseerr requests for collection titles not yet in your library
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setForm((f) => ({ ...f, autoRequest: !f.autoRequest }))}
+                                className={cn(
+                                    "relative flex-shrink-0 w-10 h-5 rounded-full transition-colors",
+                                    form.autoRequest ? "bg-brand-500" : "bg-gray-700"
+                                )}
+                            >
+                                <span className={cn(
+                                    "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
+                                    form.autoRequest ? "translate-x-5" : "translate-x-0"
+                                )} />
+                            </button>
+                        </div>
                     </div>
 
                     {createError && (
@@ -711,7 +897,7 @@ export default function PlexCollectionsPage() {
                                                 </span>
                                             ) : c.streamingProviders?.length ? (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 flex-shrink-0">
-                                                    {c.streamingProviders.join(", ")} · top {c.maxItems}
+                                                    {c.streamingProviders.join(", ")} · top {c.maxItemsPerProvider}/provider
                                                 </span>
                                             ) : null}
                                         </div>
@@ -849,18 +1035,39 @@ export default function PlexCollectionsPage() {
                                                 />
                                             </div>
                                             <div className="space-y-1.5">
-                                                <label className="text-xs text-gray-400">Max Items</label>
+                                                <label className="text-xs text-gray-400">Max Items Per Provider</label>
                                                 <input
                                                     type="number"
                                                     min={1}
                                                     max={50}
-                                                    value={editForm.maxItems}
-                                                    onChange={(e) => setEditForm((ef) => ({ ...ef, maxItems: Math.max(1, parseInt(e.target.value) || 5) }))}
+                                                    value={editForm.maxItemsPerProvider}
+                                                    onChange={(e) => setEditForm((ef) => ({ ...ef, maxItemsPerProvider: Math.max(1, parseInt(e.target.value) || 10) }))}
                                                     className={INPUT_CLS}
                                                 />
+                                                <p className="text-xs text-gray-600">Top N per provider, interleaved across providers</p>
                                             </div>
                                         </div>
                                     )}
+                                    {/* Auto-request toggle */}
+                                    <div className="flex items-center justify-between rounded-lg border border-gray-700/60 bg-gray-800/40 px-4 py-3">
+                                        <div>
+                                            <p className="text-xs font-medium text-white">Auto-request in Jellyseerr</p>
+                                            <p className="text-[10px] text-gray-500 mt-0.5">Submit requests for collection titles not yet in library</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditForm((ef) => ({ ...ef, autoRequest: !ef.autoRequest }))}
+                                            className={cn(
+                                                "relative flex-shrink-0 w-10 h-5 rounded-full transition-colors",
+                                                editForm.autoRequest ? "bg-brand-500" : "bg-gray-700"
+                                            )}
+                                        >
+                                            <span className={cn(
+                                                "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
+                                                editForm.autoRequest ? "translate-x-5" : "translate-x-0"
+                                            )} />
+                                        </button>
+                                    </div>
                                     {editError && (
                                         <p className="text-sm text-red-400 rounded-lg bg-red-900/20 border border-red-800 px-3 py-2">{editError}</p>
                                     )}
@@ -885,7 +1092,7 @@ export default function PlexCollectionsPage() {
 
                             {/* Items panel */}
                             {expandedItemsId === c.id && editingId !== c.id && (
-                                <CollectionItemsPanel collectionId={c.id} />
+                                <CollectionItemsPanel collectionId={c.id} mediaType={c.mediaType} />
                             )}
                         </div>
                     ))}
@@ -901,9 +1108,10 @@ export default function PlexCollectionsPage() {
                     boosts are automatically added or removed as scores change.
                 </p>
                 <p>
-                    <span className="text-amber-400 font-medium">Top Trending</span> collections pull the highest-scored
-                    titles already in your Plex library that are available on a specific streaming service, capped at the
-                    number you choose.
+                    <span className="text-amber-400 font-medium">Top Trending</span> collections pull from streaming
+                    platform-specific popularity rankings (via TMDB Discover) for each selected provider. With multiple
+                    providers, titles are interleaved by rank: #1 Netflix, #1 Prime, #1 Disney+, #2 Netflix… giving
+                    you an accurate per-platform top list ordered by position.
                 </p>
                 <p>
                     Collections sync on a schedule (default every 6h 45min). Use{" "}

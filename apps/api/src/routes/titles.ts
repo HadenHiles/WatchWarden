@@ -12,6 +12,7 @@ const listQuerySchema = z.object({
     inLibrary: z.coerce.boolean().optional(),
     cleanupEligible: z.coerce.boolean().optional(),
     isPinned: z.coerce.boolean().optional(),
+    search: z.string().max(200).optional(),
     page: z.coerce.number().int().positive().default(1),
     pageSize: z.coerce.number().int().positive().max(100).default(25),
     sortBy: z.enum(["title", "year", "createdAt", "updatedAt"]).default("createdAt"),
@@ -28,6 +29,7 @@ titlesRouter.get("/", validateQuery(listQuerySchema), asyncHandler(async (req, r
         ...(q.inLibrary !== undefined ? { inLibrary: q.inLibrary } : {}),
         ...(q.cleanupEligible !== undefined ? { cleanupEligible: q.cleanupEligible } : {}),
         ...(q.isPinned !== undefined ? { isPinned: q.isPinned } : {}),
+        ...(q.search ? { title: { contains: q.search, mode: "insensitive" as const } } : {}),
     };
 
     const [items, total] = await Promise.all([

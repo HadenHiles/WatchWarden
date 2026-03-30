@@ -27,8 +27,9 @@ const createCollectionSchema = z.object({
     filter: z.enum(VALID_FILTERS).default("ACTIVE_TRENDING"),
     // TOP_TRENDING fields
     streamingProviders: z.array(z.string().min(1).max(100)).default([]),
-    maxItems: z.number().int().min(1).max(50).default(5),
+    maxItemsPerProvider: z.number().int().min(1).max(50).default(10),
     enabled: z.boolean().default(true),
+    autoRequest: z.boolean().default(false),
 });
 
 // POST /plex/collections — create a new managed collection
@@ -62,8 +63,9 @@ const updateCollectionSchema = z.object({
     collectionType: z.enum(VALID_COLLECTION_TYPES).optional(),
     filter: z.enum(VALID_FILTERS).optional(),
     streamingProviders: z.array(z.string().min(1).max(100)).optional(),
-    maxItems: z.number().int().min(1).max(50).optional(),
+    maxItemsPerProvider: z.number().int().min(1).max(50).optional(),
     enabled: z.boolean().optional(),
+    autoRequest: z.boolean().optional(),
 });
 
 // PATCH /plex/collections/:id — update a collection
@@ -98,59 +100,190 @@ plexRouter.get("/collections/:id/items", asyncHandler(async (req, res) => {
         return res.status(404).json({ success: false, error: "Collection not found" });
     }
 
-    const select = {
+    const { PROVIDER_TMDB_ID_MAP } = await import("@watchwarden/integrations");
+
+    const titleSelect = {
         id: true,
         title: true,
         year: true,
         posterPath: true,
         mediaType: true,
         streamingOn: true,
+        inLibrary: true,
+        isRequested: true,
         trendSnapshots: {
-            select: { trendScore: true },
+            select: { trendScore: true, providerId: true, providerRank: true },
             orderBy: { snapshotAt: "desc" as const },
-            take: 1,
+            take: 5,
         },
     };
 
-    let titles;
+    // Helper to get manual overrides for this collection
+    const overrides = await prisma.plexCollectionTitle.findMany({
+        where: { collectionId: collection.id },
+    });
+    const excludedIds = new Set(overrides.filter((o) => o.manuallyExcluded).map((o) => o.titleId));
+    const manuallyAddedIds = overrides.filter((o) => o.manuallyAdded && !o.manuallyExcluded).map((o) => o.titleId);
+
+    let orderedTitleIds: string[];
+
     if (collection.collectionType === "TOP_TRENDING") {
         if (!collection.streamingProviders.length) {
             return res.json({ success: true, data: [] });
         }
-        titles = await prisma.title.findMany({
-            where: {
-                mediaType: collection.mediaType,
-                inLibrary: true,
-                plexRatingKey: { not: null },
-                streamingOn: { hasSome: collection.streamingProviders },
-            },
-            select,
-        });
-    } else if (collection.filter === "PINNED") {
-        titles = await prisma.title.findMany({
-            where: { isPinned: true, mediaType: collection.mediaType, inLibrary: true, plexRatingKey: { not: null } },
-            select,
-        });
+
+        const cap = collection.maxItemsPerProvider;
+        const perProviderLists: string[][] = [];
+
+        for (const providerName of collection.streamingProviders) {
+            const tmdbProviderId = PROVIDER_TMDB_ID_MAP[providerName];
+            let ids: string[];
+
+            if (tmdbProviderId) {
+                const snapshots = await prisma.externalTrendSnapshot.findMany({
+                    where: {
+                        providerId: String(tmdbProviderId),
+                        providerRank: { not: null },
+                        snapshotAt: { gte: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) },
+                        title: { mediaType: collection.mediaType },
+                    },
+                    orderBy: [{ region: "desc" }, { providerRank: "asc" }],
+                    take: cap * 3,
+                    select: { titleId: true, providerRank: true, region: true },
+                });
+
+                // Dedup keeping best CA/lowest rank
+                const seen = new Map<string, { rank: number; region: string }>();
+                for (const snap of snapshots) {
+                    const existing = seen.get(snap.titleId);
+                    if (!existing) {
+                        seen.set(snap.titleId, { rank: snap.providerRank!, region: snap.region ?? "US" });
+                    } else {
+                        const caPrefer = snap.region === "CA" && existing.region !== "CA";
+                        if (caPrefer || (snap.providerRank ?? 999) < existing.rank) {
+                            seen.set(snap.titleId, { rank: snap.providerRank!, region: snap.region ?? "US" });
+                        }
+                    }
+                }
+                ids = Array.from(seen.entries())
+                    .sort(([, a], [, b]) => a.rank - b.rank)
+                    .slice(0, cap)
+                    .map(([id]) => id);
+            } else {
+                const titles = await prisma.title.findMany({
+                    where: { mediaType: collection.mediaType, streamingOn: { has: providerName } },
+                    select: { id: true, trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 1 } },
+                });
+                ids = titles
+                    .sort((a, b) => (b.trendSnapshots[0]?.trendScore ?? 0) - (a.trendSnapshots[0]?.trendScore ?? 0))
+                    .slice(0, cap)
+                    .map((t) => t.id);
+            }
+            if (ids.length) perProviderLists.push(ids);
+        }
+
+        // Interleave and deduplicate
+        const interleaved: string[] = [];
+        const seen = new Set<string>();
+        const maxLen = Math.max(0, ...perProviderLists.map((l) => l.length));
+        for (let i = 0; i < maxLen; i++) {
+            for (const list of perProviderLists) {
+                if (i < list.length && !seen.has(list[i])) {
+                    interleaved.push(list[i]);
+                    seen.add(list[i]);
+                }
+            }
+        }
+        orderedTitleIds = interleaved;
     } else {
-        titles = await prisma.title.findMany({
-            where: {
-                status: collection.filter === "APPROVED" ? "APPROVED" : "ACTIVE_TRENDING",
-                mediaType: collection.mediaType,
-                inLibrary: true,
-                plexRatingKey: { not: null },
-            },
-            select,
+        const whereInput =
+            collection.filter === "PINNED"
+                ? { isPinned: true, mediaType: collection.mediaType }
+                : { status: collection.filter === "APPROVED" ? "APPROVED" : "ACTIVE_TRENDING", mediaType: collection.mediaType };
+
+        const titles = await prisma.title.findMany({
+            where: whereInput as never,
+            select: { id: true, trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 1 } },
         });
+        orderedTitleIds = titles
+            .sort((a, b) => (b.trendSnapshots[0]?.trendScore ?? 0) - (a.trendSnapshots[0]?.trendScore ?? 0))
+            .map((t) => t.id);
     }
 
-    const sorted = [...titles].sort(
-        (a, b) => (b.trendSnapshots[0]?.trendScore ?? 0) - (a.trendSnapshots[0]?.trendScore ?? 0)
-    );
-    const result = collection.collectionType === "TOP_TRENDING"
-        ? sorted.slice(0, collection.maxItems)
-        : sorted;
+    // Apply manual exclusions, then append manual additions
+    const filteredIds = orderedTitleIds.filter((id) => !excludedIds.has(id));
+    const existingSet = new Set(filteredIds);
+    for (const id of manuallyAddedIds) {
+        if (!existingSet.has(id)) filteredIds.push(id);
+    }
+
+    // Fetch title details preserving order
+    const titleRows = await prisma.title.findMany({
+        where: { id: { in: filteredIds } },
+        select: {
+            ...titleSelect,
+            collectionOverrides: {
+                where: { collectionId: collection.id },
+                select: { manuallyAdded: true, manuallyExcluded: true },
+            },
+        },
+    });
+    const titleMap = new Map(titleRows.map((t) => [t.id, t]));
+    const result = filteredIds
+        .map((id) => titleMap.get(id))
+        .filter(Boolean)
+        .map((t) => ({
+            ...t,
+            manuallyAdded: (t!.collectionOverrides?.[0]?.manuallyAdded) ?? false,
+            manuallyExcluded: (t!.collectionOverrides?.[0]?.manuallyExcluded) ?? false,
+            collectionOverrides: undefined,
+        }));
 
     return res.json({ success: true, data: result });
+}));
+
+// POST /plex/collections/:id/titles — manually add or exclude a title
+const titleOverrideSchema = z.object({
+    titleId: z.string().min(1),
+    action: z.enum(["include", "exclude"]),
+});
+
+plexRouter.post("/collections/:id/titles", validateBody(titleOverrideSchema), asyncHandler(async (req, res) => {
+    const collection = await prisma.plexCollection.findUnique({ where: { id: req.params.id } });
+    if (!collection) return res.status(404).json({ success: false, error: "Collection not found" });
+
+    const { titleId, action } = req.body as z.infer<typeof titleOverrideSchema>;
+
+    const title = await prisma.title.findUnique({ where: { id: titleId } });
+    if (!title) return res.status(404).json({ success: false, error: "Title not found" });
+
+    const override = await prisma.plexCollectionTitle.upsert({
+        where: { collectionId_titleId: { collectionId: collection.id, titleId } },
+        update: {
+            manuallyAdded: action === "include",
+            manuallyExcluded: action === "exclude",
+        },
+        create: {
+            collectionId: collection.id,
+            titleId,
+            manuallyAdded: action === "include",
+            manuallyExcluded: action === "exclude",
+        },
+    });
+
+    return res.status(201).json({ success: true, data: override });
+}));
+
+// DELETE /plex/collections/:id/titles/:titleId — remove a manual override
+plexRouter.delete("/collections/:id/titles/:titleId", asyncHandler(async (req, res) => {
+    const collection = await prisma.plexCollection.findUnique({ where: { id: req.params.id } });
+    if (!collection) return res.status(404).json({ success: false, error: "Collection not found" });
+
+    await prisma.plexCollectionTitle.deleteMany({
+        where: { collectionId: collection.id, titleId: req.params.titleId },
+    });
+
+    return res.json({ success: true });
 }));
 
 // GET /plex/sections — proxy to Plex API to list library sections (used in the UI)
