@@ -5,6 +5,8 @@ import type {
     JellyseerrRequest,
     JellyseerrRequestPayload,
     JellyseerrHealthStatus,
+    JellyseerrDiscoverSlider,
+    JellyseerrDiscoverSliderPayload,
 } from "@watchwarden/types";
 
 const logger = createLogger("jellyseerr-client");
@@ -139,6 +141,56 @@ export class JellyseerrClient {
             return res.data;
         } catch (err) {
             this.handleError("getPendingRequests", err);
+        }
+    }
+
+    // ── Discover slider management ────────────────────────────────────────────
+    // These endpoints manage the Discover tab sliders in Jellyseerr.
+    // WatchWarden creates per-platform sliders so users see curated trending
+    // content and can request it directly from the Jellyseerr interface.
+
+    /** Fetch all configured discover sliders */
+    async getDiscoverSliders(): Promise<JellyseerrDiscoverSlider[]> {
+        try {
+            const res = await this.http.get<JellyseerrDiscoverSlider[]>("/discover");
+            return res.data ?? [];
+        } catch (err) {
+            this.handleError("getDiscoverSliders", err);
+        }
+    }
+
+    /** Create a new discover slider */
+    async createDiscoverSlider(payload: JellyseerrDiscoverSliderPayload): Promise<JellyseerrDiscoverSlider> {
+        try {
+            const res = await this.http.post<JellyseerrDiscoverSlider>("/discover", payload);
+            logger.info("Jellyseerr discover slider created", { title: payload.title, type: payload.type });
+            return res.data;
+        } catch (err) {
+            this.handleError("createDiscoverSlider", err);
+        }
+    }
+
+    /** Update an existing discover slider by its Jellyseerr ID */
+    async updateDiscoverSlider(
+        sliderId: number,
+        payload: JellyseerrDiscoverSliderPayload,
+    ): Promise<JellyseerrDiscoverSlider> {
+        try {
+            const res = await this.http.put<JellyseerrDiscoverSlider>(`/discover/${sliderId}`, payload);
+            logger.debug("Jellyseerr discover slider updated", { sliderId, title: payload.title });
+            return res.data;
+        } catch (err) {
+            this.handleError(`updateDiscoverSlider(${sliderId})`, err);
+        }
+    }
+
+    /** Delete a discover slider */
+    async deleteDiscoverSlider(sliderId: number): Promise<void> {
+        try {
+            await this.http.delete(`/discover/${sliderId}`);
+            logger.info("Jellyseerr discover slider deleted", { sliderId });
+        } catch (err) {
+            this.handleError(`deleteDiscoverSlider(${sliderId})`, err);
         }
     }
 }

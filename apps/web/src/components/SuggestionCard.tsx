@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { CheckCircle, XCircle, Clock, Pin, RotateCcw, PinOff, Flag, Trash2, CalendarPlus, Film } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Pin, RotateCcw, PinOff, Flag, Trash2, CalendarPlus, Film, ExternalLink } from "lucide-react";
 import { TitleDetailsModal } from "./TitleDetailsModal";
 import { StatusBadge } from "./StatusBadge";
 import { ScoreBreakdown } from "./ScoreBreakdown";
@@ -22,6 +22,7 @@ export interface SuggestionCardData {
     generatedAt: string;
     title: {
         id: string;
+        tmdbId?: number | null;
         title: string;
         year?: number | null;
         mediaType: "MOVIE" | "SHOW";
@@ -33,6 +34,7 @@ export interface SuggestionCardData {
         inLibrary: boolean;
         isRequested: boolean;
         cleanupEligible: boolean;
+        streamingOn?: string[];
         trendSnapshots?: Array<{ source: string; trendScore: number }>;
     };
 }
@@ -73,6 +75,11 @@ export function SuggestionCard({ suggestion, onDecision }: SuggestionCardProps) 
 
     const posterUrl = title.posterPath
         ? `https://image.tmdb.org/t/p/w185${title.posterPath}`
+        : null;
+
+    const jellyseerrBase = process.env.NEXT_PUBLIC_JELLYSEERR_URL?.replace(/\/$/, "");
+    const jellyseerrUrl = jellyseerrBase && title.tmdbId
+        ? `${jellyseerrBase}/${title.mediaType === "MOVIE" ? "movie" : "tv"}/${title.tmdbId}`
         : null;
 
     return (
@@ -141,8 +148,9 @@ export function SuggestionCard({ suggestion, onDecision }: SuggestionCardProps) 
                         {/* PENDING actions */}
                         {suggestion.status === "PENDING" && <>
                             <button onClick={() => applyDecision("APPROVE")} disabled={loading !== null}
+                                title="Surface this title to Jellyseerr — it will appear in the Discover tab so users can request it"
                                 className="flex items-center gap-1 text-xs rounded-lg px-2.5 py-1.5 bg-green-950/60 text-green-400 hover:bg-green-900/60 border border-green-900/60 hover:border-green-800 transition-all disabled:opacity-50">
-                                <CheckCircle className="w-3 h-3" /> Approve
+                                <CheckCircle className="w-3 h-3" /> Surface
                             </button>
                             <button onClick={() => applyDecision("REJECT")} disabled={loading !== null}
                                 className="flex items-center gap-1 text-xs rounded-lg px-2.5 py-1.5 bg-red-950/60 text-red-400 hover:bg-red-900/60 border border-red-900/60 hover:border-red-800 transition-all disabled:opacity-50">
@@ -237,6 +245,27 @@ export function SuggestionCard({ suggestion, onDecision }: SuggestionCardProps) 
                         </button>
                     </div>
                     <p className="text-[11px] text-gray-700">{formatDate(suggestion.generatedAt)}</p>
+                    {/* Streaming platforms + Jellyseerr deeplink */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {title.streamingOn && title.streamingOn.length > 0 && (
+                            <span className="text-[11px] text-brand-500/80 font-medium truncate max-w-[200px]">
+                                {title.streamingOn.slice(0, 3).join(" · ")}
+                            </span>
+                        )}
+                        {jellyseerrUrl && (
+                            <a
+                                href={jellyseerrUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-[11px] text-gray-600 hover:text-gray-400 transition-colors ml-auto"
+                                title="Open in Jellyseerr"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <ExternalLink className="w-3 h-3" />
+                                Jellyseerr
+                            </a>
+                        )}
+                    </div>
                 </div>
             </div>
             {

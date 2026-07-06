@@ -254,6 +254,8 @@ model RequestRecord {
 // ─── PlexCollection ──────────────────────────────────────────────────────────
 // A WatchWarden-managed Plex collection.  One row per collection the worker
 // should keep in sync with Plex.
+// Plex integration is intentionally scoped to collections only — WatchWarden
+// never auto-requests or auto-approves media through Plex.
 
 model PlexCollection {
   id                String    @id @default(cuid())
@@ -261,17 +263,15 @@ model PlexCollection {
   plexKey           String?   // Plex collection ratingKey (null until first sync)
   sectionId         String    // Plex library section key
   mediaType         MediaType
-  // collectionType: "SMART" = scored suggestions + watch history
-  //                 "TOP_TRENDING" = top-N titles currently streaming on a provider
-  collectionType    String    @default("SMART")
+  // collectionType: "TOP_TRENDING" = top-N titles currently streaming on a provider
+  //                 "SMART" = scored suggestions filtered by lifecycle status
+  collectionType    String    @default("TOP_TRENDING")
   // SMART collections use filter; TOP_TRENDING collections use streamingProviders + maxItemsPerProvider
   filter             String   @default("ACTIVE_TRENDING") // "ACTIVE_TRENDING" | "PINNED" | "APPROVED"
   streamingProviders String[] // e.g. ["Netflix", "Disney+"] — for TOP_TRENDING only
   // For TOP_TRENDING: max items per provider (total = maxItemsPerProvider * providers.length)
   maxItemsPerProvider Int     @default(10)
   enabled           Boolean   @default(true)
-  // When true, automatically create Jellyseerr requests for collection titles not yet in library
-  autoRequest       Boolean   @default(false)
   lastSyncAt        DateTime?
   itemCount         Int       @default(0)
   createdAt         DateTime  @default(now())
@@ -281,6 +281,27 @@ model PlexCollection {
 
   @@index([sectionId])
   @@index([collectionType])
+}
+
+// ─── JellyseerrDiscoverSlider ─────────────────────────────────────────────────
+// Tracks discover sliders WatchWarden creates/manages in Jellyseerr.
+// Each slider surfaces curated trending content for a specific streaming platform
+// in Jellyseerr's Discover tab — allowing users to request content directly.
+
+model JellyseerrDiscoverSlider {
+  id                  String    @id @default(cuid())
+  jellyseerrSliderId  Int?      @unique  // Jellyseerr's internal slider ID (null until first sync)
+  name                String    // e.g. "WatchWarden: Netflix Movies"
+  streamingProvider   String    // Provider name e.g. "Netflix"
+  mediaType           MediaType
+  enabled             Boolean   @default(true)
+  lastSyncAt          DateTime?
+  itemCount           Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([streamingProvider])
+  @@index([mediaType])
 }
 
 // ─── PlexCollectionTitle ─────────────────────────────────────────────────────

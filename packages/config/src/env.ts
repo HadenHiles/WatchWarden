@@ -46,10 +46,10 @@ export const workerEnvSchema = baseEnvSchema.extend({
     TAUTULLI_SYNC_CRON: z.string().default("0 */2 * * *"),
     SCORING_CRON: z.string().default("30 */6 * * *"),
     JELLYSEERR_STATUS_SYNC_CRON: z.string().default("0 * * * *"),
+    JELLYSEERR_DISCOVER_SYNC_CRON: z.string().default("0 */6 * * *"),
     LIBRARY_SYNC_CRON: z.string().default("0 */3 * * *"),
     LIFECYCLE_EVAL_CRON: z.string().default("0 4 * * *"),
     EXPORT_CRON: z.string().default("15 */6 * * *"),
-    PLEX_LIBRARY_SYNC_CRON: z.string().default("0 */4 * * *"),
     PLEX_SYNC_CRON: z.string().default("45 */6 * * *"),
 });
 
@@ -61,6 +61,8 @@ export const webEnvSchema = z.object({
     ADMIN_PASSWORD_HASH: z.string().min(1).default(DEFAULT_PASSWORD_HASH),
     SESSION_SECRET: z.string().min(32).default(DEFAULT_SESSION_SECRET),
     NEXT_PUBLIC_APP_NAME: z.string().default("Watch Warden"),
+    /** Jellyseerr public URL used to build deep links in the UI (no API key needed) */
+    NEXT_PUBLIC_JELLYSEERR_URL: z.string().url().optional(),
 });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

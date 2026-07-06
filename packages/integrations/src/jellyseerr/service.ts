@@ -3,7 +3,12 @@ import {
     JellyseerrClient,
     type JellyseerrClientConfig,
 } from "./client";
-import type { JellyseerrRequest, JellyseerrHealthStatus } from "@watchwarden/types";
+import type {
+    JellyseerrRequest,
+    JellyseerrHealthStatus,
+    JellyseerrDiscoverSlider,
+} from "@watchwarden/types";
+import { JellyseerrDiscoverSliderType as SliderType } from "@watchwarden/types";
 
 const logger = createLogger("jellyseerr-service");
 
@@ -129,5 +134,54 @@ export class JellyseerrService {
             logger.warn("Failed to sync request status", { requestId, error: String(err) });
             return null;
         }
+    }
+
+    /**
+     * Creates or updates a WatchWarden discover slider in Jellyseerr for a streaming platform.
+     * Returns the Jellyseerr slider ID so it can be persisted in the DB.
+     *
+     * Jellyseerr slider types 13/14 (TMDB_MOVIE_STREAMING / TMDB_TV_STREAMING) accept
+     * a TMDB watch provider ID as `data`.  If Jellyseerr doesn't support those types,
+     * the error is caught and null is returned so the job can skip gracefully.
+     */
+    async upsertDiscoverSlider(input: {
+        existingSliderId?: number | null;
+        name: string;
+        mediaType: "MOVIE" | "SHOW";
+        tmdbProviderId: number;
+    }): Promise<JellyseerrDiscoverSlider | null> {
+        const sliderType = input.mediaType === "MOVIE"
+            ? SliderType.TMDB_MOVIE_STREAMING
+            : SliderType.TMDB_TV_STREAMING;
+
+        const payload = {
+            type: sliderType,
+            title: input.name,
+            data: String(input.tmdbProviderId),
+            enabled: true,
+        };
+
+        try {
+            if (input.existingSliderId) {
+                return await this.client.updateDiscoverSlider(input.existingSliderId, payload);
+            }
+            return await this.client.createDiscoverSlider(payload);
+        } catch (err) {
+            logger.warn("Failed to upsert Jellyseerr discover slider", {
+                name: input.name,
+                error: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+        }
+    }
+
+    /** Fetch all existing discover sliders from Jellyseerr */
+    async getDiscoverSliders(): Promise<JellyseerrDiscoverSlider[]> {
+        return this.client.getDiscoverSliders();
+    }
+
+    /** Remove a discover slider from Jellyseerr by its ID */
+    async removeDiscoverSlider(sliderId: number): Promise<void> {
+        return this.client.deleteDiscoverSlider(sliderId);
     }
 }

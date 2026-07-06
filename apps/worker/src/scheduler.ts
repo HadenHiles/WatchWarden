@@ -6,10 +6,10 @@ import { trendSyncJob } from "./jobs/trend-sync.job";
 import { tautulliSyncJob } from "./jobs/tautulli-sync.job";
 import { scoringJob } from "./jobs/scoring.job";
 import { jellyseerrStatusSyncJob } from "./jobs/jellyseerr-status-sync.job";
+import { jellyseerrDiscoverSyncJob } from "./jobs/jellyseerr-discover-sync.job";
 import { librarySyncJob } from "./jobs/library-sync.job";
 import { lifecycleEvalJob } from "./jobs/lifecycle-eval.job";
 import { exportJob } from "./jobs/export.job";
-import { plexLibrarySyncJob } from "./jobs/plex-library-sync.job";
 import { plexSyncJob } from "./jobs/plex-sync.job";
 
 const logger = createLogger("scheduler");
@@ -22,10 +22,10 @@ export function buildScheduler(env: WorkerEnv) {
         { name: "tautulli-sync", cron: env.TAUTULLI_SYNC_CRON, fn: tautulliSyncJob },
         { name: "scoring", cron: env.SCORING_CRON, fn: scoringJob },
         { name: "jellyseerr-status-sync", cron: env.JELLYSEERR_STATUS_SYNC_CRON, fn: jellyseerrStatusSyncJob },
+        { name: "jellyseerr-discover-sync", cron: env.JELLYSEERR_DISCOVER_SYNC_CRON, fn: jellyseerrDiscoverSyncJob },
         { name: "library-sync", cron: env.LIBRARY_SYNC_CRON, fn: librarySyncJob },
         { name: "lifecycle-eval", cron: env.LIFECYCLE_EVAL_CRON, fn: lifecycleEvalJob },
         { name: "export", cron: env.EXPORT_CRON, fn: exportJob },
-        { name: "plex-library-sync", cron: env.PLEX_LIBRARY_SYNC_CRON, fn: plexLibrarySyncJob },
         { name: "plex-sync", cron: env.PLEX_SYNC_CRON, fn: plexSyncJob },
     ];
 

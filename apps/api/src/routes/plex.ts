@@ -22,14 +22,13 @@ const createCollectionSchema = z.object({
     name: z.string().min(1).max(100),
     sectionId: z.string().min(1),
     mediaType: z.enum(VALID_MEDIA_TYPES),
-    collectionType: z.enum(VALID_COLLECTION_TYPES).default("SMART"),
+    collectionType: z.enum(VALID_COLLECTION_TYPES).default("TOP_TRENDING"),
     // SMART fields
     filter: z.enum(VALID_FILTERS).default("ACTIVE_TRENDING"),
     // TOP_TRENDING fields
     streamingProviders: z.array(z.string().min(1).max(100)).default([]),
     maxItemsPerProvider: z.number().int().min(1).max(50).default(10),
     enabled: z.boolean().default(true),
-    autoRequest: z.boolean().default(false),
 });
 
 // POST /plex/collections — create a new managed collection
@@ -65,7 +64,6 @@ const updateCollectionSchema = z.object({
     streamingProviders: z.array(z.string().min(1).max(100)).optional(),
     maxItemsPerProvider: z.number().int().min(1).max(50).optional(),
     enabled: z.boolean().optional(),
-    autoRequest: z.boolean().optional(),
 });
 
 // PATCH /plex/collections/:id — update a collection

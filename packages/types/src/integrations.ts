@@ -124,6 +124,43 @@ export interface JellyseerrHealthStatus {
     error?: string;
 }
 
+// Discover slider types supported by Jellyseerr.
+// See https://github.com/Fallenbagel/jellyseerr for the full enum.
+export enum JellyseerrDiscoverSliderType {
+    RECENTLY_ADDED = 1,
+    RECENT_REQUESTS = 2,
+    PLEX_RECENTLY_ADDED_MOVIES = 3,
+    PLEX_RECENTLY_ADDED_SHOWS = 4,
+    TMDB_MOVIE_GENRE = 5,
+    TMDB_MOVIE_STUDIO = 6,
+    TMDB_MOVIE_KEYWORD = 7,
+    TMDB_TV_GENRE = 8,
+    TMDB_TV_NETWORK = 9,
+    TMDB_TV_KEYWORD = 10,
+    TMDB_TRENDING = 11,
+    TMDB_POPULAR = 12,
+    // Provider-based streaming — data = TMDB watch provider ID (numeric string)
+    TMDB_MOVIE_STREAMING = 13,
+    TMDB_TV_STREAMING = 14,
+}
+
+export interface JellyseerrDiscoverSlider {
+    id: number;
+    type: number;
+    title?: string;
+    data?: string;
+    enabled: boolean;
+    isBuiltIn: boolean;
+    order: number;
+}
+
+export interface JellyseerrDiscoverSliderPayload {
+    type: number;
+    title?: string;
+    data?: string;
+    enabled?: boolean;
+}
+
 // ─── Source adapter canonical output ─────────────────────────────────────────
 
 export interface SourceTrendItem {

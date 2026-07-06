@@ -249,69 +249,9 @@ async function resolveTopTrendingKeys(
 }
 
 /**
- * Auto-requests titles in a collection via Jellyseerr when collection.autoRequest is true.
- * Only submits requests for titles not yet in the library and not already requested.
- */
-async function autoRequestCollectionTitles(
-    collection: { id: string; streamingProviders: string[]; mediaType: string; maxItemsPerProvider: number },
-): Promise<void> {
-    const { jellyseerr } = await getIntegrationConfig();
-    if (!jellyseerr.baseUrl || !jellyseerr.apiKey) {
-        logger.warn("Jellyseerr not configured — skipping auto-request for collection", { collectionId: collection.id });
-        return;
-    }
-
-    // Find titles in this collection that need requesting
-    // We look at the same set the sync would use, but filtered to NOT in library
-    const providerTmdbIds = collection.streamingProviders
-        .map((name) => PROVIDER_TMDB_ID_MAP[name])
-        .filter(Boolean)
-        .map(String);
-
-    const whereClause = providerTmdbIds.length > 0
-        ? {
-            mediaType: collection.mediaType as "MOVIE" | "SHOW",
-            inLibrary: false,
-            isRequested: false,
-            trendSnapshots: {
-                some: {
-                    providerId: { in: providerTmdbIds },
-                    snapshotAt: { gte: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) },
-                },
-            },
-        }
-        : {
-            mediaType: collection.mediaType as "MOVIE" | "SHOW",
-            inLibrary: false,
-            isRequested: false,
-            streamingOn: { hasSome: collection.streamingProviders },
-        };
-
-    const candidates = await prisma.title.findMany({
-        where: whereClause,
-        select: { id: true, title: true, tmdbId: true },
-        take: collection.maxItemsPerProvider * collection.streamingProviders.length,
-    });
-
-    if (candidates.length === 0) return;
-
-    const { submitRequest } = await import("../services/request.service");
-
-    for (const title of candidates) {
-        try {
-            await submitRequest(title.id);
-            logger.info("Auto-requested title from collection", { titleId: title.id, titleName: title.title });
-        } catch (err) {
-            logger.warn("Auto-request failed for title", {
-                titleId: title.id,
-                error: err instanceof Error ? err.message : String(err),
-            });
-        }
-    }
-}
-
-/**
  * Syncs all enabled PlexCollection rows to the actual Plex server.
+ * WatchWarden manages collections for "Top 10 on Platform" visibility only —
+ * it never auto-requests or downloads media through this job.
  */
 export async function plexSyncJob(): Promise<void> {
     const { plex } = await getIntegrationConfig();
@@ -338,11 +278,6 @@ export async function plexSyncJob(): Promise<void> {
 
     for (const collection of collections) {
         try {
-            // Auto-request titles before syncing so requests are in-flight
-            if (collection.autoRequest && collection.collectionType === "TOP_TRENDING") {
-                await autoRequestCollectionTitles(collection);
-            }
-
             let targetKeys: string[];
             if (collection.collectionType === "TOP_TRENDING") {
                 targetKeys = await resolveTopTrendingKeys(collection);

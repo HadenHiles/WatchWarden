@@ -44,6 +44,11 @@ RUN pnpm install --frozen-lockfile
 # Copy all source
 COPY . .
 
+# Jellyseerr public URL — baked into the Next.js bundle at build time.
+# Pass with: docker build --build-arg NEXT_PUBLIC_JELLYSEERR_URL=https://...
+ARG NEXT_PUBLIC_JELLYSEERR_URL
+ENV NEXT_PUBLIC_JELLYSEERR_URL=${NEXT_PUBLIC_JELLYSEERR_URL}
+
 # Build in dependency order.
 # integrations and scoring tsconfigs use paths→src so they compile cleanly
 # even when pnpm creates per-package node_modules for workspace packages.
