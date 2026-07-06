@@ -1,0 +1,19 @@
+# Patch image — layers updated compiled files on top of the existing base image.
+# This avoids a full rebuild (apt-get / pnpm install) when only source changes.
+# Build with:
+#   DOCKER_BUILDKIT=0 docker build -f Dockerfile.patch -t hadenhiles/watchwarden:latest .
+FROM hadenhiles/watchwarden:latest
+
+# Updated compiled dist files
+COPY apps/api/dist                  /app/apps/api/dist/
+COPY apps/worker/dist               /app/apps/worker/dist/
+
+# Updated Next.js standalone build (NEXT_PUBLIC_JELLYSEERR_URL already baked in)
+COPY apps/web/.next/standalone/apps/web/  /app/apps/web/
+COPY apps/web/.next/static/               /app/apps/web/.next/static/
+COPY apps/web/public/                     /app/apps/web/public/
+
+# Updated Prisma schema + regenerated client (has JellyseerrDiscoverSlider model)
+COPY packages/db/prisma/schema.prisma     /app/packages/db/prisma/schema.prisma
+COPY node_modules/.prisma/client/         /app/node_modules/.prisma/client/
+COPY node_modules/.prisma/client/         /app/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma/client/
