@@ -9,10 +9,10 @@ const JOB_NAMES = [
     "tautulli-sync",
     "scoring",
     "jellyseerr-status-sync",
+    "jellyseerr-discover-sync",
     "library-sync",
     "lifecycle-eval",
     "export",
-    "plex-library-sync",
     "plex-sync",
 ] as const;
 
