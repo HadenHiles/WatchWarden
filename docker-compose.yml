@@ -30,6 +30,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      network: host
     container_name: watchwarden-api
     restart: unless-stopped
     env_file:
@@ -66,6 +67,7 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
+      network: host
     container_name: watchwarden-worker
     restart: unless-stopped
     env_file:
@@ -90,6 +92,7 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      network: host
     container_name: watchwarden-web
     restart: unless-stopped
     env_file:
