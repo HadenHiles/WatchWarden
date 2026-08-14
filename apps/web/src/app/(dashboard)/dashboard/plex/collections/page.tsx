@@ -61,6 +61,7 @@ function ShelfPreview({ shelf, onChanged, onRename }: { shelf: Shelf; onChanged:
     const [name, setName] = useState(shelf.name);
     const [renaming, setRenaming] = useState(false);
     const [requestingId, setRequestingId] = useState<string | null>(null);
+    const [rejectingId, setRejectingId] = useState<string | null>(null);
 
     useEffect(() => setName(shelf.name), [shelf.name]);
 
@@ -94,6 +95,18 @@ function ShelfPreview({ shelf, onChanged, onRename }: { shelf: Shelf; onChanged:
             onChanged();
         } finally {
             setRequestingId(null);
+        }
+    }
+
+    async function rejectCandidate(titleId: string) {
+        setRejectingId(titleId);
+        try {
+            const response = await fetch(apiUrl(`/plex/collections/${shelf.id}/candidates/${titleId}/reject`), { method: "POST", credentials: "include" });
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.error ?? "Could not reject candidate");
+            await mutateCandidates();
+        } finally {
+            setRejectingId(null);
         }
     }
 
@@ -133,13 +146,13 @@ function ShelfPreview({ shelf, onChanged, onRename }: { shelf: Shelf; onChanged:
             </div>}
             <div className="border-t border-gray-800/80 pt-4">
                 <div className="mb-3 flex items-end justify-between gap-3">
-                    <div><h3 className="text-sm font-semibold text-white">Fill this shelf</h3><p className="mt-0.5 text-[11px] text-gray-500">Missing titles ranked for this row. Approve only what you want Jellyseerr to download.</p></div>
+                    <div><h3 className="text-sm font-semibold text-white">Fill this shelf</h3><p className="mt-0.5 text-[11px] text-gray-500">Missing titles ranked for this row. Global genre, anime, and popularity filters apply.</p></div>
                     <span className="text-[11px] text-gray-600">Manual requests</span>
                 </div>
                 {candidatesLoading ? <div className="flex h-24 items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-gray-600" /></div> : (candidateData?.data.length ?? 0) === 0 ? <div className="rounded-lg border border-dashed border-gray-800 py-6 text-center text-xs text-gray-600">No unrequested candidates for this shelf.</div> : <div className="flex gap-3 overflow-x-auto pb-2">
                     {candidateData!.data.map((candidate) => <div key={candidate.id} className="w-28 flex-none overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
                         {candidate.posterPath ? <img src={`https://image.tmdb.org/t/p/w185${candidate.posterPath}`} alt="" className="aspect-[2/3] w-full bg-gray-800 object-cover" /> : <div className="flex aspect-[2/3] items-center justify-center bg-gray-800"><Film className="h-5 w-5 text-gray-600" /></div>}
-                        <div className="p-2"><p className="truncate text-xs font-medium text-gray-200" title={candidate.title}>{candidate.title}</p><p className="mt-0.5 text-[10px] text-gray-600">{candidate.year ?? "Year unknown"}</p><button onClick={() => approveRequest(candidate.id)} disabled={requestingId === candidate.id} className="mt-2 flex w-full items-center justify-center gap-1 rounded-md bg-brand-500 px-2 py-1.5 text-[11px] font-semibold text-gray-950 hover:bg-brand-400 disabled:opacity-50">{requestingId === candidate.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}Approve</button></div>
+                        <div className="p-2"><p className="truncate text-xs font-medium text-gray-200" title={candidate.title}>{candidate.title}</p><p className="mt-0.5 text-[10px] text-gray-600">{candidate.year ?? "Year unknown"}</p><div className="mt-2 grid grid-cols-2 gap-1"><button onClick={() => approveRequest(candidate.id)} disabled={requestingId === candidate.id || rejectingId === candidate.id} className="flex items-center justify-center gap-1 rounded-md bg-brand-500 px-1 py-1.5 text-[10px] font-semibold text-gray-950 hover:bg-brand-400 disabled:opacity-50">{requestingId === candidate.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}Approve</button><button onClick={() => rejectCandidate(candidate.id)} disabled={requestingId === candidate.id || rejectingId === candidate.id} title="Reject globally" className="flex items-center justify-center gap-1 rounded-md border border-gray-700 px-1 py-1.5 text-[10px] font-semibold text-gray-400 hover:border-red-500/60 hover:text-red-400 disabled:opacity-50">{rejectingId === candidate.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}Reject</button></div></div>
                     </div>)}
                 </div>}
             </div>
