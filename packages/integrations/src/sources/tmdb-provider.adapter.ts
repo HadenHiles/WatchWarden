@@ -65,6 +65,13 @@ interface TmdbDiscoverResponse {
     total_results: number;
 }
 
+interface TmdbEditorialDetails {
+    last_air_date?: string | null;
+    next_episode_to_air?: { air_date?: string | null } | null;
+    networks?: Array<{ id: number; name: string }>;
+    production_companies?: Array<{ id: number; name: string }>;
+}
+
 /**
  * TMDB Provider Discovery adapter.
  *
@@ -138,9 +145,18 @@ export class TmdbProviderDiscoveryAdapter implements SourceAdapter {
                 page++;
             }
 
-            return results
-                .slice(0, this.maxResults)
-                .map((item, index) => this.normalize(item, index + 1));
+            const selected = results.slice(0, this.maxResults);
+            const details = this.providerName === "Netflix"
+                ? await Promise.all(selected.map(async (item) => {
+                    try {
+                        const response = await axios.get<TmdbEditorialDetails>(`${TMDB_BASE}/${endpoint}/${item.id}`, {
+                            params: { api_key: this.apiKey, language: "en-US" }, timeout: 8_000,
+                        });
+                        return response.data;
+                    } catch { return null; }
+                }))
+                : selected.map(() => null);
+            return selected.map((item, index) => this.normalize(item, index + 1, details[index]));
         } catch (err) {
             logger.error("TMDB provider trending fetch failed", {
                 source: this.sourceId,
@@ -151,11 +167,15 @@ export class TmdbProviderDiscoveryAdapter implements SourceAdapter {
         }
     }
 
-    private normalize(item: TmdbDiscoverResult, providerRank: number): SourceTrendItem {
+    private normalize(item: TmdbDiscoverResult, providerRank: number, details?: TmdbEditorialDetails | null): SourceTrendItem {
         const isMovie = this.mediaType === "movie";
         const rawYear = isMovie ? item.release_date : item.first_air_date;
         const year = rawYear ? parseInt(rawYear.substring(0, 4), 10) : null;
         const trendScore = Math.min(1, (item.popularity ?? 0) / 1000);
+        const networks = details?.networks ?? [];
+        const productionCompanies = details?.production_companies ?? [];
+        const isNetflixOriginal = networks.some((network) => network.id === 213 || /netflix/i.test(network.name))
+            || productionCompanies.some((company) => /netflix/i.test(company.name));
 
         return {
             tmdbId: item.id,
@@ -184,6 +204,11 @@ export class TmdbProviderDiscoveryAdapter implements SourceAdapter {
                 voteAverage: item.vote_average,
                 originalLanguage: item.original_language,
                 originCountry: item.origin_country,
+                lastAirDate: details?.last_air_date ?? null,
+                nextAirDate: details?.next_episode_to_air?.air_date ?? null,
+                networks,
+                productionCompanies,
+                isNetflixOriginal,
             },
         };
     }

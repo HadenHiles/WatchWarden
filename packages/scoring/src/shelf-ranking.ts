@@ -53,6 +53,57 @@ export interface PlatformSnapshot {
     snapshotAt: Date;
 }
 
+export interface StreamingEditorialCandidate {
+    id: string;
+    providerRank: number;
+    firstAirDate?: Date | null;
+    lastAirDate?: Date | null;
+    isNetflixOriginal: boolean;
+    rankMomentum: number;
+    stableDays: number;
+}
+
+/** Builds a streaming-style TV row from distinct editorial lanes. */
+export function selectStreamingEditorialTitles(candidates: StreamingEditorialCandidate[], limit: number, now = new Date()): StreamingEditorialCandidate[] {
+    const target = Math.max(0, limit);
+    if (!target) return [];
+    const rankScore = (item: StreamingEditorialCandidate) => 1 / Math.max(1, item.providerRank);
+    const ageDays = (date?: Date | null) => date ? Math.max(0, now.getTime() - date.getTime()) / 86_400_000 : Number.POSITIVE_INFINITY;
+    const freshness = (item: StreamingEditorialCandidate) => {
+        const age = Math.min(ageDays(item.lastAirDate), ageDays(item.firstAirDate));
+        return Number.isFinite(age) ? Math.max(0, 1 - age / 730) : 0;
+    };
+    const base = (item: StreamingEditorialCandidate) => rankScore(item) * 0.55 + freshness(item) * 0.3
+        + (item.isNetflixOriginal ? 0.15 : 0) - (item.stableDays >= 35 ? 0.18 : 0);
+    const recent = [...candidates].filter((item) => Math.min(ageDays(item.lastAirDate), ageDays(item.firstAirDate)) <= 365)
+        .sort((a, b) => freshness(b) - freshness(a) || a.providerRank - b.providerRank);
+    const originals = [...candidates].filter((item) => item.isNetflixOriginal)
+        .sort((a, b) => base(b) - base(a) || a.providerRank - b.providerRank);
+    const rising = [...candidates].filter((item) => item.rankMomentum > 0)
+        .sort((a, b) => b.rankMomentum - a.rankMomentum || base(b) - base(a));
+    const evergreen = [...candidates].sort((a, b) => base(b) - base(a) || a.providerRank - b.providerRank);
+
+    const quotas = target >= 5
+        ? [Math.round(target * 0.4), Math.floor(target * 0.3), Math.max(1, Math.floor(target * 0.1))]
+        : [Math.ceil(target * 0.4), Math.floor(target * 0.3), 0];
+    const evergreenQuota = Math.max(0, target - quotas.reduce((sum, value) => sum + value, 0));
+    const selected: StreamingEditorialCandidate[] = [];
+    const seen = new Set<string>();
+    const take = (items: StreamingEditorialCandidate[], count: number) => {
+        for (const item of items) {
+            if (selected.length >= target || count <= 0) break;
+            if (seen.has(item.id)) continue;
+            seen.add(item.id); selected.push(item); count--;
+        }
+    };
+    take(recent, quotas[0]);
+    take(originals, quotas[1]);
+    take(rising, quotas[2]);
+    take(evergreen, evergreenQuota);
+    take(evergreen, target - selected.length);
+    return selected;
+}
+
 export function comparePlatformSnapshots(a: PlatformSnapshot, b: PlatformSnapshot, config = DEFAULT_SHELF_RANKING_CONFIG): number {
     return regionPriority(a.region, config) - regionPriority(b.region, config)
         || a.providerRank - b.providerRank

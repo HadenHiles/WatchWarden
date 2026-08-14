@@ -2,7 +2,7 @@ import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
-import { culturalHeat, diversifyShelf, resolvePlatformSnapshots, selectPublishedShelfIds } from "@watchwarden/scoring";
+import { culturalHeat, diversifyShelf, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
 import { submitRequest } from "../services/request.service";
 
 const logger = createLogger("plex-sync-job");
@@ -158,6 +158,7 @@ async function resolveTopTrendingKeys(
         if (tmdbProviderId) {
             // Use provider-specific snapshots (from TmdbProviderDiscoveryAdapter)
             // Try CA region first, fall back to US
+            const editorialNetflix = providerName === "Netflix";
             const snapshots = await prisma.externalTrendSnapshot.findMany({
                 where: {
                     providerId: String(tmdbProviderId),
@@ -167,23 +168,47 @@ async function resolveTopTrendingKeys(
                         inLibrary: true,
                         plexRatingKey: { not: null },
                     },
-                    // Use snapshots from the last 8 days (gives ~1 weekly cycle of freshness)
-                    snapshotAt: { gte: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) },
+                    snapshotAt: { gte: new Date(Date.now() - (editorialNetflix ? 45 : 8) * 24 * 60 * 60 * 1000) },
                 },
                 select: {
                     titleId: true,
                     providerRank: true,
                     region: true,
                     snapshotAt: true,
-                    title: { select: { plexRatingKey: true } },
+                    rawMetadata: true,
+                    title: { select: { plexRatingKey: true, releaseDate: true, streamingOn: true } },
                 },
             });
-            titleIds = resolvePlatformSnapshots(snapshots.map((s) => ({
+            const recentCutoff = Date.now() - 8 * 24 * 60 * 60 * 1000;
+            const currentSnapshots = snapshots.filter((snapshot) => snapshot.snapshotAt.getTime() >= recentCutoff);
+            const resolved = resolvePlatformSnapshots(currentSnapshots.map((s) => ({
                 titleId: s.titleId,
                 providerRank: s.providerRank!,
                 region: s.region,
                 snapshotAt: s.snapshotAt,
-            })), { freshnessHalfLifeHours: 72, maxRank: 100, ...regionConfig }).slice(0, cap).map((s) => s.titleId);
+            })), { freshnessHalfLifeHours: 72, maxRank: 100, ...regionConfig });
+            if (editorialNetflix) {
+                const candidates = resolved.map((item) => {
+                    const history = snapshots.filter((snapshot) => snapshot.titleId === item.titleId)
+                        .sort((a, b) => b.snapshotAt.getTime() - a.snapshotAt.getTime());
+                    const current = history.find((snapshot) => snapshot.region === item.region) ?? history[0];
+                    const oldest = history[history.length - 1];
+                    const raw = (current?.rawMetadata ?? {}) as Record<string, unknown>;
+                    const lastAirDate = typeof raw.lastAirDate === "string" && raw.lastAirDate ? new Date(raw.lastAirDate) : null;
+                    return {
+                        id: item.titleId,
+                        providerRank: item.providerRank,
+                        firstAirDate: current?.title.releaseDate ?? null,
+                        lastAirDate,
+                        isNetflixOriginal: raw.isNetflixOriginal === true || (current?.title.streamingOn.length === 1 && /netflix/i.test(current.title.streamingOn[0] ?? "")),
+                        rankMomentum: Math.max(0, (oldest?.providerRank ?? item.providerRank) - item.providerRank),
+                        stableDays: oldest ? (current!.snapshotAt.getTime() - oldest.snapshotAt.getTime()) / 86_400_000 : 0,
+                    };
+                });
+                titleIds = selectStreamingEditorialTitles(candidates, cap).map((item) => item.id);
+            } else {
+                titleIds = resolved.slice(0, cap).map((item) => item.titleId);
+            }
         } else {
             // Fall back: filter by streamingOn provider name, sort by overall trend score
             const titles = await prisma.title.findMany({
@@ -295,8 +320,28 @@ async function resolveAutoRequestIds(collection: {
                 title: baseTitle,
             },
             orderBy: [{ providerRank: "asc" }, { snapshotAt: "desc" }],
-            select: { titleId: true },
+            select: { titleId: true, providerRank: true, snapshotAt: true, rawMetadata: true, title: { select: { releaseDate: true, streamingOn: true } } },
         });
+        if (providerName === "Netflix") {
+            const latest = new Map<string, typeof snapshots[number]>();
+            for (const snapshot of snapshots) {
+                const current = latest.get(snapshot.titleId);
+                if (!current || snapshot.snapshotAt > current.snapshotAt) latest.set(snapshot.titleId, snapshot);
+            }
+            const candidates = [...latest.values()].map((snapshot) => {
+                const raw = (snapshot.rawMetadata ?? {}) as Record<string, unknown>;
+                return {
+                    id: snapshot.titleId,
+                    providerRank: snapshot.providerRank!,
+                    firstAirDate: snapshot.title.releaseDate,
+                    lastAirDate: typeof raw.lastAirDate === "string" && raw.lastAirDate ? new Date(raw.lastAirDate) : null,
+                    isNetflixOriginal: raw.isNetflixOriginal === true || (snapshot.title.streamingOn.length === 1 && /netflix/i.test(snapshot.title.streamingOn[0] ?? "")),
+                    rankMomentum: 0,
+                    stableDays: 0,
+                };
+            });
+            return selectStreamingEditorialTitles(candidates, collection.maxItemsPerProvider || 10).map((item) => item.id);
+        }
         return [...new Set(snapshots.map((snapshot) => snapshot.titleId))]
             .slice(0, collection.maxItemsPerProvider || 10);
     }
@@ -355,10 +400,11 @@ export async function plexSyncJob(): Promise<void> {
     const automationSetting = await prisma.appSetting.findUnique({ where: { key: "automation.roster" } });
     const automation = (automationSetting?.value ?? {}) as { enabled?: boolean; maxNewRequestsPerRun?: number };
     if (automation.enabled === true) {
-        const candidates: string[] = [];
+        const candidateLists: string[][] = [];
         for (const collection of collections.filter((item) => item.enabled && item.autoRequest)) {
-            candidates.push(...await resolveAutoRequestIds(collection));
+            candidateLists.push(await resolveAutoRequestIds(collection));
         }
+        const candidates = interleave(candidateLists);
         const cap = Math.max(0, Math.min(20, automation.maxNewRequestsPerRun ?? 5));
         for (const titleId of [...new Set(candidates)].slice(0, cap)) await submitRequest(titleId);
         logger.info("Auto-request roster evaluated", { candidates: new Set(candidates).size, requestCap: cap });

@@ -108,12 +108,18 @@ export class JellyseerrService {
                 return { success: true, request: activeRequest };
             }
 
+            const seasons = input.mediaType === "tv"
+                ? (input.seasons ?? media.seasons?.map((season) => season.seasonNumber).filter((season) => season > 0) ?? [])
+                : undefined;
+            if (input.mediaType === "tv" && (!seasons || seasons.length === 0)) {
+                return { success: false, error: `No requestable seasons found for TV TMDB ${input.tmdbId}` };
+            }
             const request = await this.client.createRequest({
                 mediaType: input.mediaType,
                 mediaId: media.id,
                 tvdbId: input.tvdbId,
                 userId: input.botUserId,
-                seasons: input.seasons,
+                seasons,
                 rootFolder: input.rootFolder,
                 qualityProfileId: input.qualityProfileId,
             });

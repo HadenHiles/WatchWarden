@@ -79,6 +79,7 @@ export interface JellyseerrSearchResult {
     firstAirDate?: string;
     overview?: string;
     posterPath?: string;
+    seasons?: Array<{ seasonNumber: number; episodeCount?: number; airDate?: string | null }>;
     mediaInfo?: {
         id: number;
         status: number;

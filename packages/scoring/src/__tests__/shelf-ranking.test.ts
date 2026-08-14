@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { culturalHeat, diversifyShelf, isRecentlyReleased, resolvePlatformSnapshots, selectPublishedShelfIds } from "../shelf-ranking";
+import { culturalHeat, diversifyShelf, isRecentlyReleased, resolvePlatformSnapshots, selectStreamingEditorialTitles, selectPublishedShelfIds } from "../shelf-ranking";
 
 describe("shelf ranking", () => {
     const now = new Date("2026-08-13T12:00:00Z");
+    it("merchandises Netflix shows across recent, original, rising, and evergreen lanes", () => {
+        const shows = selectStreamingEditorialTitles([
+            { id: "recent-a", providerRank: 8, firstAirDate: new Date("2026-07-01"), lastAirDate: null, isNetflixOriginal: false, rankMomentum: 0, stableDays: 2 },
+            { id: "recent-b", providerRank: 9, firstAirDate: new Date("2026-06-01"), lastAirDate: null, isNetflixOriginal: false, rankMomentum: 0, stableDays: 2 },
+            { id: "original", providerRank: 6, firstAirDate: new Date("2023-01-01"), lastAirDate: null, isNetflixOriginal: true, rankMomentum: 0, stableDays: 5 },
+            { id: "rising", providerRank: 12, firstAirDate: new Date("2020-01-01"), lastAirDate: null, isNetflixOriginal: false, rankMomentum: 10, stableDays: 4 },
+            { id: "evergreen", providerRank: 1, firstAirDate: new Date("1994-01-01"), lastAirDate: null, isNetflixOriginal: false, rankMomentum: 0, stableDays: 100 },
+        ], 5, now);
+        expect(shows.map((show) => show.id)).toEqual(["recent-a", "recent-b", "original", "rising", "evergreen"]);
+    });
     it("diversifies a general shelf around a priority shelf", () => {
         expect(diversifyShelf(["a", "b", "c", "d", "e", "f"], ["a", "b", "c"], 4, 0.25))
             .toEqual(["a", "d", "e", "f"]);
