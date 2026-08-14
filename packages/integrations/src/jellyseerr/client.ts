@@ -152,7 +152,7 @@ export class JellyseerrClient {
     /** Fetch all configured discover sliders */
     async getDiscoverSliders(): Promise<JellyseerrDiscoverSlider[]> {
         try {
-            const res = await this.http.get<JellyseerrDiscoverSlider[]>("/discover");
+            const res = await this.http.get<JellyseerrDiscoverSlider[]>("/settings/discover");
             return res.data ?? [];
         } catch (err) {
             this.handleError("getDiscoverSliders", err);
@@ -162,7 +162,7 @@ export class JellyseerrClient {
     /** Create a new discover slider */
     async createDiscoverSlider(payload: JellyseerrDiscoverSliderPayload): Promise<JellyseerrDiscoverSlider> {
         try {
-            const res = await this.http.post<JellyseerrDiscoverSlider>("/discover", payload);
+            const res = await this.http.post<JellyseerrDiscoverSlider>("/settings/discover", payload);
             logger.info("Jellyseerr discover slider created", { title: payload.title, type: payload.type });
             return res.data;
         } catch (err) {
@@ -176,7 +176,7 @@ export class JellyseerrClient {
         payload: JellyseerrDiscoverSliderPayload,
     ): Promise<JellyseerrDiscoverSlider> {
         try {
-            const res = await this.http.put<JellyseerrDiscoverSlider>(`/discover/${sliderId}`, payload);
+            const res = await this.http.put<JellyseerrDiscoverSlider>(`/settings/discover/${sliderId}`, payload);
             logger.debug("Jellyseerr discover slider updated", { sliderId, title: payload.title });
             return res.data;
         } catch (err) {
@@ -187,7 +187,7 @@ export class JellyseerrClient {
     /** Delete a discover slider */
     async deleteDiscoverSlider(sliderId: number): Promise<void> {
         try {
-            await this.http.delete(`/discover/${sliderId}`);
+            await this.http.delete(`/settings/discover/${sliderId}`);
             logger.info("Jellyseerr discover slider deleted", { sliderId });
         } catch (err) {
             this.handleError(`deleteDiscoverSlider(${sliderId})`, err);
