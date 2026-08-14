@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { AlertCircle, ChevronDown, ChevronUp, Clapperboard, Film, GripVertical, Loader2, Plus, RefreshCw, Search, Settings2, Trash2, Tv2, X } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, ChevronUp, Clapperboard, Film, GripVertical, Loader2, Plus, RefreshCw, Search, Settings2, Trash2, Tv2, X } from "lucide-react";
 import { apiUrl } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -50,10 +50,21 @@ function Toggle({ checked, disabled, label, onChange }: { checked: boolean; disa
     );
 }
 
-function ShelfPreview({ shelf, onChanged }: { shelf: Shelf; onChanged: () => void }) {
+function ShelfPreview({ shelf, onChanged, onRename }: { shelf: Shelf; onChanged: () => void; onRename: (name: string) => Promise<void> }) {
     const { data, isLoading, mutate } = useSWR<{ data: ShelfItem[] }>(apiUrl(`/plex/collections/${shelf.id}/items`), fetcher);
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<Array<{ id: string; title: string; year: number | null }>>([]);
+    const [name, setName] = useState(shelf.name);
+    const [renaming, setRenaming] = useState(false);
+
+    useEffect(() => setName(shelf.name), [shelf.name]);
+
+    async function rename() {
+        const nextName = name.trim();
+        if (!nextName || nextName === shelf.name) return setName(shelf.name);
+        setRenaming(true);
+        try { await onRename(nextName); } finally { setRenaming(false); }
+    }
 
     async function search(value: string) {
         setQuery(value);
@@ -71,6 +82,14 @@ function ShelfPreview({ shelf, onChanged }: { shelf: Shelf; onChanged: () => voi
     const items = data?.data ?? [];
     return (
         <div className="border-t border-gray-800/80 bg-gray-950/35 p-4 space-y-4">
+            <div className="max-w-md">
+                <label className="text-xs text-gray-400">Shelf title</label>
+                <div className="mt-1 flex gap-2">
+                    <input value={name} maxLength={100} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void rename(); if (event.key === "Escape") setName(shelf.name); }} className={INPUT} />
+                    <button type="button" onClick={() => void rename()} disabled={renaming || !name.trim() || name.trim() === shelf.name} className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 text-sm font-semibold text-gray-950 disabled:opacity-40">{renaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Save</button>
+                </div>
+                <p className="mt-1 text-[11px] text-gray-500">The Plex Home row will be renamed during the next Home sync.</p>
+            </div>
             <div className="relative max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
                 <input value={query} onChange={(event) => search(event.target.value)} placeholder="Add a local title manually…" className={`${INPUT} pl-9`} />
@@ -214,7 +233,7 @@ export default function PlexHomePage() {
                             <button onClick={() => removeShelf(shelf)} title="Stop managing shelf" className="rounded-md p-1.5 text-gray-600 hover:bg-red-950/30 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
                             <button onClick={() => setExpanded(expanded === shelf.id ? null : shelf.id)} className="text-gray-500 hover:text-white">{expanded === shelf.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
                         </div>
-                    </div>{expanded === shelf.id && <ShelfPreview shelf={shelf} onChanged={() => mutate()} />}
+                    </div>{expanded === shelf.id && <ShelfPreview shelf={shelf} onChanged={() => mutate()} onRename={async (name) => { await patchShelf(shelf, { name }, "Shelf title saved"); }} />}
                 </div>;
             })}
         </section>

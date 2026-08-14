@@ -69,7 +69,7 @@ plexRouter.get("/collections", asyncHandler(async (_req, res) => {
 }));
 
 const createCollectionSchema = z.object({
-    name: z.string().min(1).max(100),
+    name: z.string().trim().min(1).max(100),
     sectionId: z.string().min(1),
     mediaType: z.enum(VALID_MEDIA_TYPES),
     collectionType: z.enum(VALID_COLLECTION_TYPES).default("TOP_TRENDING"),
@@ -116,7 +116,7 @@ plexRouter.post("/collections", validateBody(createCollectionSchema), asyncHandl
 }));
 
 const updateCollectionSchema = z.object({
-    name: z.string().min(1).max(100).optional(),
+    name: z.string().trim().min(1).max(100).optional(),
     sectionId: z.string().min(1).optional(),
     collectionType: z.enum(VALID_COLLECTION_TYPES).optional(),
     filter: z.enum(VALID_FILTERS).optional(),
@@ -140,10 +140,21 @@ plexRouter.patch("/collections/:id", validateBody(updateCollectionSchema), async
     if (!collection) {
         return res.status(404).json({ success: false, error: "Collection not found" });
     }
+    const body = req.body as z.infer<typeof updateCollectionSchema>;
+    if (body.name && body.name !== collection.name) {
+        const duplicate = await prisma.plexCollection.findFirst({
+            where: { id: { not: collection.id }, mediaType: collection.mediaType, name: body.name },
+            select: { id: true },
+        });
+        if (duplicate) return res.status(409).json({
+            success: false,
+            error: `A shelf named "${body.name}" already exists for ${collection.mediaType}`,
+        });
+    }
 
     const updated = await prisma.plexCollection.update({
         where: { id: req.params.id },
-        data: req.body as z.infer<typeof updateCollectionSchema>,
+        data: body,
     });
     return res.json({ success: true, data: updated });
 }));

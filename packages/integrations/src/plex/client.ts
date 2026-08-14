@@ -325,6 +325,17 @@ export class PlexClient {
         }
     }
 
+    async updateCollectionTitle(collectionId: string, title: string): Promise<void> {
+        try {
+            await this.http.put(`/library/metadata/${collectionId}`, null, {
+                params: { "title.value": title, "title.locked": 1 },
+            });
+            logger.info("Renamed Plex collection", { collectionId, title });
+        } catch (err) {
+            this.handleError(`updateCollectionTitle(${collectionId})`, err);
+        }
+    }
+
     async deleteCollection(collectionId: string): Promise<void> {
         try {
             await this.http.delete(`/library/collections/${collectionId}`);

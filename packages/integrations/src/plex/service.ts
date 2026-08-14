@@ -47,6 +47,16 @@ export class PlexService {
         // Never adopt an untracked collection by title. A persisted ratingKey is
         // WatchWarden's ownership boundary; similarly named user collections are untouched.
 
+        // Keep the tracked Plex object and rename it in place. This preserves its
+        // contents, rating key, and recommendation publication settings, even if empty.
+        if (collectionKey) {
+            const currentCollection = (await this.client.getCollections(sectionId))
+                .find((collection) => collection.ratingKey === collectionKey);
+            if (currentCollection && currentCollection.title !== collectionName) {
+                await this.client.updateCollectionTitle(collectionKey, collectionName);
+            }
+        }
+
         // ── No items to sync ───────────────────────────────────────────────────
         if (targetRatingKeys.length === 0) {
             if (collectionKey) {
