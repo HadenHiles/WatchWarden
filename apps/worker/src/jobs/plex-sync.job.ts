@@ -2,7 +2,7 @@ import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
-import { culturalHeat, resolvePlatformSnapshots, selectPublishedShelfIds } from "@watchwarden/scoring";
+import { culturalHeat, diversifyShelf, resolvePlatformSnapshots, selectPublishedShelfIds } from "@watchwarden/scoring";
 import { submitRequest } from "../services/request.service";
 
 const logger = createLogger("plex-sync-job");
@@ -231,7 +231,7 @@ async function resolveTopTrendingKeys(
     return withOverrides.map((id) => keyMap.get(id)).filter(Boolean) as string[];
 }
 
-async function resolveCulturalKeys(collection: { id: string; mediaType: string; maxItems: number }): Promise<string[]> {
+async function resolveCulturalKeys(collection: { id: string; mediaType: string; maxItems: number }, candidateLimit = collection.maxItems): Promise<string[]> {
     const titles = await prisma.title.findMany({
         where: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
         select: { id: true, plexRatingKey: true, trendSnapshots: { where: { providerId: null }, orderBy: { snapshotAt: "desc" }, take: 20 } },
@@ -249,7 +249,7 @@ async function resolveCulturalKeys(collection: { id: string; mediaType: string; 
             region: newest.region,
         }, now) : 0 };
     }).sort((a, b) => b.score - a.score || a.title.id.localeCompare(b.title.id))
-        .slice(0, collection.maxItems).map((x) => x.title.id);
+        .slice(0, candidateLimit).map((x) => x.title.id);
     const ids = await applyManualOverrides(ordered, collection.id);
     const map = new Map(titles.map((t) => [t.id, t.plexRatingKey!]));
     return ids.map((id) => map.get(id)).filter(Boolean) as string[];
@@ -328,6 +328,16 @@ export async function plexSyncJob(): Promise<void> {
     const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
     const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string; manageRecommendations?: boolean };
     const publishedIds = new Set(selectPublishedShelfIds(collections, homeConfig.shelfLimit ?? 6));
+    // Netflix is the more specific editorial promise, so it gets first claim on titles.
+    const netflixKeysByMedia = new Map<string, string[]>();
+    for (const collection of collections.filter((item) =>
+        item.enabled && publishedIds.has(item.id)
+        && item.shelfType === "PROVIDER_TRENDING" && item.provider === "Netflix")) {
+        netflixKeysByMedia.set(collection.mediaType, await resolveTopTrendingKeys(collection, {
+            primaryRegion: homeConfig.primaryRegion ?? "CA",
+            fallbackRegion: homeConfig.fallbackRegion ?? "US",
+        }));
+    }
 
     if (homeConfig.manageRecommendations === true) {
         for (const sectionId of new Set(collections.filter((item) => item.enabled).map((item) => item.sectionId))) {
@@ -361,11 +371,14 @@ export async function plexSyncJob(): Promise<void> {
             }
             let targetKeys: string[];
             if (collection.shelfType === "CULTURAL_TRENDING") {
-                targetKeys = await resolveCulturalKeys(collection);
+                const candidates = await resolveCulturalKeys(collection, collection.maxItems * 4);
+                targetKeys = diversifyShelf(candidates, netflixKeysByMedia.get(collection.mediaType) ?? [], collection.maxItems, 0.25);
             } else if (collection.shelfType === "RECENTLY_RELEASED") {
                 targetKeys = await resolveRecentlyReleasedKeys(collection);
             } else if (collection.shelfType === "PROVIDER_TRENDING" || collection.collectionType === "TOP_TRENDING") {
-                targetKeys = await resolveTopTrendingKeys(collection, { primaryRegion: homeConfig.primaryRegion ?? "CA", fallbackRegion: homeConfig.fallbackRegion ?? "US" });
+                targetKeys = collection.provider === "Netflix" && netflixKeysByMedia.has(collection.mediaType)
+                    ? netflixKeysByMedia.get(collection.mediaType)!
+                    : await resolveTopTrendingKeys(collection, { primaryRegion: homeConfig.primaryRegion ?? "CA", fallbackRegion: homeConfig.fallbackRegion ?? "US" });
             } else {
                 targetKeys = await resolveSmartKeys(collection);
             }

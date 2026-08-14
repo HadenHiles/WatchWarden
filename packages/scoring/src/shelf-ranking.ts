@@ -80,6 +80,35 @@ export function selectPublishedShelfIds<T extends { id: string; enabled: boolean
         .slice(0, Math.max(0, limit)).map((s) => s.id);
 }
 
+/** Keeps a broad shelf distinct from a more specific, higher-priority shelf. */
+export function diversifyShelf<T>(candidates: T[], priorityItems: Iterable<T>, limit: number, maxOverlapRatio = 0.25): T[] {
+    const target = Math.max(0, limit);
+    const priority = new Set(priorityItems);
+    const overlapLimit = Math.floor(target * Math.max(0, Math.min(1, maxOverlapRatio)));
+    const selected: T[] = [];
+    const deferredOverlap: T[] = [];
+    const seen = new Set<T>();
+    let overlaps = 0;
+
+    for (const candidate of candidates) {
+        if (seen.has(candidate)) continue;
+        seen.add(candidate);
+        if (priority.has(candidate) && overlaps >= overlapLimit) {
+            deferredOverlap.push(candidate);
+            continue;
+        }
+        if (priority.has(candidate)) overlaps++;
+        selected.push(candidate);
+        if (selected.length === target) return selected;
+    }
+    // Thin libraries may need extra overlap to avoid a half-empty row.
+    for (const candidate of deferredOverlap) {
+        selected.push(candidate);
+        if (selected.length === target) break;
+    }
+    return selected;
+}
+
 export function isRecentlyReleased(releaseDate: Date | null, now: Date, windowDays: number): boolean {
     if (!releaseDate) return false;
     const age = now.getTime() - releaseDate.getTime();

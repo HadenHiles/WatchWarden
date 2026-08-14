@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { culturalHeat, isRecentlyReleased, resolvePlatformSnapshots, selectPublishedShelfIds } from "../shelf-ranking";
+import { culturalHeat, diversifyShelf, isRecentlyReleased, resolvePlatformSnapshots, selectPublishedShelfIds } from "../shelf-ranking";
 
 describe("shelf ranking", () => {
     const now = new Date("2026-08-13T12:00:00Z");
+    it("diversifies a general shelf around a priority shelf", () => {
+        expect(diversifyShelf(["a", "b", "c", "d", "e", "f"], ["a", "b", "c"], 4, 0.25))
+            .toEqual(["a", "d", "e", "f"]);
+    });
+    it("relaxes overlap when unique candidates cannot fill the shelf", () => {
+        expect(diversifyShelf(["a", "b", "c"], ["a", "b", "c"], 3, 0.25))
+            .toEqual(["a", "b", "c"]);
+    });
     it("ranks current high-ranked cultural titles above stale titles", () => {
         const current = culturalHeat({ tmdbTrends: [0.9, 0.8], rank: 1, snapshotAt: now, region: "CA" }, now);
         const stale = culturalHeat({ tmdbTrends: [0.9, 0.8], rank: 20, snapshotAt: new Date("2026-07-13"), region: "CA" }, now);
