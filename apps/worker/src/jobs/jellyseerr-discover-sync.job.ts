@@ -46,74 +46,31 @@ export async function jellyseerrDiscoverSyncJob(): Promise<void> {
         sliderConfigs = await createDefaultSliders();
     }
 
-    let synced = 0;
-    let errors = 0;
+    const managed = sliderConfigs.flatMap((config) => {
+        const tmdbProviderId = PROVIDER_TMDB_ID_MAP[config.streamingProvider];
+        if (!tmdbProviderId) return [];
+        return [{
+            title: `\uD83D\uDD25 WatchWarden: ${config.streamingProvider} ${config.mediaType === "MOVIE" ? "Movies" : "Shows"}`,
+            mediaType: config.mediaType,
+            tmdbProviderId,
+        }];
+    });
+    const saved = await service.syncDiscoverSliders(managed);
 
     for (const config of sliderConfigs) {
-        try {
-            const tmdbProviderId = PROVIDER_TMDB_ID_MAP[config.streamingProvider];
-            if (!tmdbProviderId) {
-                logger.warn("Unknown streaming provider in discover slider config", {
-                    provider: config.streamingProvider,
-                    sliderId: config.id,
-                });
-                continue;
-            }
-
-            const titleCount = await getTrendingTitleCount(
-                config.streamingProvider,
-                tmdbProviderId,
-                config.mediaType,
-            );
-
-            const sliderName = `\uD83D\uDD25 WatchWarden: ${config.streamingProvider} ${config.mediaType === "MOVIE" ? "Movies" : "Shows"}`;
-
-            const result = await service.upsertDiscoverSlider({
-                existingSliderId: config.jellyseerrSliderId ?? undefined,
-                name: sliderName,
-                mediaType: config.mediaType,
-                tmdbProviderId,
-            });
-
-            if (result) {
-                await prisma.jellyseerrDiscoverSlider.update({
-                    where: { id: config.id },
-                    data: {
-                        jellyseerrSliderId: result.id,
-                        itemCount: titleCount,
-                        lastSyncAt: new Date(),
-                    },
-                });
-
-                logger.info("Discover slider synced", {
-                    name: sliderName,
-                    jellyseerrSliderId: result.id,
-                    provider: config.streamingProvider,
-                    mediaType: config.mediaType,
-                    titleCount,
-                });
-                synced++;
-            } else {
-                logger.warn("Discover slider sync returned null — Jellyseerr may not support streaming sliders yet", {
-                    name: sliderName,
-                    provider: config.streamingProvider,
-                });
-                errors++;
-            }
-        } catch (err) {
-            logger.error("Failed to sync discover slider", {
-                sliderId: config.id,
-                provider: config.streamingProvider,
-                error: err instanceof Error ? err.message : String(err),
-            });
-            errors++;
-        }
+        const tmdbProviderId = PROVIDER_TMDB_ID_MAP[config.streamingProvider];
+        if (!tmdbProviderId) continue;
+        const name = `\uD83D\uDD25 WatchWarden: ${config.streamingProvider} ${config.mediaType === "MOVIE" ? "Movies" : "Shows"}`;
+        const result = saved.find((slider) => slider.title === name);
+        if (!result) throw new Error(`Jellyseerr did not return saved slider: ${name}`);
+        const itemCount = await getTrendingTitleCount(config.streamingProvider, tmdbProviderId, config.mediaType);
+        await prisma.jellyseerrDiscoverSlider.update({
+            where: { id: config.id },
+            data: { jellyseerrSliderId: result.id, itemCount, lastSyncAt: new Date() },
+        });
     }
 
-    logger.info("Jellyseerr discover sync complete", { synced, errors });
-    if (errors > 0) {
-        throw new Error(`Failed to sync ${errors} of ${sliderConfigs.length} Jellyseerr discover sliders`);
-    }
+    logger.info("Jellyseerr discover sync complete", { synced: managed.length, errors: 0 });
 }
 
 /**

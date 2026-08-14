@@ -180,6 +180,28 @@ export class JellyseerrService {
         return this.client.getDiscoverSliders();
     }
 
+    /** Merge managed sliders into Jellyseerr while preserving built-ins and user sliders. */
+    async syncDiscoverSliders(
+        managed: Array<{ title: string; mediaType: "MOVIE" | "SHOW"; tmdbProviderId: number }>,
+    ): Promise<JellyseerrDiscoverSlider[]> {
+        const existing = await this.client.getDiscoverSliders();
+        const managedTitles = new Set(managed.map((slider) => slider.title));
+        const preserved = existing.filter((slider) => !managedTitles.has(slider.title ?? ""));
+        const desired = managed.map((slider) => {
+            const previous = existing.find((candidate) => candidate.title === slider.title);
+            return {
+                ...(previous?.id ? { id: previous.id } : {}),
+                type: slider.mediaType === "MOVIE"
+                    ? SliderType.TMDB_MOVIE_STREAMING
+                    : SliderType.TMDB_TV_STREAMING,
+                title: slider.title,
+                data: String(slider.tmdbProviderId),
+                enabled: true,
+            };
+        });
+        return this.client.saveDiscoverSliders([...preserved, ...desired]);
+    }
+
     /** Remove a discover slider from Jellyseerr by its ID */
     async removeDiscoverSlider(sliderId: number): Promise<void> {
         return this.client.deleteDiscoverSlider(sliderId);

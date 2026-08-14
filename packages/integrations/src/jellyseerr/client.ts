@@ -159,6 +159,18 @@ export class JellyseerrClient {
         }
     }
 
+    /** Jellyseerr saves the complete ordered Discover layout in one request. */
+    async saveDiscoverSliders(
+        sliders: Array<JellyseerrDiscoverSlider | JellyseerrDiscoverSliderPayload>,
+    ): Promise<JellyseerrDiscoverSlider[]> {
+        try {
+            const res = await this.http.post<JellyseerrDiscoverSlider[]>("/settings/discover", sliders);
+            return res.data ?? [];
+        } catch (err) {
+            this.handleError("saveDiscoverSliders", err);
+        }
+    }
+
     /** Create a new discover slider */
     async createDiscoverSlider(payload: JellyseerrDiscoverSliderPayload): Promise<JellyseerrDiscoverSlider> {
         try {
