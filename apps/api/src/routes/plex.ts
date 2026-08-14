@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@watchwarden/db";
+import type { Prisma } from "@prisma/client";
 import { asyncHandler } from "../middleware/error";
 import { validateBody } from "../middleware/validation";
 
@@ -171,6 +172,58 @@ plexRouter.delete("/collections/:id", asyncHandler(async (req, res) => {
     }
     await prisma.plexCollection.delete({ where: { id: req.params.id } });
     return res.json({ success: true });
+}));
+
+// GET /plex/collections/:id/candidates — missing titles suited to this shelf
+plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
+    const collection = await prisma.plexCollection.findUnique({ where: { id: req.params.id } });
+    if (!collection) return res.status(404).json({ success: false, error: "Collection not found" });
+
+    const titleWhere: Prisma.TitleWhereInput = {
+        mediaType: collection.mediaType,
+        inLibrary: false,
+        isRequested: false,
+        tmdbId: { not: null },
+        status: { notIn: ["REJECTED", "EXPIRED"] },
+    };
+    let titleIds: string[] = [];
+
+    if (collection.shelfType === "PROVIDER_TRENDING" && collection.provider) {
+        const { PROVIDER_TMDB_ID_MAP } = await import("@watchwarden/integrations");
+        const providerId = PROVIDER_TMDB_ID_MAP[collection.provider];
+        if (providerId) {
+            const snapshots = await prisma.externalTrendSnapshot.findMany({
+                where: {
+                    providerId: String(providerId), providerRank: { not: null },
+                    snapshotAt: { gte: new Date(Date.now() - 21 * 86_400_000) },
+                    title: titleWhere,
+                },
+                orderBy: [{ providerRank: "asc" }, { snapshotAt: "desc" }],
+                take: 100,
+                select: { titleId: true },
+            });
+            titleIds = [...new Set(snapshots.map((snapshot) => snapshot.titleId))];
+        }
+    } else if (collection.shelfType === "RECENTLY_RELEASED") {
+        const titles = await prisma.title.findMany({
+            where: { ...titleWhere, mediaType: "MOVIE", releaseDate: { gte: new Date(Date.now() - 365 * 86_400_000), lte: new Date() } },
+            orderBy: [{ releaseDate: "desc" }, { id: "asc" }], take: 30, select: { id: true },
+        });
+        titleIds = titles.map((title) => title.id);
+    } else {
+        const suggestions = await prisma.suggestion.findMany({
+            where: { status: "PENDING", title: titleWhere },
+            orderBy: { finalScore: "desc" }, take: 30, select: { titleId: true },
+        });
+        titleIds = suggestions.map((suggestion) => suggestion.titleId);
+    }
+
+    const titles = await prisma.title.findMany({
+        where: { id: { in: titleIds.slice(0, 18) } },
+        select: { id: true, title: true, year: true, mediaType: true, posterPath: true, streamingOn: true },
+    });
+    const titleMap = new Map(titles.map((title) => [title.id, title]));
+    return res.json({ success: true, data: titleIds.map((id) => titleMap.get(id)).filter(Boolean).slice(0, 12) });
 }));
 
 // GET /plex/collections/:id/items — resolve current member titles for a collection
