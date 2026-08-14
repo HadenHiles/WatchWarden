@@ -70,8 +70,7 @@ const KNOWN_SETTINGS: SettingSection[] = [
     {
         section: "Trend Sources",
         keys: [
-            { key: "sources", subKey: "tmdbApiKey", label: "TMDB API Key", type: "password", hint: "Free at themoviedb.org → Settings → API", placeholder: "your_tmdb_api_key" },
-            { key: "sources", subKey: "traktClientId", label: "Trakt Client ID", type: "password", hint: "Free at trakt.tv → Settings → Your API Apps", placeholder: "your_trakt_client_id" },
+            { key: "sources", subKey: "tmdbApiKey", label: "TMDB API Key", type: "password", hint: "Powers trends, popular/current titles, metadata, and provider discovery", placeholder: "your_tmdb_api_key" },
         ],
     },
     {

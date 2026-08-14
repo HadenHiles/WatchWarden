@@ -1,6 +1,6 @@
 export interface CulturalHeatInput {
     tmdbTrend?: number | null;
-    traktTrend?: number | null;
+    tmdbTrends?: Array<number | null | undefined>;
     rank?: number | null;
     snapshotAt: Date;
     region?: string | null;
@@ -35,7 +35,11 @@ export function regionPriority(region: string | null | undefined, config = DEFAU
 
 /** Cultural popularity only. Household/Tautulli fields are deliberately absent. */
 export function culturalHeat(input: CulturalHeatInput, now = new Date(), config = DEFAULT_SHELF_RANKING_CONFIG): number {
-    const sourceHeat = clamp((clamp(input.tmdbTrend ?? 0) + clamp(input.traktTrend ?? 0)) / 2);
+    const availableTrends = (input.tmdbTrends ?? [input.tmdbTrend])
+        .filter((score): score is number => typeof score === "number");
+    const sourceHeat = availableTrends.length
+        ? clamp(availableTrends.reduce((sum, score) => sum + clamp(score), 0) / availableTrends.length)
+        : 0;
     const rankStrength = input.rank ? clamp(1 - (input.rank - 1) / config.maxRank) : 0;
     const freshness = freshnessScore(input.snapshotAt, now, config.freshnessHalfLifeHours);
     const regionWeight = regionPriority(input.region, config) === 0 ? 1 : regionPriority(input.region, config) === 1 ? 0.9 : 0.75;

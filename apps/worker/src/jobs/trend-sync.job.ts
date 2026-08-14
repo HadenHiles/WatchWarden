@@ -50,7 +50,6 @@ export async function trendSyncJob(): Promise<void> {
     const { sources } = await getIntegrationConfig();
     const adapters = buildSourceAdapters({
         TMDB_API_KEY: sources.tmdbApiKey ?? undefined,
-        TRAKT_CLIENT_ID: sources.traktClientId ?? undefined,
     });
 
     if (adapters.length === 0) {

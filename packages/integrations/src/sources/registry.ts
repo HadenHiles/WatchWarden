@@ -1,7 +1,6 @@
 import { createLogger } from "@watchwarden/config";
 import type { SourceAdapter } from "./adapter";
 import { TmdbTrendingAdapter } from "./tmdb.adapter";
-import { TraktTrendingAdapter } from "./trakt.adapter";
 import { TmdbProviderDiscoveryAdapter, PROVIDER_TMDB_ID_MAP } from "./tmdb-provider.adapter";
 
 const logger = createLogger("source-registry");
@@ -28,20 +27,23 @@ const PROVIDER_DISCOVERY_SOURCES: Array<{ name: string; regions: string[] }> = [
  * Builds the list of enabled source adapters from environment variables.
  * Called once during worker startup.
  *
- * Includes both generic TMDB/Trakt trending adapters and per-provider
+ * Includes complementary generic TMDB discovery adapters and per-provider
  * TMDB Discover adapters that produce platform-specific popularity rankings.
  */
 export function buildSourceAdapters(env: {
     TMDB_API_KEY?: string;
-    TRAKT_CLIENT_ID?: string;
 }): SourceAdapter[] {
     const adapters: SourceAdapter[] = [];
 
     if (env.TMDB_API_KEY) {
-        // Generic trending — broad discovery
-        adapters.push(new TmdbTrendingAdapter({ mediaType: "movie", apiKey: env.TMDB_API_KEY }));
-        adapters.push(new TmdbTrendingAdapter({ mediaType: "tv", apiKey: env.TMDB_API_KEY }));
-        logger.info("TMDB trending adapters registered");
+        // Broad discovery: short/long trend windows, durable popularity, and
+        // currently releasing/airing titles for both movies and television.
+        for (const mediaType of ["movie", "tv"] as const) {
+            for (const feed of ["trending_day", "trending_week", "popular", "current"] as const) {
+                adapters.push(new TmdbTrendingAdapter({ mediaType, feed, apiKey: env.TMDB_API_KEY }));
+            }
+        }
+        logger.info("TMDB discovery adapters registered", { count: 8 });
 
         // Per-provider discovery — platform-specific popularity rankings
         let providerAdapterCount = 0;
@@ -68,12 +70,6 @@ export function buildSourceAdapters(env: {
         logger.info(`TMDB provider discovery adapters registered`, { count: providerAdapterCount });
     } else {
         logger.warn("TMDB_API_KEY not set — TMDB adapters disabled");
-    }
-
-    if (env.TRAKT_CLIENT_ID) {
-        adapters.push(new TraktTrendingAdapter({ mediaType: "movie", clientId: env.TRAKT_CLIENT_ID, tmdbApiKey: env.TMDB_API_KEY }));
-        adapters.push(new TraktTrendingAdapter({ mediaType: "show", clientId: env.TRAKT_CLIENT_ID, tmdbApiKey: env.TMDB_API_KEY }));
-        logger.info("Trakt adapters registered");
     }
 
     return adapters;

@@ -7,13 +7,13 @@ const logger = createLogger("tmdb-adapter");
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
-interface TmdbTrendingResult {
+interface TmdbResult {
     id: number;
     title?: string;        // movies
     name?: string;         // TV
     original_title?: string;
     original_name?: string;
-    media_type: "movie" | "tv";
+    media_type?: "movie" | "tv";
     release_date?: string;
     first_air_date?: string;
     overview?: string;
@@ -24,35 +24,40 @@ interface TmdbTrendingResult {
     popularity?: number;
 }
 
-interface TmdbTrendingResponse {
+interface TmdbResponse {
     page: number;
-    results: TmdbTrendingResult[];
+    results: TmdbResult[];
     total_pages: number;
     total_results: number;
 }
 
 /**
- * TMDB Trending adapter.
- * Supports weekly trending for movies and TV shows.
- * Region support is limited (TMDB doesn't filter trending by region).
+ * TMDB discovery adapter covering complementary public signals: daily and
+ * weekly trending, overall popularity, and titles currently releasing/airing.
  */
 export class TmdbTrendingAdapter implements SourceAdapter {
     readonly sourceId: string;
     readonly sourceName: string;
     private readonly mediaType: "movie" | "tv";
-    private readonly window: "day" | "week";
+    private readonly feed: "trending_day" | "trending_week" | "popular" | "current";
     private readonly apiKey: string;
 
     constructor(config: {
         mediaType: "movie" | "tv";
-        window?: "day" | "week";
+        feed?: "trending_day" | "trending_week" | "popular" | "current";
         apiKey: string;
     }) {
         this.mediaType = config.mediaType;
-        this.window = config.window ?? "week";
+        this.feed = config.feed ?? "trending_week";
         this.apiKey = config.apiKey;
-        this.sourceId = `tmdb_trending_${config.mediaType}_${this.window}`;
-        this.sourceName = `TMDB Trending ${config.mediaType === "movie" ? "Movies" : "Shows"} (${this.window})`;
+        this.sourceId = `tmdb_${this.feed}_${config.mediaType}`;
+        const feedLabel = {
+            trending_day: "Trending Today",
+            trending_week: "Trending This Week",
+            popular: "Popular",
+            current: config.mediaType === "movie" ? "Now Playing" : "On the Air",
+        }[this.feed];
+        this.sourceName = `TMDB ${feedLabel} — ${config.mediaType === "movie" ? "Movies" : "Shows"}`;
     }
 
     async fetchTrending(): Promise<SourceTrendItem[]> {
@@ -61,21 +66,32 @@ export class TmdbTrendingAdapter implements SourceAdapter {
             return [];
         }
         try {
-            const url = `${TMDB_BASE}/trending/${this.mediaType}/${this.window}`;
-            const res = await axios.get<TmdbTrendingResponse>(url, {
-                params: { api_key: this.apiKey, language: "en-US", page: 1 },
+            const path = this.feed === "trending_day"
+                ? `trending/${this.mediaType}/day`
+                : this.feed === "trending_week"
+                    ? `trending/${this.mediaType}/week`
+                    : this.feed === "popular"
+                        ? `${this.mediaType}/popular`
+                        : `${this.mediaType}/${this.mediaType === "movie" ? "now_playing" : "on_the_air"}`;
+            const res = await axios.get<TmdbResponse>(`${TMDB_BASE}/${path}`, {
+                params: {
+                    api_key: this.apiKey,
+                    language: "en-US",
+                    page: 1,
+                    ...(this.mediaType === "movie" && this.feed === "current" ? { region: "CA" } : {}),
+                },
                 timeout: 10_000,
             });
 
-            return res.data.results.map((item: TmdbTrendingResult, index: number) => this.normalize(item, index + 1));
+            return res.data.results.map((item: TmdbResult, index: number) => this.normalize(item, index + 1));
         } catch (err) {
             logger.error("TMDB trending fetch failed", { source: this.sourceId, error: String(err) });
             throw err;
         }
     }
 
-    private normalize(item: TmdbTrendingResult, rank: number): SourceTrendItem {
-        const isMovie = item.media_type === "movie";
+    private normalize(item: TmdbResult, rank: number): SourceTrendItem {
+        const isMovie = this.mediaType === "movie";
         const rawYear = isMovie ? item.release_date : item.first_air_date;
         const year = rawYear ? parseInt(rawYear.substring(0, 4), 10) : null;
 

@@ -41,7 +41,6 @@ export const workerEnvSchema = baseEnvSchema.extend({
     PLEX_BASE_URL: z.string().url().optional(),
     PLEX_TOKEN: z.string().optional(),
     TMDB_API_KEY: z.string().optional(),
-    TRAKT_CLIENT_ID: z.string().optional(),
     TREND_SYNC_CRON: z.string().default("0 */6 * * *"),
     TAUTULLI_SYNC_CRON: z.string().default("0 */2 * * *"),
     SCORING_CRON: z.string().default("30 */6 * * *"),

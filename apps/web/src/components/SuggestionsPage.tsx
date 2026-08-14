@@ -10,14 +10,13 @@ const fetcher = (url: string) =>
 
 // ─── Source helpers ───────────────────────────────────────────────────────────
 
-const SOURCE_ORDER = ["TMDB", "Trakt", "Other"] as const;
+const SOURCE_ORDER = ["TMDB", "Other"] as const;
 type SourceLabel = (typeof SOURCE_ORDER)[number];
 
 function getPrimarySourceLabel(trendSnapshots?: Array<{ source: string; trendScore: number }>): SourceLabel {
     if (!trendSnapshots?.length) return "Other";
     const top = [...trendSnapshots].sort((a, b) => b.trendScore - a.trendScore)[0];
     if (top.source.startsWith("tmdb_")) return "TMDB";
-    if (top.source.startsWith("trakt_")) return "Trakt";
     return "Other";
 }
 
@@ -247,4 +246,3 @@ export function SuggestionsPage({ mediaType, hideHeading }: SuggestionsPageProps
         </div>
     );
 }
-

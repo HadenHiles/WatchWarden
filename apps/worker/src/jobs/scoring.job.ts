@@ -46,7 +46,7 @@ export async function scoringJob(): Promise<void> {
             status: { notIn: ["REJECTED", "PINNED", "EXPIRED"] },
         },
         include: {
-            trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 1 },
+            trendSnapshots: { where: { providerId: null }, orderBy: { snapshotAt: "desc" }, take: 32 },
             watchSignals: true,
             suggestion: { include: { decisions: { orderBy: { createdAt: "desc" }, take: 1 } } },
         },
@@ -58,7 +58,13 @@ export async function scoringJob(): Promise<void> {
     let excluded = 0;
 
     for (const title of titles) {
-        const latestSnapshot = title.trendSnapshots[0];
+        const latestBySource = [...new Map(title.trendSnapshots
+            .filter((snapshot) => snapshot.source.startsWith("tmdb_"))
+            .map((snapshot) => [snapshot.source, snapshot])).values()];
+        const latestSnapshot = latestBySource[0];
+        const externalTrendScore = latestBySource.length
+            ? latestBySource.reduce((sum, snapshot) => sum + snapshot.trendScore, 0) / latestBySource.length
+            : 0;
         const watchSignal = title.watchSignals[0];
 
         // Compute freshness: how recent is the snapshot? (0–1)
@@ -73,7 +79,7 @@ export async function scoringJob(): Promise<void> {
         );
 
         const result = scoreTitle({
-            externalTrendScore: latestSnapshot?.trendScore ?? 0,
+            externalTrendScore,
             localInterestScore: watchSignal?.localInterestScore ?? 0,
             freshnessScore,
             editorialBoost: 0,
@@ -102,7 +108,7 @@ export async function scoringJob(): Promise<void> {
             // record (kept FULFILLED so it never surfaces in the UI).
             if (title.inLibrary) {
                 const lifecycleResult = scoreTitle({
-                    externalTrendScore: latestSnapshot?.trendScore ?? 0,
+                    externalTrendScore,
                     localInterestScore: watchSignal?.localInterestScore ?? 0,
                     freshnessScore,
                     editorialBoost: 0,

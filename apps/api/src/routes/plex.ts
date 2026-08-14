@@ -203,10 +203,16 @@ plexRouter.get("/collections/:id/items", asyncHandler(async (req, res) => {
         const now = new Date();
         const titles = await prisma.title.findMany({ where: { mediaType: collection.mediaType, inLibrary: true, plexRatingKey: { not: null } }, select: { id: true, trendSnapshots: { where: { providerId: null }, orderBy: { snapshotAt: "desc" }, take: 20 } } });
         orderedTitleIds = titles.map((title) => {
-            const tmdb = title.trendSnapshots.find((s) => s.source.startsWith("tmdb"));
-            const trakt = title.trendSnapshots.find((s) => s.source.startsWith("trakt"));
-            const newest = [tmdb, trakt].filter(Boolean).sort((a, b) => b!.snapshotAt.getTime() - a!.snapshotAt.getTime())[0];
-            return { id: title.id, heat: newest ? culturalHeat({ tmdbTrend: tmdb?.trendScore, traktTrend: trakt?.trendScore, rank: newest.rank, snapshotAt: newest.snapshotAt, region: newest.region }, now) : 0 };
+            const latestBySource = [...new Map(title.trendSnapshots
+                .filter((s) => s.source.startsWith("tmdb_"))
+                .map((s) => [s.source, s])).values()];
+            const newest = latestBySource[0];
+            return { id: title.id, heat: newest ? culturalHeat({
+                tmdbTrends: latestBySource.map((s) => s.trendScore),
+                rank: Math.min(...latestBySource.map((s) => s.rank ?? 100)),
+                snapshotAt: newest.snapshotAt,
+                region: newest.region,
+            }, now) : 0 };
         }).sort((a, b) => b.heat - a.heat || a.id.localeCompare(b.id)).slice(0, collection.maxItems).map((t) => t.id);
     } else if (collection.collectionType === "TOP_TRENDING") {
         if (!collection.streamingProviders.length) {

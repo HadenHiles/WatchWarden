@@ -4,9 +4,14 @@ import { culturalHeat, isRecentlyReleased, resolvePlatformSnapshots, selectPubli
 describe("shelf ranking", () => {
     const now = new Date("2026-08-13T12:00:00Z");
     it("ranks current high-ranked cultural titles above stale titles", () => {
-        const current = culturalHeat({ tmdbTrend: 0.9, traktTrend: 0.8, rank: 1, snapshotAt: now, region: "CA" }, now);
-        const stale = culturalHeat({ tmdbTrend: 0.9, traktTrend: 0.8, rank: 20, snapshotAt: new Date("2026-07-13"), region: "CA" }, now);
+        const current = culturalHeat({ tmdbTrends: [0.9, 0.8], rank: 1, snapshotAt: now, region: "CA" }, now);
+        const stale = culturalHeat({ tmdbTrends: [0.9, 0.8], rank: 20, snapshotAt: new Date("2026-07-13"), region: "CA" }, now);
         expect(current).toBeGreaterThan(stale);
+    });
+    it("does not penalize a title when only one TMDB feed contains it", () => {
+        const single = culturalHeat({ tmdbTrends: [0.8], rank: 1, snapshotAt: now }, now);
+        const explicit = culturalHeat({ tmdbTrend: 0.8, rank: 1, snapshotAt: now }, now);
+        expect(single).toBeCloseTo(explicit);
     });
     it("prefers CA, falls back to US, then lower rank deterministically", () => {
         const rows = resolvePlatformSnapshots([

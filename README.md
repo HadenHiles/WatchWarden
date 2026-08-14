@@ -8,7 +8,7 @@ Watch Warden automatically surfaces culturally relevant movies and shows already
 
 Open **Plex Home Curation**, connect Plex, then choose **Add default shelves**. This creates disabled templates—existing installs never publish rows automatically—for Popular Movies/Shows Right Now, Recently Released Movies, and Netflix, Disney+, Prime Video, and Apple TV+ provider shelves. Crave, Paramount+, and other configured TMDB providers remain available for custom shelves.
 
-- **Cultural Heat** ranks current TMDB and Trakt activity, rank, snapshot freshness, and region. It intentionally excludes household watch preferences.
+- **Cultural Heat** combines available TMDB daily/weekly trends, popularity, current-release activity, rank, snapshot freshness, and region. Missing feeds never count as zero. It intentionally excludes household watch preferences.
 - **Platform Heat** ranks subscription-streaming (`flatrate`) provider snapshots by platform rank, freshness, and explicit region priority.
 - Canada is the default primary region and the US is fallback. A title's Canadian snapshot wins when present; US data fills gaps.
 - **Recently Released Movies** uses the movie release date (90 days by default), never Plex's date-added field.
@@ -35,8 +35,7 @@ Watch Warden only mutates collections whose Plex rating key it persistently trac
 External integrations:
   ├── Tautulli      — local watch history (family engagement signals)
   ├── Jellyseerr    — media request automation
-  ├── TMDB API      — trending movies/shows (external trend source)
-  └── Trakt.tv API  — trending movies/shows (external trend source)
+  └── TMDB API      — trends, popular/current titles, metadata, and streaming availability
 
 Export targets:
   ├── Kometa        — Plex collection YAML/JSON
@@ -54,7 +53,7 @@ WatchWarden/
 ├── packages/
 │   ├── config/      Environment validation (Zod) + structured logging (Winston)
 │   ├── db/          Prisma schema, client singleton, seed script
-│   ├── integrations/ Tautulli, Jellyseerr, TMDB, Trakt clients
+│   ├── integrations/ Tautulli, Jellyseerr, TMDB, and Plex clients
 │   ├── scoring/     Scoring engine + lifecycle state machine
 │   └── types/       Shared TypeScript types
 ├── exports/
@@ -68,7 +67,7 @@ WatchWarden/
 ### Prerequisites
 
 - Docker & Docker Compose v2
-- API keys: TMDB (free) and/or Trakt.tv (free)
+- A TMDB API key (free for personal use)
 - Running Tautulli and Jellyseerr instances (optional but recommended)
 
 ### 1. Clone and configure
@@ -83,14 +82,9 @@ Edit `.env` with your values — at minimum set:
 
 - `POSTGRES_PASSWORD` — any secure random string
 - `API_SECRET` — random 32+ char string
-- `ADMIN_PASSWORD_HASH` — bcrypt hash of your chosen admin password
 - `SESSION_SECRET` — random 32+ char string
 
-Generate an admin password hash:
-
-```bash
-node -e "const bcrypt = require('bcryptjs'); bcrypt.hash('yourpassword', 12).then(console.log)"
-```
+The first-run onboarding wizard creates the admin account and stores only its bcrypt password hash in PostgreSQL.
 
 ### 2. Start
 
@@ -142,14 +136,12 @@ Key variables:
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `API_SECRET` | Bearer token for service-to-service calls |
-| `ADMIN_PASSWORD_HASH` | bcrypt hash of the single admin password |
 | `SESSION_SECRET` | iron-session encryption key (32+ chars) |
 | `TAUTULLI_BASE_URL` | Tautulli base URL |
 | `TAUTULLI_API_KEY` | Tautulli API key |
 | `JELLYSEERR_URL` | Jellyseerr base URL |
 | `JELLYSEERR_API_KEY` | Jellyseerr API key |
 | `TMDB_API_KEY` | TMDB API v3 key (free at themoviedb.org) |
-| `TRAKT_CLIENT_ID` | Trakt.tv app client ID (free) |
 | `EXPORT_OUTPUT_DIR` | Filesystem path for Kometa exports |
 
 ## Scoring System
@@ -167,7 +159,7 @@ finalScore = (
 
 **Score components:**
 
-- `externalTrendScore` (0–1): Normalized from TMDB popularity or Trakt watchers
+- `externalTrendScore` (0–1): Mean of the latest TMDB feeds in which a title appears; absent feeds are ignored
 - `localInterestScore` (0–1): Derived from Tautulli watch history (recency, completion, household engagement)
 - `freshnessScore` (0–1): Decays over 14 days since last trend snapshot
 - `editorialBoost` (0–1): Manual admin editorial override
@@ -210,7 +202,7 @@ Any state → PINNED (overrides cleanup, never expires)
 
 | Job | Default Schedule | Purpose |
 | --- | --- | --- |
-| `trend-sync` | Every 6 hours | Fetch trending from TMDB/Trakt, upsert Titles + snapshots |
+| `trend-sync` | Every 6 hours | Fetch TMDB trends, popular/current titles, and provider rankings |
 | `tautulli-sync` | Every 4 hours | Fetch 30-day watch history, upsert LocalWatchSignals |
 | `scoring` | Every 2 hours | Score all candidates, upsert Suggestions |
 | `jellyseerr-status-sync` | Every 30 min | Sync RequestRecord status from Jellyseerr |
@@ -309,10 +301,10 @@ docker compose up -d
 
 ## Security Notes
 
-- Single-admin design: one hashed password stored in `ADMIN_PASSWORD_HASH` env var
-- Sessions use iron-session (encrypted, httpOnly, SameSite=lax)
+- Single-admin design: onboarding stores only a bcrypt hash in PostgreSQL
+- Sessions use encrypted, httpOnly, SameSite=lax cookies with PostgreSQL-backed API sessions
 - All API routes require authentication
-- TMDB and Trakt API keys are never exposed to the browser
+- TMDB API keys are never exposed to the browser
 - Passwords are hashed with bcrypt (cost factor 12)
 - Docker containers run as non-root where possible
 

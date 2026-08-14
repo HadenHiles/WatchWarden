@@ -3,7 +3,7 @@ import { prisma } from "./client";
 export interface IntegrationConfig {
     tautulli: { baseUrl: string | null; apiKey: string | null };
     jellyseerr: { baseUrl: string | null; apiKey: string | null; botUserId: number | null };
-    sources: { tmdbApiKey: string | null; traktClientId: string | null };
+    sources: { tmdbApiKey: string | null };
     plex: { baseUrl: string | null; token: string | null };
 }
 
@@ -20,7 +20,7 @@ export async function getIntegrationConfig(): Promise<IntegrationConfig> {
 
     const t = db.tautulli as { baseUrl?: string; apiKey?: string } | undefined;
     const j = db.jellyseerr as { baseUrl?: string; apiKey?: string; botUserId?: number } | undefined;
-    const s = db.sources as { tmdbApiKey?: string; traktClientId?: string } | undefined;
+    const s = db.sources as { tmdbApiKey?: string } | undefined;
     const p = db.plex as { baseUrl?: string; token?: string } | undefined;
 
     return {
@@ -39,7 +39,6 @@ export async function getIntegrationConfig(): Promise<IntegrationConfig> {
         },
         sources: {
             tmdbApiKey: s?.tmdbApiKey || process.env.TMDB_API_KEY || null,
-            traktClientId: s?.traktClientId || process.env.TRAKT_CLIENT_ID || null,
         },
         plex: {
             baseUrl: p?.baseUrl || process.env.PLEX_BASE_URL || null,

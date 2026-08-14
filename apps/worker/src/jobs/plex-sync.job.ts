@@ -237,10 +237,16 @@ async function resolveCulturalKeys(collection: { id: string; mediaType: string; 
     });
     const now = new Date();
     const ordered = titles.map((title) => {
-        const tmdb = title.trendSnapshots.find((s) => s.source.startsWith("tmdb"));
-        const trakt = title.trendSnapshots.find((s) => s.source.startsWith("trakt"));
-        const newest = [tmdb, trakt].filter(Boolean).sort((a, b) => b!.snapshotAt.getTime() - a!.snapshotAt.getTime())[0];
-        return { title, score: newest ? culturalHeat({ tmdbTrend: tmdb?.trendScore, traktTrend: trakt?.trendScore, rank: newest.rank, snapshotAt: newest.snapshotAt, region: newest.region }, now) : 0 };
+        const latestBySource = [...new Map(title.trendSnapshots
+            .filter((s) => s.source.startsWith("tmdb_"))
+            .map((s) => [s.source, s])).values()];
+        const newest = latestBySource[0];
+        return { title, score: newest ? culturalHeat({
+            tmdbTrends: latestBySource.map((s) => s.trendScore),
+            rank: Math.min(...latestBySource.map((s) => s.rank ?? 100)),
+            snapshotAt: newest.snapshotAt,
+            region: newest.region,
+        }, now) : 0 };
     }).sort((a, b) => b.score - a.score || a.title.id.localeCompare(b.title.id))
         .slice(0, collection.maxItems).map((x) => x.title.id);
     const ids = await applyManualOverrides(ordered, collection.id);

@@ -148,7 +148,7 @@ model Title {
 model ExternalTrendSnapshot {
   id           String   @id @default(cuid())
   titleId      String
-  source       String   // e.g. "tmdb_trending_week", "trakt_trending", "tmdb_provider_8_movie_CA"
+  source       String   // e.g. "tmdb_trending_week_movie", "tmdb_popular_tv", "tmdb_provider_8_movie_CA"
   region       String?  // "US" | "CA"
   rank         Int?     // position in the overall trending list
   trendScore   Float

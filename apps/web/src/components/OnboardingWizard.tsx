@@ -30,7 +30,6 @@ interface JellyseerrForm {
 
 interface SourcesForm {
     tmdbApiKey: string;
-    traktClientId: string;
 }
 
 interface SchedulesForm {
@@ -190,7 +189,7 @@ export function OnboardingWizard() {
     const [jellyseerr, setJellyseerr] = useState<JellyseerrForm>({ baseUrl: "", apiKey: "", botUserId: "2" });
     const [jellyseerrTest, setJellyseerrTest] = useState<TestStatus>({ state: null, message: "" });
 
-    const [sources, setSources] = useState<SourcesForm>({ tmdbApiKey: "", traktClientId: "" });
+    const [sources, setSources] = useState<SourcesForm>({ tmdbApiKey: "" });
     const [schedules, setSchedules] = useState<SchedulesForm>(DEFAULT_SCHEDULES);
 
     const [saving, setSaving] = useState(false);
@@ -230,7 +229,7 @@ export function OnboardingWizard() {
                             },
                         }
                         : {}),
-                    ...(sources.tmdbApiKey || sources.traktClientId ? { sources } : {}),
+                    ...(sources.tmdbApiKey ? { sources } : {}),
                     refreshIntervals: schedules,
                 };
 
@@ -337,7 +336,7 @@ export function OnboardingWizard() {
                                     { label: "Plex", desc: "Direct connection to manage collections on your server", highlight: true },
                                     { label: "Tautulli", desc: "Local watch history & engagement signals" },
                                     { label: "Jellyseerr", desc: "Automated media requests for approved titles" },
-                                    { label: "Trend Sources", desc: "TMDB & Trakt API keys for trending data" },
+                                    { label: "Discovery", desc: "TMDB trends, popularity, current releases, and streaming availability" },
                                     { label: "Schedules", desc: "Background job cron schedules" },
                                 ].map(({ label, desc, highlight }) => (
                                     <li key={label} className="flex items-start gap-3 text-sm text-gray-300">
@@ -574,7 +573,8 @@ export function OnboardingWizard() {
                         <>
                             <h2 className="text-xl font-bold text-white mb-1">Trend Sources</h2>
                             <p className="text-gray-400 text-sm mb-5 leading-relaxed">
-                                API credentials for external trending data. Both are free and optional.
+                                TMDB supplies daily and weekly trends, popular titles, current releases,
+                                metadata, and streaming availability. It is free for personal projects.
                             </p>
                             <div className="space-y-4">
                                 <Field label="TMDB API Key" hint="Free at themoviedb.org → Settings → API">
@@ -585,20 +585,6 @@ export function OnboardingWizard() {
                                             setSources((f) => ({ ...f, tmdbApiKey: e.target.value }))
                                         }
                                         placeholder="your_tmdb_api_key"
-                                        className={INPUT_CLS}
-                                    />
-                                </Field>
-                                <Field
-                                    label="Trakt Client ID"
-                                    hint="Free at trakt.tv → Settings → Your API Apps"
-                                >
-                                    <input
-                                        type="password"
-                                        value={sources.traktClientId}
-                                        onChange={(e) =>
-                                            setSources((f) => ({ ...f, traktClientId: e.target.value }))
-                                        }
-                                        placeholder="your_trakt_client_id"
                                         className={INPUT_CLS}
                                     />
                                 </Field>

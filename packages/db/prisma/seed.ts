@@ -88,40 +88,22 @@ async function seedSettings() {
 
 async function seedSourceConfigs() {
     const sources = [
-        {
-            sourceId: "tmdb_trending_movie_week",
-            sourceName: "TMDB Trending Movies (Week)",
-            enabled: true,
-            region: null,
-            mediaType: MediaType.MOVIE,
-            config: {},
-        },
-        {
-            // sourceId must match TmdbTrendingAdapter which uses mediaType param "tv"
-            sourceId: "tmdb_trending_tv_week",
-            sourceName: "TMDB Trending Shows (Week)",
-            enabled: true,
-            region: null,
-            mediaType: MediaType.SHOW,
-            config: {},
-        },
-        {
-            sourceId: "trakt_trending_movies",
-            sourceName: "Trakt Trending Movies",
-            enabled: false,
-            region: null,
-            mediaType: MediaType.MOVIE,
-            config: {},
-        },
-        {
-            sourceId: "trakt_trending_shows",
-            sourceName: "Trakt Trending Shows",
-            enabled: false,
-            region: null,
-            mediaType: MediaType.SHOW,
-            config: {},
-        },
-    ];
+        ["tmdb_trending_day_movie", "TMDB Trending Today — Movies", MediaType.MOVIE],
+        ["tmdb_trending_week_movie", "TMDB Trending This Week — Movies", MediaType.MOVIE],
+        ["tmdb_popular_movie", "TMDB Popular — Movies", MediaType.MOVIE],
+        ["tmdb_current_movie", "TMDB Now Playing — Movies", MediaType.MOVIE],
+        ["tmdb_trending_day_tv", "TMDB Trending Today — Shows", MediaType.SHOW],
+        ["tmdb_trending_week_tv", "TMDB Trending This Week — Shows", MediaType.SHOW],
+        ["tmdb_popular_tv", "TMDB Popular — Shows", MediaType.SHOW],
+        ["tmdb_current_tv", "TMDB On the Air — Shows", MediaType.SHOW],
+    ].map(([sourceId, sourceName, mediaType]) => ({
+        sourceId: sourceId as string,
+        sourceName: sourceName as string,
+        enabled: true,
+        region: null,
+        mediaType: mediaType as MediaType,
+        config: {},
+    }));
 
     for (const source of sources) {
         await prisma.sourceConfig.upsert({

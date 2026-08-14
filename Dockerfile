@@ -10,10 +10,9 @@
 #   POSTGRES_PASSWORD    — strong password for the internal database user
 #   SESSION_SECRET       — ≥32 character secret for session signing
 #   API_SECRET           — ≥32 character secret for API auth
-#   NEXTAUTH_SECRET      — secret for NextAuth
 #   NEXTAUTH_URL         — public URL of the web UI (e.g. http://myserver:3000)
-#   ADMIN_USERNAME       — initial admin username  (default: admin)
-#   ADMIN_PASSWORD_HASH  — bcrypt hash of the admin password
+# Admin credentials are created by the first-run onboarding wizard and stored
+# as a bcrypt hash in PostgreSQL.
 #
 # Persistent volumes (mount to preserve data between restarts):
 #   /var/lib/postgresql/data   — PostgreSQL data

@@ -22,7 +22,7 @@ const setupSchema = z.object({
         apiKey: z.string().optional(),
         botUserId: z.number().int().positive().optional(),
     }).optional(),
-    sources: z.object({ tmdbApiKey: z.string().optional(), traktClientId: z.string().optional() }).optional(),
+    sources: z.object({ tmdbApiKey: z.string().optional() }).optional(),
     plex: z.object({ baseUrl: z.string().optional(), token: z.string().optional() }).optional(),
     refreshIntervals: z.record(z.string()).optional(),
 });
@@ -116,7 +116,7 @@ export function authRouter(env: ApiEnv) {
             });
         }
 
-        if (sources?.tmdbApiKey || sources?.traktClientId) {
+        if (sources?.tmdbApiKey) {
             writes.push({
                 where: { key: "sources" },
                 update: { value: sources as object },

@@ -13,7 +13,7 @@ const fetcher = (url: string) =>
 const JOB_META: Record<string, { label: string; description: string }> = {
     "trend-sync": {
         label: "Trend Sync",
-        description: "Fetches trending titles from TMDB and Trakt and upserts them into the local database.",
+        description: "Fetches TMDB daily/weekly trends, popular and current titles, and provider discovery rankings.",
     },
     "tautulli-sync": {
         label: "Tautulli Sync",

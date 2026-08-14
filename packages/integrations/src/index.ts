@@ -23,6 +23,5 @@ export type { CollectionSyncResult } from "./plex/service";
 // Source adapters
 export type { SourceAdapter } from "./sources/adapter";
 export { TmdbTrendingAdapter } from "./sources/tmdb.adapter";
-export { TraktTrendingAdapter } from "./sources/trakt.adapter";
 export { TmdbProviderDiscoveryAdapter, PROVIDER_TMDB_ID_MAP } from "./sources/tmdb-provider.adapter";
 export { buildSourceAdapters } from "./sources/registry";
