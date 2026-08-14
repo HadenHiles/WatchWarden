@@ -56,6 +56,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      default:
+      watchwarden_lan:
+      famflix_media_net:
 
   # ── Worker ──────────────────────────────────────────────────────────────────
   worker:
@@ -76,6 +80,10 @@ services:
         condition: service_healthy
     volumes:
       - exports_data:/app/exports
+    networks:
+      default:
+      watchwarden_lan:
+      famflix_media_net:
 
   # ── Web ─────────────────────────────────────────────────────────────────────
   web:
@@ -118,4 +126,6 @@ volumes:
 
 networks:
   famflix_media_net:
+    external: true
+  watchwarden_lan:
     external: true
