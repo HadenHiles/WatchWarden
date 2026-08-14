@@ -37,8 +37,8 @@ plexRouter.post("/home/setup", validateBody(setupShelvesSchema), asyncHandler(as
     const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
     const home = { ...DEFAULT_HOME_SETTINGS, ...((homeSetting?.value ?? {}) as Partial<typeof DEFAULT_HOME_SETTINGS>) };
     const base = [
-        { name: "Popular Movies Right Now", sectionId: body.movieSectionId, mediaType: "MOVIE" as const, shelfType: "CULTURAL_TRENDING" as const },
-        { name: "Popular Shows Right Now", sectionId: body.showSectionId, mediaType: "SHOW" as const, shelfType: "CULTURAL_TRENDING" as const },
+        { name: "Popular Movies Right Now", sectionId: body.movieSectionId, mediaType: "MOVIE" as const, shelfType: "CULTURAL_TRENDING" as const, streamingProviders: body.providers },
+        { name: "Popular Shows Right Now", sectionId: body.showSectionId, mediaType: "SHOW" as const, shelfType: "CULTURAL_TRENDING" as const, streamingProviders: body.providers },
         { name: "Recently Released Movies", sectionId: body.movieSectionId, mediaType: "MOVIE" as const, shelfType: "RECENTLY_RELEASED" as const },
         ...body.providers.flatMap((provider) => (["MOVIE", "SHOW"] as const).map((mediaType) => ({ name: `Popular on ${provider}${mediaType === "SHOW" ? " — Shows" : ""}`, sectionId: mediaType === "MOVIE" ? body.movieSectionId : body.showSectionId, mediaType, shelfType: "PROVIDER_TRENDING" as const, provider }))),
     ];
@@ -50,7 +50,7 @@ plexRouter.post("/home/setup", validateBody(setupShelvesSchema), asyncHandler(as
         const provider = "provider" in shelf ? shelf.provider : null;
         created.push(await prisma.plexCollection.create({ data: {
             ...shelf, collectionType: shelf.shelfType === "PROVIDER_TRENDING" ? "TOP_TRENDING" : "SMART",
-            provider, streamingProviders: provider ? [provider] : [], enabled: false, publishToHome: false,
+            provider, streamingProviders: "streamingProviders" in shelf ? shelf.streamingProviders : provider ? [provider] : [], enabled: false, publishToHome: false,
             homePriority: (index + 1) * 10, maxItems: home.defaultMaxItems, maxItemsPerProvider: home.defaultMaxItems,
             releaseWindowDays: home.recentlyReleasedDays,
         } }));

@@ -2,7 +2,7 @@ import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
-import { culturalHeat, diversifyShelf, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
+import { culturalHeat, diversifyShelf, rankProviderHistory, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
 import { submitRequest } from "../services/request.service";
 
 const logger = createLogger("plex-sync-job");
@@ -256,13 +256,17 @@ async function resolveTopTrendingKeys(
     return withOverrides.map((id) => keyMap.get(id)).filter(Boolean) as string[];
 }
 
-async function resolveCulturalKeys(collection: { id: string; mediaType: string; maxItems: number }, candidateLimit = collection.maxItems): Promise<string[]> {
+async function resolveCulturalKeys(
+    collection: { id: string; mediaType: string; maxItems: number; streamingProviders: string[] },
+    providerNames: string[],
+    candidateLimit = collection.maxItems,
+): Promise<string[]> {
     const titles = await prisma.title.findMany({
         where: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
         select: { id: true, plexRatingKey: true, trendSnapshots: { where: { providerId: null }, orderBy: { snapshotAt: "desc" }, take: 20 } },
     });
     const now = new Date();
-    const ordered = titles.map((title) => {
+    const globalLane = titles.map((title) => {
         const latestBySource = [...new Map(title.trendSnapshots
             .filter((s) => s.source.startsWith("tmdb_"))
             .map((s) => [s.source, s])).values()];
@@ -274,8 +278,31 @@ async function resolveCulturalKeys(collection: { id: string; mediaType: string; 
             region: newest.region,
         }, now) : 0 };
     }).sort((a, b) => b.score - a.score || a.title.id.localeCompare(b.title.id))
-        .slice(0, candidateLimit).map((x) => x.title.id);
-    const ids = await applyManualOverrides(ordered, collection.id);
+        .map((x) => x.title.id);
+
+    // A broad "right now" shelf should cover the selected services, not merely
+    // mirror TMDB's global chart. Aggregate each service's daily rankings over
+    // three weeks, then round-robin the provider lanes with the global lane.
+    const providerLanes: string[][] = [];
+    const since = new Date(Date.now() - 21 * 86_400_000);
+    for (const providerName of providerNames) {
+        const providerId = PROVIDER_TMDB_ID_MAP[providerName];
+        if (!providerId) continue;
+        const snapshots = await prisma.externalTrendSnapshot.findMany({
+            where: {
+                providerId: String(providerId), providerRank: { not: null }, snapshotAt: { gte: since },
+                title: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
+            },
+            select: { titleId: true, providerRank: true, snapshotAt: true },
+        });
+        const lane = rankProviderHistory(snapshots.map((snapshot) => ({
+            titleId: snapshot.titleId, providerRank: snapshot.providerRank!, snapshotAt: snapshot.snapshotAt,
+        })), now);
+        if (lane.length) providerLanes.push(lane);
+    }
+    const ordered = interleave([globalLane, ...providerLanes]);
+    const deduped = [...new Set(ordered)].slice(0, candidateLimit);
+    const ids = await applyManualOverrides(deduped, collection.id);
     const map = new Map(titles.map((t) => [t.id, t.plexRatingKey!]));
     return ids.map((id) => map.get(id)).filter(Boolean) as string[];
 }
@@ -379,6 +406,7 @@ export async function plexSyncJob(): Promise<void> {
     const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
     const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string; manageRecommendations?: boolean; backfillRecentReleases?: boolean; recentlyReleasedBackfillDays?: number };
     const publishedIds = new Set(selectPublishedShelfIds(collections, homeConfig.shelfLimit ?? 6));
+    const configuredProviders = [...new Set(collections.map((item) => item.provider).filter((provider): provider is string => Boolean(provider)))];
     // Netflix is the more specific editorial promise, so it gets first claim on titles.
     const netflixKeysByMedia = new Map<string, string[]>();
     for (const collection of collections.filter((item) =>
@@ -423,8 +451,9 @@ export async function plexSyncJob(): Promise<void> {
             }
             let targetKeys: string[];
             if (collection.shelfType === "CULTURAL_TRENDING") {
-                const candidates = await resolveCulturalKeys(collection, collection.maxItems * 4);
-                targetKeys = diversifyShelf(candidates, netflixKeysByMedia.get(collection.mediaType) ?? [], collection.maxItems, 0.25);
+                const providers = collection.streamingProviders.length ? collection.streamingProviders : configuredProviders;
+                const candidates = await resolveCulturalKeys(collection, providers, collection.maxItems * 4);
+                targetKeys = diversifyShelf(candidates, netflixKeysByMedia.get(collection.mediaType) ?? [], collection.maxItems, 0);
             } else if (collection.shelfType === "RECENTLY_RELEASED") {
                 targetKeys = await resolveRecentlyReleasedKeys(collection, {
                     enabled: homeConfig.backfillRecentReleases !== false,

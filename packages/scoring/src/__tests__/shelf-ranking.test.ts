@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { culturalHeat, diversifyShelf, isRecentlyReleased, resolvePlatformSnapshots, selectStreamingEditorialTitles, selectPublishedShelfIds } from "../shelf-ranking";
+import { culturalHeat, diversifyShelf, isRecentlyReleased, rankProviderHistory, resolvePlatformSnapshots, selectStreamingEditorialTitles, selectPublishedShelfIds } from "../shelf-ranking";
 
 describe("shelf ranking", () => {
     const now = new Date("2026-08-13T12:00:00Z");
@@ -25,6 +25,14 @@ describe("shelf ranking", () => {
         const current = culturalHeat({ tmdbTrends: [0.9, 0.8], rank: 1, snapshotAt: now, region: "CA" }, now);
         const stale = culturalHeat({ tmdbTrends: [0.9, 0.8], rank: 20, snapshotAt: new Date("2026-07-13"), region: "CA" }, now);
         expect(current).toBeGreaterThan(stale);
+    });
+    it("ranks sustained provider popularity across recent weeks", () => {
+        expect(rankProviderHistory([
+            { titleId: "sustained", providerRank: 2, snapshotAt: now },
+            { titleId: "sustained", providerRank: 2, snapshotAt: new Date("2026-08-06T12:00:00Z") },
+            { titleId: "one-day", providerRank: 1, snapshotAt: now },
+            { titleId: "stale", providerRank: 1, snapshotAt: new Date("2026-07-13T12:00:00Z") },
+        ], now)).toEqual(["sustained", "one-day", "stale"]);
     });
     it("does not penalize a title when only one TMDB feed contains it", () => {
         const single = culturalHeat({ tmdbTrends: [0.8], rank: 1, snapshotAt: now }, now);

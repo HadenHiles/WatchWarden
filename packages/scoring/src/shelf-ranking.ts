@@ -53,6 +53,23 @@ export interface PlatformSnapshot {
     snapshotAt: Date;
 }
 
+export interface ProviderHistorySnapshot {
+    titleId: string;
+    providerRank: number;
+    snapshotAt: Date;
+}
+
+/** Ranks titles by sustained, recent provider-chart strength across a lookback window. */
+export function rankProviderHistory(snapshots: ProviderHistorySnapshot[], now = new Date()): string[] {
+    const scores = new Map<string, number>();
+    for (const snapshot of snapshots) {
+        const ageDays = Math.max(0, now.getTime() - snapshot.snapshotAt.getTime()) / 86_400_000;
+        const score = Math.pow(0.5, ageDays / 7) / Math.sqrt(Math.max(1, snapshot.providerRank));
+        scores.set(snapshot.titleId, (scores.get(snapshot.titleId) ?? 0) + score);
+    }
+    return [...scores].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([id]) => id);
+}
+
 export interface StreamingEditorialCandidate {
     id: string;
     providerRank: number;
