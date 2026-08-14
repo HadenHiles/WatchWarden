@@ -1,6 +1,5 @@
-import { OverviewPage } from "@/components/OverviewPage";
+import { redirect } from "next/navigation";
 
 export default function DashboardRootPage() {
-    return <OverviewPage />;
+    redirect("/dashboard/plex/collections");
 }
-

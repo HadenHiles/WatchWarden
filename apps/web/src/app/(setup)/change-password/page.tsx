@@ -43,7 +43,7 @@ export default function ChangePasswordPage() {
       const statusData = await statusRes.json();
 
       if (statusData.data?.complete) {
-        router.push("/dashboard");
+        router.push("/dashboard/plex/collections");
       } else {
         router.push("/onboarding");
       }

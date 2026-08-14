@@ -1,5 +1,5 @@
-import { DiscoverPage } from "@/components/DiscoverPage";
+import { redirect } from "next/navigation";
 
 export default function JellyseerrDiscoverPage() {
-    return <DiscoverPage />;
+    redirect("/dashboard/plex/collections");
 }

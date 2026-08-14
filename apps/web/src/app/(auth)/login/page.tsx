@@ -28,7 +28,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/dashboard/plex/collections");
       router.refresh();
     } catch {
       setError("Network error — please try again");

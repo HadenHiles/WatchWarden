@@ -4,22 +4,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Library,
+    Library,
   Clapperboard,
   Briefcase,
   Settings,
   X,
-  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Home", icon: LayoutDashboard, exact: true },
-  { href: "/dashboard/plex/collections", label: "Plex Home", icon: Clapperboard },
-  { href: "/dashboard/library", label: "Library", icon: Library },
-  { href: "/dashboard/discover", label: "Jellyseerr", icon: Radio },
-  { href: "/dashboard/jobs", label: "Automation", icon: Briefcase },
+    { href: "/dashboard/plex/collections", label: "Plex Home", icon: Clapperboard },
+    { href: "/dashboard/library", label: "Library", icon: Library },
+    { href: "/dashboard/jobs", label: "Automation", icon: Briefcase },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
@@ -69,8 +65,8 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-          {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
-            const active = exact ? pathname === href : pathname.startsWith(href);
+          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            const active = pathname.startsWith(href);
             return (
               <Link
                 key={href}
