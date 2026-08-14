@@ -2,6 +2,7 @@ import axios from "axios";
 import { createLogger } from "@watchwarden/config";
 import type { SourceTrendItem } from "@watchwarden/types";
 import type { SourceAdapter } from "./adapter";
+import { mapTmdbGenres } from "./tmdb-genres";
 
 const logger = createLogger("tmdb-adapter");
 
@@ -22,6 +23,8 @@ interface TmdbResult {
     genre_ids?: number[];
     vote_average?: number;
     popularity?: number;
+    original_language?: string;
+    origin_country?: string[];
 }
 
 interface TmdbResponse {
@@ -113,7 +116,7 @@ export class TmdbTrendingAdapter implements SourceAdapter {
             // Consumers are responsible for prepending the desired image base URL.
             posterPath: item.poster_path ?? null,
             backdropPath: item.backdrop_path ?? null,
-            genres: [],
+            genres: mapTmdbGenres(item.genre_ids),
             source: this.sourceId,
             region: null,
             rank,

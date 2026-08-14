@@ -111,6 +111,9 @@ export async function jellyseerrDiscoverSyncJob(): Promise<void> {
     }
 
     logger.info("Jellyseerr discover sync complete", { synced, errors });
+    if (errors > 0) {
+        throw new Error(`Failed to sync ${errors} of ${sliderConfigs.length} Jellyseerr discover sliders`);
+    }
 }
 
 /**

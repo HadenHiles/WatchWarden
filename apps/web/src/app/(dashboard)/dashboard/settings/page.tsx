@@ -9,7 +9,7 @@ import { apiUrl } from "@/lib/api-client";
 const fetcher = (url: string) =>
     fetch(url, { credentials: "include" }).then((r) => r.json());
 
-type FieldType = "number" | "boolean" | "text" | "password" | "url";
+type FieldType = "number" | "boolean" | "text" | "password" | "url" | "csv";
 
 interface SettingField {
     key: string;
@@ -27,6 +27,15 @@ interface SettingSection {
 }
 
 const KNOWN_SETTINGS: SettingSection[] = [
+    {
+        section: "Discovery Filters",
+        note: "Applied globally when trend and provider feeds sync. Anime uses Japanese-language/origin animation detection; minimum popularity suppresses niche titles.",
+        keys: [
+            { key: "discovery.filters", subKey: "excludeAnime", label: "Exclude anime", type: "boolean" },
+            { key: "discovery.filters", subKey: "excludedGenres", label: "Excluded genres", type: "csv", hint: "Comma-separated TMDB genres, e.g. Horror, Fantasy, Animation", placeholder: "Horror, Fantasy" },
+            { key: "discovery.filters", subKey: "minimumPopularity", label: "Minimum TMDB popularity", type: "number", hint: "0 disables this filter; 20 is a gentle mainstream cutoff", placeholder: "20" },
+        ],
+    },
     {
         section: "Scoring Weights",
         note: "Values must be between 0.0 and 1.0 and should sum to 1.0 (e.g. 0.45 + 0.35 + 0.10 + 0.10). The worker will normalize them if they don't.",
@@ -110,7 +119,9 @@ export default function SettingsPage() {
             for (const [key, obj] of Object.entries(data.data)) {
                 if (obj && typeof obj === "object") {
                     for (const [subKey, val] of Object.entries(obj)) {
-                        map[`${key}::${subKey}`] = JSON.stringify(val).replace(/^"|"$/g, "");
+                        map[`${key}::${subKey}`] = Array.isArray(val)
+                            ? val.join(", ")
+                            : JSON.stringify(val).replace(/^"|"$/g, "");
                     }
                 }
             }
@@ -128,6 +139,12 @@ export default function SettingsPage() {
                 const key = compoundKey.slice(0, sep);
                 const subKey = compoundKey.slice(sep + 2);
                 if (!patch[key]) patch[key] = {};
+                const field = KNOWN_SETTINGS.flatMap((section) => section.keys)
+                    .find((candidate) => candidate.key === key && candidate.subKey === subKey);
+                if (field?.type === "csv") {
+                    patch[key][subKey] = raw.split(",").map((value) => value.trim()).filter(Boolean);
+                    continue;
+                }
                 try {
                     patch[key][subKey] = JSON.parse(raw);
                 } catch {

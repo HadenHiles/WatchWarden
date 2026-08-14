@@ -38,6 +38,12 @@ export async function scoringJob(): Promise<void> {
         excludeAlreadyRequested: boolean;
         excludePermanentlyRejected: boolean;
     } | null;
+    const discoverySetting = await prisma.appSetting.findUnique({ where: { key: "discovery.filters" } });
+    const discoveryFilters = (discoverySetting?.value ?? {}) as {
+        excludedGenres?: string[];
+        excludeAnime?: boolean;
+        minimumPopularity?: number;
+    };
 
     // Process all titles that have at least one trend snapshot
     const titles = await prisma.title.findMany({
@@ -62,6 +68,33 @@ export async function scoringJob(): Promise<void> {
             .filter((snapshot) => snapshot.source.startsWith("tmdb_"))
             .map((snapshot) => [snapshot.source, snapshot])).values()];
         const latestSnapshot = latestBySource[0];
+        const isExcludedGenre = title.genres.some((genre) =>
+            (discoveryFilters.excludedGenres ?? []).includes(genre)
+        );
+        const isAnime = discoveryFilters.excludeAnime === true
+            && title.genres.includes("Animation")
+            && latestBySource.some((snapshot) => {
+                const raw = snapshot.rawMetadata as Record<string, unknown>;
+                const language = raw.original_language ?? raw.originalLanguage;
+                const countries = raw.origin_country ?? raw.originCountry;
+                return language === "ja" || (Array.isArray(countries) && countries.includes("JP"));
+            });
+        const latestPopularity = latestSnapshot
+            ? (latestSnapshot.rawMetadata as Record<string, unknown>).popularity
+            : undefined;
+        const isBelowPopularity = typeof latestPopularity === "number"
+            && latestPopularity < (discoveryFilters.minimumPopularity ?? 0);
+
+        if (isExcludedGenre || isAnime || isBelowPopularity) {
+            if (title.suggestion && !["FULFILLED", "REJECTED"].includes(title.suggestion.status)) {
+                await prisma.suggestion.update({
+                    where: { id: title.suggestion.id },
+                    data: { status: "FULFILLED" },
+                });
+            }
+            excluded++;
+            continue;
+        }
         const externalTrendScore = latestBySource.length
             ? latestBySource.reduce((sum, snapshot) => sum + snapshot.trendScore, 0) / latestBySource.length
             : 0;

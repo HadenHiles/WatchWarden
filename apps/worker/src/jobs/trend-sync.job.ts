@@ -10,6 +10,35 @@ const TMDB_BASE = "https://api.themoviedb.org/3";
 // Preferred region order: CA first, US as fallback
 const PROVIDER_REGIONS = ["CA", "US"] as const;
 
+interface DiscoveryFilters {
+    excludedGenres: string[];
+    excludeAnime: boolean;
+    minimumPopularity: number;
+}
+
+async function getDiscoveryFilters(): Promise<DiscoveryFilters> {
+    const setting = await prisma.appSetting.findUnique({ where: { key: "discovery.filters" } });
+    const value = (setting?.value ?? {}) as Record<string, unknown>;
+    return {
+        excludedGenres: Array.isArray(value.excludedGenres)
+            ? value.excludedGenres.filter((genre): genre is string => typeof genre === "string")
+            : [],
+        excludeAnime: value.excludeAnime === true,
+        minimumPopularity: typeof value.minimumPopularity === "number" ? Math.max(0, value.minimumPopularity) : 0,
+    };
+}
+
+function isExcluded(item: SourceTrendItem, filters: DiscoveryFilters): boolean {
+    if (item.genres.some((genre) => filters.excludedGenres.includes(genre))) return true;
+    const raw = item.rawMetadata as Record<string, unknown>;
+    const originalLanguage = raw.original_language ?? raw.originalLanguage;
+    const originCountry = raw.origin_country ?? raw.originCountry;
+    const isJapanese = originalLanguage === "ja" || (Array.isArray(originCountry) && originCountry.includes("JP"));
+    if (filters.excludeAnime && item.genres.includes("Animation") && isJapanese) return true;
+    const popularity = raw.popularity;
+    return typeof popularity === "number" && popularity < filters.minimumPopularity;
+}
+
 // ─── Watch provider enrichment ────────────────────────────────────────────────
 
 interface TmdbWatchProvider {
@@ -48,6 +77,7 @@ async function fetchStreamingProviders(
 
 export async function trendSyncJob(): Promise<void> {
     const { sources } = await getIntegrationConfig();
+    const discoveryFilters = await getDiscoveryFilters();
     const adapters = buildSourceAdapters({
         TMDB_API_KEY: sources.tmdbApiKey ?? undefined,
     });
@@ -81,6 +111,10 @@ export async function trendSyncJob(): Promise<void> {
         }
 
         for (const item of items) {
+            if (isExcluded(item, discoveryFilters)) {
+                logger.debug("Skipping title excluded by global discovery filters", { title: item.title });
+                continue;
+            }
             if (!item.tmdbId && !item.imdbId) {
                 logger.debug("Skipping item with no canonical ID", { title: item.title });
                 continue;

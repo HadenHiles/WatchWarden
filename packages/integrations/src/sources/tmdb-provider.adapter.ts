@@ -2,6 +2,7 @@ import axios from "axios";
 import { createLogger } from "@watchwarden/config";
 import type { SourceTrendItem } from "@watchwarden/types";
 import type { SourceAdapter } from "./adapter";
+import { mapTmdbGenres } from "./tmdb-genres";
 
 const logger = createLogger("tmdb-provider-adapter");
 
@@ -53,6 +54,8 @@ interface TmdbDiscoverResult {
     genre_ids?: number[];
     vote_average?: number;
     popularity?: number;
+    original_language?: string;
+    origin_country?: string[];
 }
 
 interface TmdbDiscoverResponse {
@@ -166,7 +169,7 @@ export class TmdbProviderDiscoveryAdapter implements SourceAdapter {
             overview: item.overview ?? null,
             posterPath: item.poster_path ?? null,
             backdropPath: item.backdrop_path ?? null,
-            genres: [],
+            genres: mapTmdbGenres(item.genre_ids),
             source: this.sourceId,
             region: this.region,
             rank: providerRank,
@@ -179,6 +182,8 @@ export class TmdbProviderDiscoveryAdapter implements SourceAdapter {
                 providerRank,
                 popularity: item.popularity,
                 voteAverage: item.vote_average,
+                originalLanguage: item.original_language,
+                originCountry: item.origin_country,
             },
         };
     }
