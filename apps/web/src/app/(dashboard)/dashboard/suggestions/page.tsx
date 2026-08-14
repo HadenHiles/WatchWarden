@@ -1,6 +1,5 @@
-import { CollectionFeedPage } from "@/components/CollectionFeedPage";
+import { redirect } from "next/navigation";
 
 export default function SuggestionsRoutePage() {
-    return <CollectionFeedPage />;
+  redirect("/dashboard/plex/collections");
 }
-

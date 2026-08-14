@@ -1,3 +1,4 @@
 import { redirect } from "next/navigation";
-export default function Page() { redirect("/dashboard/suggestions?tab=shows"); }
-
+export default function Page() {
+  redirect("/dashboard/plex/collections");
+}
