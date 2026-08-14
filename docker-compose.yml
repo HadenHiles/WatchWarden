@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ─── Watch Warden ─────────────────────────────────────────────────────────────
 # Production / self-hosted Docker Compose.
 # Zero required env vars — runs out of the box with safe defaults.
@@ -36,7 +34,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://watchwarden:${POSTGRES_PASSWORD:-watchwarden}@postgres:5432/watchwarden
-      NODE_ENV: ${NODE_ENV:-production}
+      NODE_ENV: production
       SESSION_SECRET: ${SESSION_SECRET:-}
       API_SECRET: ${API_SECRET:-}
       EXPORT_OUTPUT_DIR: /app/exports
@@ -48,8 +46,9 @@ services:
         condition: service_healthy
     volumes:
       - exports_data:/app/exports
+    command: ["/bin/sh", "-c", "/app/node_modules/.bin/prisma migrate deploy --schema /app/packages/db/prisma/schema.prisma && node dist/index.js"]
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:4000/health || exit 1" ]
+      test: [ "CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -64,7 +63,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://watchwarden:${POSTGRES_PASSWORD:-watchwarden}@postgres:5432/watchwarden
-      NODE_ENV: ${NODE_ENV:-production}
+      NODE_ENV: production
       EXPORT_OUTPUT_DIR: /app/exports
       LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
@@ -81,6 +80,7 @@ services:
     container_name: watchwarden-web
     restart: unless-stopped
     environment:
+      HOSTNAME: 0.0.0.0
       API_URL: http://api:4000
       API_SECRET: ${API_SECRET:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
@@ -90,7 +90,7 @@ services:
     depends_on:
       - api
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1" ]
+      test: [ "CMD", "node", "-e", "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" ]
       interval: 30s
       timeout: 10s
       retries: 3
