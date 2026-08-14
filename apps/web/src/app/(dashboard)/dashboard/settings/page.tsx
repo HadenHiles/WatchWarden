@@ -28,6 +28,14 @@ interface SettingSection {
 
 const KNOWN_SETTINGS: SettingSection[] = [
     {
+        section: "Shelf Automation",
+        note: "Requests missing titles from shelves through the Jellyseerr bot. The per-run cap prevents sudden library growth.",
+        keys: [
+            { key: "automation.roster", subKey: "enabled", label: "Auto-request shelf roster", type: "boolean" },
+            { key: "automation.roster", subKey: "maxNewRequestsPerRun", label: "Maximum new requests per run", type: "number", hint: "Recommended: 5", placeholder: "5" },
+        ],
+    },
+    {
         section: "Discovery Filters",
         note: "Applied globally when trend and provider feeds sync. Anime uses Japanese-language/origin animation detection; minimum popularity suppresses niche titles.",
         keys: [

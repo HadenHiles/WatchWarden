@@ -20,6 +20,7 @@ export async function lifecycleEvalJob(): Promise<void> {
             trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 1 },
             suggestion: true,
             requestRecord: true,
+            watchSignals: true,
         },
     });
 
@@ -43,13 +44,23 @@ export async function lifecycleEvalJob(): Promise<void> {
             keepUntil: title.keepUntil ?? null,
         });
 
-        if (result.changed) {
+        // A title must both fall out of the trend lifecycle and show weak
+        // household engagement before it can enter the cleanup queue.
+        const signal = title.watchSignals[0];
+        const weakEngagement = title.mediaType === "SHOW"
+            ? (signal?.recentWatchCount ?? 0) <= 1
+            : (signal?.uniqueViewerCount ?? 0) === 0 || (signal?.completionRate ?? 0) < 0.5;
+        const guardedResult = result.newStatus === "CLEANUP_ELIGIBLE" && !weakEngagement
+            ? { ...result, changed: false, newStatus: title.status, cleanupEligible: false, cleanupReason: null }
+            : result;
+
+        if (guardedResult.changed) {
             await prisma.title.update({
                 where: { id: title.id },
                 data: {
-                    status: result.newStatus,
-                    cleanupEligible: result.cleanupEligible,
-                    cleanupReason: result.cleanupReason,
+                    status: guardedResult.newStatus,
+                    cleanupEligible: guardedResult.cleanupEligible,
+                    cleanupReason: guardedResult.cleanupReason,
                 },
             });
             transitioned++;

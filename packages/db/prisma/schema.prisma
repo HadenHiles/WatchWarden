@@ -280,6 +280,7 @@ model PlexCollection {
   streamingProviders String[] // e.g. ["Netflix", "Disney+"] — for TOP_TRENDING only
   // For TOP_TRENDING: max items per provider (total = maxItemsPerProvider * providers.length)
   maxItemsPerProvider Int     @default(10)
+  autoRequest        Boolean  @default(false)
   shelfType         PlexShelfType @default(CUSTOM)
   provider          String?
   publishToHome     Boolean   @default(false)

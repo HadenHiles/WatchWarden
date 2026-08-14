@@ -3,6 +3,7 @@ import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/inte
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
 import { culturalHeat, resolvePlatformSnapshots, selectPublishedShelfIds } from "@watchwarden/scoring";
+import { submitRequest } from "../services/request.service";
 
 const logger = createLogger("plex-sync-job");
 
@@ -268,6 +269,40 @@ async function resolveRecentlyReleasedKeys(collection: { id: string; mediaType: 
     return ids.map((id) => map.get(id)).filter(Boolean) as string[];
 }
 
+async function resolveAutoRequestIds(collection: {
+    mediaType: string; shelfType: string; provider: string | null;
+    streamingProviders: string[]; maxItems: number; maxItemsPerProvider: number;
+}): Promise<string[]> {
+    const baseTitle: Prisma.TitleWhereInput = {
+        mediaType: collection.mediaType as "MOVIE" | "SHOW",
+        inLibrary: false,
+        isRequested: false,
+        status: { notIn: ["REJECTED", "EXPIRED"] },
+    };
+    const providerName = collection.provider ?? collection.streamingProviders[0];
+    const providerId = providerName ? PROVIDER_TMDB_ID_MAP[providerName] : undefined;
+    if (providerId) {
+        const snapshots = await prisma.externalTrendSnapshot.findMany({
+            where: {
+                providerId: String(providerId), providerRank: { not: null },
+                snapshotAt: { gte: new Date(Date.now() - 8 * 86_400_000) },
+                title: baseTitle,
+            },
+            orderBy: [{ providerRank: "asc" }, { snapshotAt: "desc" }],
+            select: { titleId: true },
+        });
+        return [...new Set(snapshots.map((snapshot) => snapshot.titleId))]
+            .slice(0, collection.maxItemsPerProvider || 10);
+    }
+    const suggestions = await prisma.suggestion.findMany({
+        where: { status: "PENDING", title: baseTitle },
+        orderBy: { finalScore: "desc" },
+        take: collection.maxItems || 20,
+        select: { titleId: true },
+    });
+    return suggestions.map((suggestion) => suggestion.titleId);
+}
+
 /**
  * Syncs all enabled PlexCollection rows to the actual Plex server.
  * WatchWarden manages collections for "Top 10 on Platform" visibility only —
@@ -293,6 +328,18 @@ export async function plexSyncJob(): Promise<void> {
     const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
     const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string };
     const publishedIds = new Set(selectPublishedShelfIds(collections, homeConfig.shelfLimit ?? 6));
+
+    const automationSetting = await prisma.appSetting.findUnique({ where: { key: "automation.roster" } });
+    const automation = (automationSetting?.value ?? {}) as { enabled?: boolean; maxNewRequestsPerRun?: number };
+    if (automation.enabled === true) {
+        const candidates: string[] = [];
+        for (const collection of collections.filter((item) => item.enabled && item.autoRequest)) {
+            candidates.push(...await resolveAutoRequestIds(collection));
+        }
+        const cap = Math.max(0, Math.min(20, automation.maxNewRequestsPerRun ?? 5));
+        for (const titleId of [...new Set(candidates)].slice(0, cap)) await submitRequest(titleId);
+        logger.info("Auto-request roster evaluated", { candidates: new Set(candidates).size, requestCap: cap });
+    }
 
     let syncedCount = 0;
     let errorCount = 0;
