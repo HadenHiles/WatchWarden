@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:4000";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
     try {
         const res = await fetch(`${API_BASE}/auth/setup-status`, { cache: "no-store" });
