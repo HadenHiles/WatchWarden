@@ -255,9 +255,15 @@ async function resolveCulturalKeys(collection: { id: string; mediaType: string; 
     return ids.map((id) => map.get(id)).filter(Boolean) as string[];
 }
 
-async function resolveRecentlyReleasedKeys(collection: { id: string; mediaType: string; maxItems: number; releaseWindowDays: number }): Promise<string[]> {
+async function resolveRecentlyReleasedKeys(
+    collection: { id: string; mediaType: string; maxItems: number; releaseWindowDays: number },
+    backfill = { enabled: true, maxDays: 365 },
+): Promise<string[]> {
     if (collection.mediaType !== "MOVIE") return [];
-    const since = new Date(Date.now() - collection.releaseWindowDays * 86_400_000);
+    const lookbackDays = backfill.enabled
+        ? Math.max(collection.releaseWindowDays, backfill.maxDays)
+        : collection.releaseWindowDays;
+    const since = new Date(Date.now() - lookbackDays * 86_400_000);
     const titles = await prisma.title.findMany({
         where: { mediaType: "MOVIE", inLibrary: true, plexRatingKey: { not: null }, releaseDate: { gte: since, lte: new Date() } },
         orderBy: [{ releaseDate: "desc" }, { id: "asc" }], take: collection.maxItems,
@@ -326,7 +332,7 @@ export async function plexSyncJob(): Promise<void> {
     const client = new PlexClient({ baseUrl: plex.baseUrl, token: plex.token });
     const service = new PlexService(client);
     const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
-    const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string; manageRecommendations?: boolean };
+    const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string; manageRecommendations?: boolean; backfillRecentReleases?: boolean; recentlyReleasedBackfillDays?: number };
     const publishedIds = new Set(selectPublishedShelfIds(collections, homeConfig.shelfLimit ?? 6));
     // Netflix is the more specific editorial promise, so it gets first claim on titles.
     const netflixKeysByMedia = new Map<string, string[]>();
@@ -374,7 +380,10 @@ export async function plexSyncJob(): Promise<void> {
                 const candidates = await resolveCulturalKeys(collection, collection.maxItems * 4);
                 targetKeys = diversifyShelf(candidates, netflixKeysByMedia.get(collection.mediaType) ?? [], collection.maxItems, 0.25);
             } else if (collection.shelfType === "RECENTLY_RELEASED") {
-                targetKeys = await resolveRecentlyReleasedKeys(collection);
+                targetKeys = await resolveRecentlyReleasedKeys(collection, {
+                    enabled: homeConfig.backfillRecentReleases !== false,
+                    maxDays: homeConfig.recentlyReleasedBackfillDays ?? 365,
+                });
             } else if (collection.shelfType === "PROVIDER_TRENDING" || collection.collectionType === "TOP_TRENDING") {
                 targetKeys = collection.provider === "Netflix" && netflixKeysByMedia.has(collection.mediaType)
                     ? netflixKeysByMedia.get(collection.mediaType)!

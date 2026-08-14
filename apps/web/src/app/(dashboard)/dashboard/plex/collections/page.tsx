@@ -23,7 +23,7 @@ interface Shelf {
     enabled: boolean; publishToHome: boolean; publishToSharedHome: boolean; homePriority: number;
     maxItems: number; releaseWindowDays: number; itemCount: number; lastSyncAt: string | null;
 }
-interface HomeSettings { primaryRegion: string; fallbackRegion: string; shelfLimit: number; recentlyReleasedDays: number; defaultMaxItems: number }
+interface HomeSettings { primaryRegion: string; fallbackRegion: string; shelfLimit: number; recentlyReleasedDays: number; backfillRecentReleases: boolean; recentlyReleasedBackfillDays: number; defaultMaxItems: number }
 interface HomeResponse { settings: HomeSettings; shelves: Shelf[] }
 interface ShelfItem {
     id: string; title: string; year: number | null; posterPath: string | null; mediaType: "MOVIE" | "SHOW";
@@ -129,7 +129,7 @@ export default function PlexHomePage() {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
-    const [settings, setSettings] = useState<HomeSettings>({ primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, defaultMaxItems: 20 });
+    const [settings, setSettings] = useState<HomeSettings>({ primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, backfillRecentReleases: true, recentlyReleasedBackfillDays: 365, defaultMaxItems: 20 });
     const [setup, setSetup] = useState({ movieSectionId: "", showSectionId: "", providers: ["Netflix", "Disney+", "Prime Video", "Apple TV+"] });
 
     useEffect(() => { if (data?.data.settings) setSettings(data.data.settings); }, [data]);
@@ -199,13 +199,15 @@ export default function PlexHomePage() {
 
         {settingsOpen && <section className="rounded-xl border border-gray-700 bg-gray-900 p-5">
             <div className="mb-4"><h2 className="font-semibold text-white">Home behavior</h2><p className="text-xs text-gray-400">These settings apply to every managed shelf.</p></div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="text-xs text-gray-400">Primary region<select value={settings.primaryRegion} onChange={(e) => { const primaryRegion = e.target.value; setSettings({ ...settings, primaryRegion, fallbackRegion: primaryRegion === "CA" ? "US" : "CA" }); }} className={`${INPUT} mt-1`}><option>CA</option><option>US</option></select></label>
                 <label className="text-xs text-gray-400">Fallback region<select value={settings.fallbackRegion} onChange={(e) => setSettings({ ...settings, fallbackRegion: e.target.value })} className={`${INPUT} mt-1`}><option disabled value={settings.primaryRegion}>{settings.primaryRegion}</option><option value={settings.primaryRegion === "CA" ? "US" : "CA"}>{settings.primaryRegion === "CA" ? "US" : "CA"}</option></select></label>
                 <label className="text-xs text-gray-400">Home shelf limit<input type="number" min={0} max={20} value={settings.shelfLimit} onChange={(e) => setSettings({ ...settings, shelfLimit: Number(e.target.value) })} className={`${INPUT} mt-1`} /></label>
                 <label className="text-xs text-gray-400">Recent movie window<input type="number" min={1} max={365} value={settings.recentlyReleasedDays} onChange={(e) => setSettings({ ...settings, recentlyReleasedDays: Number(e.target.value) })} className={`${INPUT} mt-1`} /></label>
+                <label className="text-xs text-gray-400">Backfill lookback<input type="number" min={settings.recentlyReleasedDays} max={730} disabled={!settings.backfillRecentReleases} value={settings.recentlyReleasedBackfillDays} onChange={(e) => setSettings({ ...settings, recentlyReleasedBackfillDays: Number(e.target.value) })} className={`${INPUT} mt-1 disabled:opacity-40`} /></label>
                 <label className="text-xs text-gray-400">Default items<input type="number" min={1} max={100} value={settings.defaultMaxItems} onChange={(e) => setSettings({ ...settings, defaultMaxItems: Number(e.target.value) })} className={`${INPUT} mt-1`} /></label>
-            </div><div className="mt-4 flex justify-end"><button onClick={saveSettings} disabled={busy === "settings"} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-gray-950">Save settings</button></div>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><Toggle checked={settings.backfillRecentReleases} label="Backfill recent releases to keep the shelf full" onChange={(checked) => setSettings({ ...settings, backfillRecentReleases: checked })} /><button onClick={saveSettings} disabled={busy === "settings"} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-gray-950">Save settings</button></div>
         </section>}
 
         {setupOpen && <section className="rounded-xl border border-brand-500/30 bg-gray-900 p-5">

@@ -6,7 +6,7 @@ import { validateBody } from "../middleware/validation";
 
 export const plexRouter = Router();
 
-const DEFAULT_HOME_SETTINGS = { primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, defaultMaxItems: 20 };
+const DEFAULT_HOME_SETTINGS = { primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, backfillRecentReleases: true, recentlyReleasedBackfillDays: 365, defaultMaxItems: 20 };
 
 plexRouter.get("/home", asyncHandler(async (_req, res) => {
     const setting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
@@ -17,12 +17,15 @@ plexRouter.get("/home", asyncHandler(async (_req, res) => {
 const homeSettingsSchema = z.object({
     primaryRegion: z.string().length(2).default("CA"), fallbackRegion: z.string().length(2).default("US"),
     shelfLimit: z.number().int().min(0).max(20).default(6), recentlyReleasedDays: z.number().int().min(1).max(365).default(90),
+    backfillRecentReleases: z.boolean().default(true), recentlyReleasedBackfillDays: z.number().int().min(1).max(730).default(365),
     defaultMaxItems: z.number().int().min(1).max(100).default(20),
 });
 plexRouter.patch("/home/settings", validateBody(homeSettingsSchema), asyncHandler(async (req, res) => {
     const body = req.body as z.infer<typeof homeSettingsSchema>;
+    const current = await prisma.appSetting.findUnique({ where: { key: "plexHome" }, select: { value: true } });
+    const value = { ...((current?.value ?? {}) as object), ...body };
     const [setting] = await prisma.$transaction([
-        prisma.appSetting.upsert({ where: { key: "plexHome" }, update: { value: body }, create: { key: "plexHome", value: body, category: "plex" } }),
+        prisma.appSetting.upsert({ where: { key: "plexHome" }, update: { value }, create: { key: "plexHome", value, category: "plex" } }),
         prisma.plexCollection.updateMany({ where: { shelfType: "RECENTLY_RELEASED" }, data: { releaseWindowDays: body.recentlyReleasedDays } }),
     ]);
     res.json({ success: true, data: setting.value });
