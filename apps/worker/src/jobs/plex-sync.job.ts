@@ -2,7 +2,7 @@ import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
-import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, rankProviderHistory, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
+import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, passesAutoRequestDiscoveryFilters, rankProviderHistory, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
 import { submitRequest } from "../services/request.service";
 
 const logger = createLogger("plex-sync-job");
@@ -383,15 +383,27 @@ async function resolveAutoRequestIds(collection: {
 
 async function filterAutoRequestCandidates(candidateIds: string[]): Promise<string[]> {
     const uniqueIds = [...new Set(candidateIds)];
+    const filterSetting = await prisma.appSetting.findUnique({ where: { key: "discovery.filters" } });
+    const filters = (filterSetting?.value ?? {}) as { excludeAnime?: boolean; excludedGenres?: string[]; minimumPopularity?: number };
     const titles = await prisma.title.findMany({
         where: { id: { in: uniqueIds } },
         select: {
-            id: true, mediaType: true, releaseDate: true,
+            id: true, mediaType: true, releaseDate: true, genres: true,
+            trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 8, select: { rawMetadata: true } },
         },
     });
     const eligible = new Set(titles.filter((title) => {
-        if (title.mediaType !== "SHOW") return true;
-        return isAutoRequestEligibleShow(title.releaseDate, new Date(), 730);
+        if (title.mediaType === "SHOW" && !isAutoRequestEligibleShow(title.releaseDate, new Date(), 730)) return false;
+        const metadata = title.trendSnapshots.map((snapshot) => snapshot.rawMetadata as Record<string, unknown>);
+        const originalLanguage = metadata.map((raw) => raw.originalLanguage ?? raw.original_language)
+            .find((value): value is string => typeof value === "string");
+        const originCountries = metadata.flatMap((raw) => {
+            const value = raw.originCountries ?? raw.originCountry ?? raw.origin_country;
+            return Array.isArray(value) ? value.filter((country): country is string => typeof country === "string") : [];
+        });
+        const popularity = metadata.map((raw) => raw.popularity)
+            .find((value): value is number => typeof value === "number");
+        return passesAutoRequestDiscoveryFilters({ genres: title.genres, originalLanguage, originCountries, popularity }, filters);
     }).map((title) => title.id));
     return uniqueIds.filter((id) => eligible.has(id));
 }

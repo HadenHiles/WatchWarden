@@ -194,3 +194,39 @@ export function isAutoRequestEligibleShow(
         && !Number.isNaN(firstAirDate.getTime())
         && firstAirDate >= cutoff;
 }
+
+export interface AutoRequestDiscoveryCandidate {
+    genres: string[];
+    originalLanguage?: string | null;
+    originCountries?: string[] | null;
+    popularity?: number | null;
+}
+
+export interface AutoRequestDiscoveryFilters {
+    excludeAnime?: boolean;
+    excludedGenres?: string[];
+    minimumPopularity?: number;
+}
+
+/** Enforces the saved discovery exclusions at the final auto-request boundary. */
+export function passesAutoRequestDiscoveryFilters(
+    candidate: AutoRequestDiscoveryCandidate,
+    filters: AutoRequestDiscoveryFilters,
+): boolean {
+    // Missing genre metadata cannot prove that a title satisfies the user's
+    // exclusions. Keep it off the automatic path until a later sync enriches it.
+    if (candidate.genres.length === 0) return false;
+
+    if ((filters.minimumPopularity ?? 0) > 0
+        && (typeof candidate.popularity !== "number" || candidate.popularity < filters.minimumPopularity!)) return false;
+
+    const excluded = new Set((filters.excludedGenres ?? []).map((genre) => genre.toLocaleLowerCase()));
+    if (candidate.genres.some((genre) => excluded.has(genre.toLocaleLowerCase()))) return false;
+
+    const japanese = candidate.originalLanguage === "ja"
+        || (candidate.originCountries ?? []).some((country) => country.toLocaleUpperCase() === "JP");
+    const animated = candidate.genres.some((genre) => genre.toLocaleLowerCase() === "animation");
+    if (filters.excludeAnime === true && japanese && animated) return false;
+
+    return true;
+}

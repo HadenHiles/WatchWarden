@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, isRecentlyReleased, rankProviderHistory, resolvePlatformSnapshots, selectStreamingEditorialTitles, selectPublishedShelfIds } from "../shelf-ranking";
+import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, isRecentlyReleased, passesAutoRequestDiscoveryFilters, rankProviderHistory, resolvePlatformSnapshots, selectStreamingEditorialTitles, selectPublishedShelfIds } from "../shelf-ranking";
 
 describe("shelf ranking", () => {
     const now = new Date("2026-08-13T12:00:00Z");
@@ -64,5 +64,13 @@ describe("shelf ranking", () => {
         expect(isAutoRequestEligibleShow(new Date("2024-09-01"), now)).toBe(true);
         expect(isAutoRequestEligibleShow(new Date("1992-01-01"), now)).toBe(false);
         expect(isAutoRequestEligibleShow(null, now)).toBe(false);
+    });
+    it("enforces saved discovery exclusions before auto-requesting", () => {
+        const filters = { excludeAnime: true, excludedGenres: ["Horror", "Animation"], minimumPopularity: 20 };
+        expect(passesAutoRequestDiscoveryFilters({ genres: ["Drama"], popularity: 40 }, filters)).toBe(true);
+        expect(passesAutoRequestDiscoveryFilters({ genres: ["Horror"], popularity: 40 }, filters)).toBe(false);
+        expect(passesAutoRequestDiscoveryFilters({ genres: ["Animation"], originalLanguage: "ja", popularity: 40 }, filters)).toBe(false);
+        expect(passesAutoRequestDiscoveryFilters({ genres: ["Drama"], popularity: 10 }, filters)).toBe(false);
+        expect(passesAutoRequestDiscoveryFilters({ genres: [], popularity: 40 }, filters)).toBe(false);
     });
 });
