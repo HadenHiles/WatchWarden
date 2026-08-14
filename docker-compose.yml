@@ -89,6 +89,11 @@ services:
       - "3000:3000"
     depends_on:
       - api
+    networks:
+      default:
+      famflix_media_net:
+        aliases:
+          - watchwarden
     healthcheck:
       test: [ "CMD", "node", "-e", "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" ]
       interval: 30s
@@ -99,3 +104,7 @@ services:
 volumes:
   postgres_data:
   exports_data:
+
+networks:
+  famflix_media_net:
+    external: true
