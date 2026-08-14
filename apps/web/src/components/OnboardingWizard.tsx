@@ -11,6 +11,12 @@ interface PlexForm {
     token: string;
 }
 
+interface AdminForm {
+    username: string;
+    password: string;
+    confirmPassword: string;
+}
+
 interface TautulliForm {
     baseUrl: string;
     apiKey: string;
@@ -48,11 +54,12 @@ interface TestStatus {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const STEPS = ["welcome", "plex", "tautulli", "jellyseerr", "sources", "schedules", "done"] as const;
+const STEPS = ["welcome", "admin", "plex", "tautulli", "jellyseerr", "sources", "schedules", "done"] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
     welcome: "Welcome",
+    admin: "Admin",
     plex: "Plex",
     tautulli: "Tautulli",
     jellyseerr: "Jellyseerr",
@@ -172,6 +179,8 @@ export function OnboardingWizard() {
     const [stepIdx, setStepIdx] = useState(0);
     const currentStep = STEPS[stepIdx];
 
+    const [admin, setAdmin] = useState<AdminForm>({ username: "admin", password: "", confirmPassword: "" });
+
     const [plex, setPlex] = useState<PlexForm>({ baseUrl: "", token: "" });
     const [plexTest, setPlexTest] = useState<TestStatus>({ state: null, message: "" });
 
@@ -188,12 +197,29 @@ export function OnboardingWizard() {
     const [submitError, setSubmitError] = useState<string | null>(null);
 
     async function handleNext() {
+        if (currentStep === "admin") {
+            if (admin.username.trim().length < 3) {
+                setSubmitError("Username must be at least 3 characters");
+                return;
+            }
+            if (admin.password.length < 8) {
+                setSubmitError("Password must be at least 8 characters");
+                return;
+            }
+            if (admin.password !== admin.confirmPassword) {
+                setSubmitError("Passwords do not match");
+                return;
+            }
+            setSubmitError(null);
+        }
+
         if (currentStep === "schedules") {
             // Final step — submit everything at once
             setSaving(true);
             setSubmitError(null);
             try {
                 const payload = {
+                    admin: { username: admin.username.trim(), password: admin.password },
                     ...(plex.baseUrl || plex.token ? { plex } : {}),
                     ...(tautulli.baseUrl || tautulli.apiKey ? { tautulli } : {}),
                     ...(jellyseerr.baseUrl || jellyseerr.apiKey
@@ -228,7 +254,7 @@ export function OnboardingWizard() {
         }
 
         if (currentStep === "done") {
-            router.push("/dashboard/suggestions/movies");
+            router.push("/login?setup=complete");
             return;
         }
 
@@ -253,7 +279,7 @@ export function OnboardingWizard() {
         setJellyseerrTest({ state: result.success ? "ok" : "fail", message: result.message ?? "" });
     }
 
-    const configSteps = (["plex", "tautulli", "jellyseerr", "sources", "schedules"] as const).map(
+    const configSteps = (["admin", "plex", "tautulli", "jellyseerr", "sources", "schedules"] as const).map(
         (s) => STEP_LABELS[s],
     );
     const currentConfigIdx = configSteps.indexOf(STEP_LABELS[currentStep]);
@@ -307,6 +333,7 @@ export function OnboardingWizard() {
                             </p>
                             <ul className="space-y-2.5 mb-6">
                                 {[
+                                    { label: "Admin account", desc: "Create the credentials you will use to sign in" },
                                     { label: "Plex", desc: "Direct connection to manage collections on your server", highlight: true },
                                     { label: "Tautulli", desc: "Local watch history & engagement signals" },
                                     { label: "Jellyseerr", desc: "Automated media requests for approved titles" },
@@ -338,6 +365,47 @@ export function OnboardingWizard() {
                                 Get Started
                                 <ChevronRight className="w-4 h-4" />
                             </button>
+                        </>
+                    )}
+
+                    {/* ── Administrator ──────────────────────────────────── */}
+                    {currentStep === "admin" && (
+                        <>
+                            <h2 className="text-xl font-bold text-white mb-1">Create your admin account</h2>
+                            <p className="text-gray-400 text-sm mb-5 leading-relaxed">
+                                These credentials protect WatchWarden. They are stored as a secure password hash,
+                                and can be changed later from Settings.
+                            </p>
+                            <div className="space-y-4">
+                                <Field label="Username">
+                                    <input
+                                        type="text"
+                                        autoComplete="username"
+                                        value={admin.username}
+                                        onChange={(e) => setAdmin((f) => ({ ...f, username: e.target.value }))}
+                                        className={INPUT_CLS}
+                                    />
+                                </Field>
+                                <Field label="Password" hint="Use at least 8 characters.">
+                                    <input
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={admin.password}
+                                        onChange={(e) => setAdmin((f) => ({ ...f, password: e.target.value }))}
+                                        className={INPUT_CLS}
+                                    />
+                                </Field>
+                                <Field label="Confirm password">
+                                    <input
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={admin.confirmPassword}
+                                        onChange={(e) => setAdmin((f) => ({ ...f, confirmPassword: e.target.value }))}
+                                        className={INPUT_CLS}
+                                    />
+                                </Field>
+                                {submitError && <p className="text-sm text-red-400">{submitError}</p>}
+                            </div>
                         </>
                     )}
 
@@ -581,8 +649,8 @@ export function OnboardingWizard() {
                                 You&#39;re all set!
                             </h2>
                             <p className="text-gray-400 text-sm text-center mb-4 leading-relaxed">
-                                WatchWarden is ready. Head to the dashboard to create your first Plex
-                                collection — then watch it fill up as data syncs in the background.
+                                WatchWarden is ready. Sign in with the admin account you just created,
+                                then connect any remaining services from Settings.
                             </p>
                             <div className="rounded-lg border border-brand-700/40 bg-brand-900/20 p-3 text-xs text-brand-300 mb-6 leading-relaxed space-y-1">
                                 <p className="font-semibold text-brand-200">Next steps:</p>
@@ -614,7 +682,7 @@ export function OnboardingWizard() {
                                 {saving ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : currentStep === "done" ? (
-                                    "Go to Dashboard"
+                                    "Continue to Sign In"
                                 ) : currentStep === "schedules" ? (
                                     <>
                                         Finish Setup

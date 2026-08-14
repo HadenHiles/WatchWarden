@@ -3,6 +3,7 @@ import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import type { ApiEnv } from "@watchwarden/config";
 import { createLogger } from "@watchwarden/config";
 import { errorHandler } from "./middleware/error";
@@ -12,6 +13,12 @@ const logger = createLogger("api-app");
 
 export function createApp(env: ApiEnv) {
     const app = express();
+
+    if (env.NODE_ENV === "production") {
+        // Cloudflare / reverse proxies terminate TLS before forwarding to Express.
+        // Trust the first proxy so secure session cookies are issued correctly.
+        app.set("trust proxy", 1);
+    }
 
     // ── Security headers ───────────────────────────────────────────────────────
     app.use(helmet());
@@ -44,9 +51,13 @@ export function createApp(env: ApiEnv) {
     }
 
     // ── Session ────────────────────────────────────────────────────────────────
-    // Simple in-memory store for v1.  In a scaled deployment, swap for connect-pg-simple.
+    const PostgresSessionStore = connectPgSimple(session);
     app.use(
         session({
+            store: new PostgresSessionStore({
+                conString: env.DATABASE_URL,
+                createTableIfMissing: true,
+            }),
             secret: env.SESSION_SECRET,
             resave: false,
             saveUninitialized: false,

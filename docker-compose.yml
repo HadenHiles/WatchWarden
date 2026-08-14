@@ -32,11 +32,14 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: watchwarden-api
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://watchwarden:${POSTGRES_PASSWORD:-watchwarden}@postgres:5432/watchwarden
       NODE_ENV: production
       SESSION_SECRET: ${SESSION_SECRET:-}
       API_SECRET: ${API_SECRET:-}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       EXPORT_OUTPUT_DIR: /app/exports
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
@@ -61,6 +64,8 @@ services:
       dockerfile: apps/worker/Dockerfile
     container_name: watchwarden-worker
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://watchwarden:${POSTGRES_PASSWORD:-watchwarden}@postgres:5432/watchwarden
       NODE_ENV: production
@@ -79,11 +84,17 @@ services:
       dockerfile: apps/web/Dockerfile
     container_name: watchwarden-web
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       HOSTNAME: 0.0.0.0
+      PORT: 3000
       API_URL: http://api:4000
       API_SECRET: ${API_SECRET:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Watch Warden}
+      NEXT_PUBLIC_JELLYSEERR_URL: ${NEXT_PUBLIC_JELLYSEERR_URL:-}
+      DOCKER_UPDATE_IMAGE: ${DOCKER_UPDATE_IMAGE:-hadenhiles/watchwarden}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     ports:
       - "3000:3000"

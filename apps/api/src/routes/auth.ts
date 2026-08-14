@@ -11,6 +11,22 @@ const loginSchema = z.object({
     password: z.string().min(1),
 });
 
+const setupSchema = z.object({
+    admin: z.object({
+        username: z.string().trim().min(3, "Username must be at least 3 characters").max(64),
+        password: z.string().min(8, "Password must be at least 8 characters").max(128),
+    }),
+    tautulli: z.object({ baseUrl: z.string().optional(), apiKey: z.string().optional() }).optional(),
+    jellyseerr: z.object({
+        baseUrl: z.string().optional(),
+        apiKey: z.string().optional(),
+        botUserId: z.number().int().positive().optional(),
+    }).optional(),
+    sources: z.object({ tmdbApiKey: z.string().optional(), traktClientId: z.string().optional() }).optional(),
+    plex: z.object({ baseUrl: z.string().optional(), token: z.string().optional() }).optional(),
+    refreshIntervals: z.record(z.string()).optional(),
+});
+
 /** Verifies the Authorization: Bearer <API_SECRET> header. */
 function hasApiSecret(req: Request): boolean {
     const token = req.headers.authorization?.startsWith("Bearer ")
@@ -55,20 +71,34 @@ export function authRouter(env: ApiEnv) {
             return res.status(409).json({ success: false, error: "Setup is already complete" });
         }
 
-        const { admin, tautulli, jellyseerr, sources, plex, refreshIntervals } = req.body as {
-            admin?: { username?: string; password?: string };
-            tautulli?: { baseUrl?: string; apiKey?: string };
-            jellyseerr?: { baseUrl?: string; apiKey?: string; botUserId?: number };
-            sources?: { tmdbApiKey?: string; traktClientId?: string };
-            plex?: { baseUrl?: string; token?: string };
-            refreshIntervals?: Record<string, string>;
-        };
+        const parsed = setupSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return res.status(400).json({
+                success: false,
+                error: parsed.error.issues[0]?.message ?? "Invalid setup details",
+            });
+        }
+
+        const { admin, tautulli, jellyseerr, sources, plex, refreshIntervals } = parsed.data;
 
         type UpsertArg = Parameters<typeof prisma.appSetting.upsert>[0];
         const writes: UpsertArg[] = [];
 
-        // Admin credentials are now handled via POST /auth/change-password — ignore if sent
-        void admin;
+        const passwordHash = await bcrypt.hash(admin.password, 12);
+        writes.push({
+            where: { key: "admin.credentials" },
+            update: { value: { username: admin.username, passwordHash } },
+            create: {
+                key: "admin.credentials",
+                value: { username: admin.username, passwordHash },
+                category: "system",
+            },
+        });
+        writes.push({
+            where: { key: "password.changed" },
+            update: { value: true as unknown as object },
+            create: { key: "password.changed", value: true as unknown as object, category: "system" },
+        });
 
         if (tautulli?.baseUrl || tautulli?.apiKey) {
             writes.push({
