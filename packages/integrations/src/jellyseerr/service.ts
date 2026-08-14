@@ -199,7 +199,9 @@ export class JellyseerrService {
                 enabled: true,
             };
         });
-        return this.client.saveDiscoverSliders([...preserved, ...desired]);
+        await this.client.saveDiscoverSliders([...preserved, ...desired]);
+        // The save response echoes the submitted payload and may omit generated IDs.
+        return this.client.getDiscoverSliders();
     }
 
     /** Remove a discover slider from Jellyseerr by its ID */
