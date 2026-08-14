@@ -326,8 +326,15 @@ export async function plexSyncJob(): Promise<void> {
     const client = new PlexClient({ baseUrl: plex.baseUrl, token: plex.token });
     const service = new PlexService(client);
     const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
-    const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string };
+    const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string; manageRecommendations?: boolean };
     const publishedIds = new Set(selectPublishedShelfIds(collections, homeConfig.shelfLimit ?? 6));
+
+    if (homeConfig.manageRecommendations === true) {
+        for (const sectionId of new Set(collections.filter((item) => item.enabled).map((item) => item.sectionId))) {
+            const suppressed = await client.suppressBuiltInRecommendations(sectionId);
+            logger.info("WatchWarden recommendation management applied", { sectionId, suppressed });
+        }
+    }
 
     const automationSetting = await prisma.appSetting.findUnique({ where: { key: "automation.roster" } });
     const automation = (automationSetting?.value ?? {}) as { enabled?: boolean; maxNewRequestsPerRun?: number };

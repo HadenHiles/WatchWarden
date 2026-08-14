@@ -375,6 +375,31 @@ export class PlexClient {
         }
     }
 
+    /** Demote built-in recommendation rows while preserving resume playback. */
+    async suppressBuiltInRecommendations(sectionId: string): Promise<number> {
+        try {
+            const managed = await this.http.get<{
+                MediaContainer: { Hub?: Array<{ identifier: string; title?: string }> };
+            }>(`/hubs/sections/${sectionId}/manage`);
+            const builtIns = (managed.data.MediaContainer.Hub ?? []).filter((hub) =>
+                !hub.identifier.includes("custom.collection")
+                && !/continue watching/i.test(hub.title ?? "")
+            );
+            for (const hub of builtIns) {
+                await this.http.put(`/hubs/sections/${sectionId}/manage/${hub.identifier}`, null, {
+                    params: {
+                        promotedToRecommended: 0,
+                        promotedToOwnHome: 0,
+                        promotedToSharedHome: 0,
+                    },
+                });
+            }
+            return builtIns.length;
+        } catch (err) {
+            this.handleError(`suppressBuiltInRecommendations(${sectionId})`, err);
+        }
+    }
+
     // ── GUID helpers ──────────────────────────────────────────────────────────
 
     /**

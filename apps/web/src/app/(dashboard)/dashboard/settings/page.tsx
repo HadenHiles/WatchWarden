@@ -69,6 +69,7 @@ const KNOWN_SETTINGS: SettingSection[] = [
         keys: [
             { key: "plex", subKey: "baseUrl", label: "Server URL", type: "url", placeholder: "http://192.168.8.3:32400" },
             { key: "plex", subKey: "token", label: "Plex Token", type: "password", placeholder: "xxxxxxxxxxxxxxxxxxxx" },
+            { key: "plexHome", subKey: "manageRecommendations", label: "Allow WatchWarden to manage recommendations", type: "boolean", hint: "Disables overlapping built-in rows in managed libraries; preserves Continue Watching" },
         ],
     },
     {
