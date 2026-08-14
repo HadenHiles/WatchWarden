@@ -10,7 +10,7 @@ async function isSetupComplete(): Promise<boolean> {
             `${process.env.API_URL ?? "http://localhost:4000"}/auth/setup-status`,
             {
                 headers: { Authorization: `Bearer ${process.env.API_SECRET ?? ""}` },
-                next: { revalidate: 300 }, // cache for 5 min — setup status is stable once complete
+                cache: "no-store",
                 signal: controller.signal,
             },
         );
@@ -24,12 +24,11 @@ async function isSetupComplete(): Promise<boolean> {
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-    const session = await requireAuth();
-
-    if (session.needsPasswordChange) redirect("/change-password");
-
     const setupDone = await isSetupComplete();
     if (!setupDone) redirect("/onboarding");
+
+    const session = await requireAuth();
+    if (session.needsPasswordChange) redirect("/change-password");
 
     return <DashboardShell>{children}</DashboardShell>;
 }
