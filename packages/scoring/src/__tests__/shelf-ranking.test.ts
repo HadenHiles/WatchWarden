@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { culturalHeat, diversifyShelf, isRecentlyReleased, rankProviderHistory, resolvePlatformSnapshots, selectStreamingEditorialTitles, selectPublishedShelfIds } from "../shelf-ranking";
+import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, isRecentlyReleased, rankProviderHistory, resolvePlatformSnapshots, selectStreamingEditorialTitles, selectPublishedShelfIds } from "../shelf-ranking";
 
 describe("shelf ranking", () => {
     const now = new Date("2026-08-13T12:00:00Z");
@@ -58,5 +58,11 @@ describe("shelf ranking", () => {
         expect(isRecentlyReleased(new Date("2026-06-01"), now, 90)).toBe(true);
         expect(isRecentlyReleased(new Date("2026-01-01"), now, 90)).toBe(false);
         expect(isRecentlyReleased(null, now, 90)).toBe(false);
+    });
+    it("only auto-requests shows that premiered recently", () => {
+        expect(isAutoRequestEligibleShow(new Date("2026-01-01"), now)).toBe(true);
+        expect(isAutoRequestEligibleShow(new Date("2024-09-01"), now)).toBe(true);
+        expect(isAutoRequestEligibleShow(new Date("1992-01-01"), now)).toBe(false);
+        expect(isAutoRequestEligibleShow(null, now)).toBe(false);
     });
 });

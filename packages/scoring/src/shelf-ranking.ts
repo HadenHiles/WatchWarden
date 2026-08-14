@@ -182,3 +182,15 @@ export function isRecentlyReleased(releaseDate: Date | null, now: Date, windowDa
     const age = now.getTime() - releaseDate.getTime();
     return age >= 0 && age <= Math.max(1, windowDays) * 86_400_000;
 }
+
+/** Auto-request only young series; older shows remain explicit user requests. */
+export function isAutoRequestEligibleShow(
+    firstAirDate: Date | null,
+    now: Date,
+    windowDays = 730,
+): boolean {
+    const cutoff = new Date(now.getTime() - Math.max(1, windowDays) * 86_400_000);
+    return firstAirDate instanceof Date
+        && !Number.isNaN(firstAirDate.getTime())
+        && firstAirDate >= cutoff;
+}

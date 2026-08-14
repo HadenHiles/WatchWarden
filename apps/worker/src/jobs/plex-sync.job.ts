@@ -2,7 +2,7 @@ import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
-import { culturalHeat, diversifyShelf, rankProviderHistory, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
+import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, rankProviderHistory, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
 import { submitRequest } from "../services/request.service";
 
 const logger = createLogger("plex-sync-job");
@@ -381,10 +381,25 @@ async function resolveAutoRequestIds(collection: {
     return suggestions.map((suggestion) => suggestion.titleId);
 }
 
+async function filterAutoRequestCandidates(candidateIds: string[]): Promise<string[]> {
+    const uniqueIds = [...new Set(candidateIds)];
+    const titles = await prisma.title.findMany({
+        where: { id: { in: uniqueIds } },
+        select: {
+            id: true, mediaType: true, releaseDate: true,
+        },
+    });
+    const eligible = new Set(titles.filter((title) => {
+        if (title.mediaType !== "SHOW") return true;
+        return isAutoRequestEligibleShow(title.releaseDate, new Date(), 730);
+    }).map((title) => title.id));
+    return uniqueIds.filter((id) => eligible.has(id));
+}
+
 /**
  * Syncs all enabled PlexCollection rows to the actual Plex server.
- * WatchWarden manages collections for "Top 10 on Platform" visibility only —
- * it never auto-requests or downloads media through this job.
+ * Syncs managed collections and, when explicitly enabled, evaluates the
+ * auto-request roster before publishing Plex Home shelves.
  */
 export async function plexSyncJob(): Promise<void> {
     const { plex } = await getIntegrationConfig();
@@ -432,7 +447,7 @@ export async function plexSyncJob(): Promise<void> {
         for (const collection of collections.filter((item) => item.enabled && item.autoRequest)) {
             candidateLists.push(await resolveAutoRequestIds(collection));
         }
-        const candidates = interleave(candidateLists);
+        const candidates = await filterAutoRequestCandidates(interleave(candidateLists));
         const cap = Math.max(0, Math.min(20, automation.maxNewRequestsPerRun ?? 5));
         for (const titleId of [...new Set(candidates)].slice(0, cap)) await submitRequest(titleId);
         logger.info("Auto-request roster evaluated", { candidates: new Set(candidates).size, requestCap: cap });
