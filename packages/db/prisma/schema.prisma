@@ -18,6 +18,14 @@ enum MediaType {
   SHOW
 }
 
+enum PlexShelfType {
+  CULTURAL_TRENDING
+  PROVIDER_TRENDING
+  RECENTLY_RELEASED
+  SMART
+  CUSTOM
+}
+
 // Canonical lifecycle status for a title.
 // See state machine in packages/types/src/media.ts
 enum TitleStatus {
@@ -92,6 +100,7 @@ model Title {
   originalTitle String?
   mediaType     MediaType
   year          Int?
+  releaseDate   DateTime?
   overview      String?   @db.Text
   posterPath    String?
   backdropPath  String?
@@ -271,6 +280,14 @@ model PlexCollection {
   streamingProviders String[] // e.g. ["Netflix", "Disney+"] — for TOP_TRENDING only
   // For TOP_TRENDING: max items per provider (total = maxItemsPerProvider * providers.length)
   maxItemsPerProvider Int     @default(10)
+  shelfType         PlexShelfType @default(CUSTOM)
+  provider          String?
+  publishToHome     Boolean   @default(false)
+  publishToSharedHome Boolean @default(false)
+  autoPublish       Boolean   @default(false)
+  homePriority      Int       @default(100)
+  maxItems          Int       @default(20)
+  releaseWindowDays Int       @default(90)
   enabled           Boolean   @default(true)
   lastSyncAt        DateTime?
   itemCount         Int       @default(0)

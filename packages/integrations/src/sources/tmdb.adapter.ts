@@ -91,6 +91,7 @@ export class TmdbTrendingAdapter implements SourceAdapter {
             originalTitle: (isMovie ? item.original_title : item.original_name) ?? null,
             mediaType: isMovie ? "MOVIE" : "SHOW",
             year: isNaN(year!) ? null : year,
+            releaseDate: rawYear || null,
             overview: item.overview ?? null,
             // Store only the raw path fragment from TMDB (e.g. "/abc123.jpg").
             // Consumers are responsible for prepending the desired image base URL.

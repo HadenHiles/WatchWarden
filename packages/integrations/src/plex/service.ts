@@ -44,20 +44,8 @@ export class PlexService {
         const targetSet = new Set(targetRatingKeys);
         let collectionKey = existingCollectionKey ?? null;
 
-        // ── Resolve existing collection ────────────────────────────────────────
-        if (!collectionKey) {
-            const existing = await this.client.getCollections(sectionId);
-            const match = existing.find(
-                (c) => c.title.toLowerCase() === collectionName.toLowerCase()
-            );
-            if (match) {
-                collectionKey = match.ratingKey;
-                logger.info("Found existing Plex collection", {
-                    title: collectionName,
-                    ratingKey: collectionKey,
-                });
-            }
-        }
+        // Never adopt an untracked collection by title. A persisted ratingKey is
+        // WatchWarden's ownership boundary; similarly named user collections are untouched.
 
         // ── No items to sync ───────────────────────────────────────────────────
         if (targetRatingKeys.length === 0) {
@@ -137,5 +125,19 @@ export class PlexService {
             removed: toRemove.length,
             unchanged,
         };
+    }
+    async syncCollectionRecommendation(params: {
+        sectionId: string;
+        collectionId: string;
+        publishToHome: boolean;
+        publishToSharedHome: boolean;
+    }): Promise<boolean> {
+        const current = (await this.client.getCollections(params.sectionId)).find((c) => c.ratingKey === params.collectionId);
+        if (current
+            && current.promotedToOwnHome === params.publishToHome
+            && current.promotedToSharedHome === params.publishToSharedHome
+            && current.promotedToRecommended === (params.publishToHome || params.publishToSharedHome)) return false;
+        await this.client.setCollectionRecommendation(params);
+        return true;
     }
 }

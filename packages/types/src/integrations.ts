@@ -171,6 +171,7 @@ export interface SourceTrendItem {
     originalTitle: string | null;
     mediaType: "MOVIE" | "SHOW";
     year: number | null;
+    releaseDate?: string | null;
     overview: string | null;
     posterPath: string | null;
     backdropPath: string | null;

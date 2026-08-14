@@ -120,6 +120,8 @@ export class TmdbProviderDiscoveryAdapter implements SourceAdapter {
                             language: "en-US",
                             sort_by: "popularity.desc",
                             with_watch_providers: this.tmdbProviderId,
+                            // Shelves represent subscription availability, never rent/buy.
+                            with_watch_monetization_types: "flatrate",
                             watch_region: this.region,
                             page,
                         },
@@ -160,6 +162,7 @@ export class TmdbProviderDiscoveryAdapter implements SourceAdapter {
             originalTitle: (isMovie ? item.original_title : item.original_name) ?? null,
             mediaType: isMovie ? "MOVIE" : "SHOW",
             year: isNaN(year!) ? null : year,
+            releaseDate: rawYear || null,
             overview: item.overview ?? null,
             posterPath: item.poster_path ?? null,
             backdropPath: item.backdrop_path ?? null,

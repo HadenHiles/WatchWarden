@@ -46,7 +46,15 @@ interface PlexCollection {
     autoRequest: boolean;
     lastSyncAt: string | null;
     itemCount: number;
+    shelfType: "CULTURAL_TRENDING" | "PROVIDER_TRENDING" | "RECENTLY_RELEASED" | "SMART" | "CUSTOM";
+    provider: string | null;
+    publishToHome: boolean;
+    publishToSharedHome: boolean;
+    homePriority: number;
+    maxItems: number;
 }
+
+interface PlexHomeData { settings: { shelfLimit: number; primaryRegion: string; fallbackRegion: string; recentlyReleasedDays: number; defaultMaxItems: number }; shelves: PlexCollection[] }
 
 const FILTER_LABELS: Record<string, string> = {
     ACTIVE_TRENDING: "Active & Trending",
@@ -372,6 +380,7 @@ export default function PlexCollectionsPage() {
         apiUrl("/plex/sections"),
         fetcher
     );
+    const { data: homeData, mutate: mutateHome } = useSWR<{ data: PlexHomeData }>(apiUrl("/plex/home"), fetcher);
 
     const collections = collectionsData?.data ?? [];
     const sections = sectionsData?.data ?? [];
@@ -469,6 +478,18 @@ export default function PlexCollectionsPage() {
         await mutate();
     }
 
+    async function patchShelf(collection: PlexCollection, patch: Record<string, unknown>) {
+        await fetch(apiUrl(`/plex/collections/${collection.id}`), { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(patch) });
+        await Promise.all([mutate(), mutateHome()]);
+    }
+
+    async function setupDefaultShelves() {
+        const movie = movieSections[0]?.key; const show = showSections[0]?.key;
+        if (!movie || !show) return;
+        await fetch(apiUrl("/plex/home/setup"), { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ movieSectionId: movie, showSectionId: show, providers: ["Netflix", "Disney+", "Prime Video", "Apple TV+"] }) });
+        await Promise.all([mutate(), mutateHome()]);
+    }
+
     async function handleDelete(collection: PlexCollection) {
         if (!confirm(`Remove "${collection.name}" from WatchWarden? This will NOT delete the collection from Plex.`)) return;
         await fetch(apiUrl(`/plex/collections/${collection.id}`), {
@@ -562,9 +583,9 @@ export default function PlexCollectionsPage() {
                         <Clapperboard className="w-4.5 h-4.5 text-brand-400" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-white">Plex Collections</h1>
+                        <h1 className="text-xl font-bold text-white">Plex Home Curation</h1>
                         <p className="text-xs text-gray-500 mt-0.5">
-                            Automated collections synced directly to your Plex server
+                            Build useful discovery shelves from titles already on your server
                         </p>
                     </div>
                 </div>
@@ -605,6 +626,26 @@ export default function PlexCollectionsPage() {
                     </span>
                 </div>
             )}
+
+            <section className="rounded-xl border border-gray-700/60 bg-gray-900/50 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-semibold text-white">Your Plex Home</h2>
+                        <p className="text-xs text-gray-500">Canada first, US fallback · up to {homeData?.data.settings.shelfLimit ?? 6} Watch Warden shelves</p>
+                    </div>
+                    <button onClick={setupDefaultShelves} disabled={!movieSections.length || !showSections.length} className="text-xs px-3 py-2 rounded-lg border border-gray-700 text-gray-300 hover:text-white disabled:opacity-40">Add default shelves</button>
+                </div>
+                <div className="space-y-2">
+                    {collections.slice().sort((a, b) => a.homePriority - b.homePriority || a.id.localeCompare(b.id)).map((c, index) => (
+                        <div key={c.id} className="grid grid-cols-[2rem_1fr_auto_auto] items-center gap-2 rounded-lg bg-gray-800/50 px-3 py-2">
+                            <input aria-label="Home priority" type="number" value={c.homePriority} onChange={(e) => patchShelf(c, { homePriority: Number(e.target.value) })} className="w-8 bg-transparent text-xs text-gray-500" />
+                            <div className="min-w-0"><p className="text-sm text-white truncate">{index + 1}. {c.name}</p><p className="text-[10px] text-gray-500">{c.mediaType === "MOVIE" ? "Movies" : "Shows"} · {c.itemCount} local titles</p></div>
+                            <label className="flex items-center gap-1 text-xs text-gray-400"><input type="checkbox" checked={c.publishToHome} onChange={(e) => patchShelf(c, { publishToHome: e.target.checked })} /> Show on Home</label>
+                            <label className="flex items-center gap-1 text-xs text-gray-400"><input type="checkbox" checked={c.publishToSharedHome} disabled={!c.publishToHome} onChange={(e) => patchShelf(c, { publishToSharedHome: e.target.checked })} /> Shared users</label>
+                        </div>
+                    ))}
+                </div>
+            </section>
 
             {/* Create form */}
             {showForm && (

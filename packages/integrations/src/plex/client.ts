@@ -32,6 +32,9 @@ export interface PlexCollection {
     type: string;
     leafCount?: number;
     childCount?: number;
+    promotedToOwnHome?: boolean;
+    promotedToSharedHome?: boolean;
+    promotedToRecommended?: boolean;
 }
 
 export interface PlexIdentity {
@@ -208,6 +211,9 @@ export class PlexClient {
                         type: string;
                         leafCount?: number;
                         childCount?: number;
+                        promotedToOwnHome?: boolean;
+                        promotedToSharedHome?: boolean;
+                        promotedToRecommended?: boolean;
                     }>;
                 };
             }>(`/library/sections/${sectionId}/collections`);
@@ -218,6 +224,9 @@ export class PlexClient {
                 type: c.type,
                 leafCount: c.leafCount,
                 childCount: c.childCount,
+                promotedToOwnHome: Boolean(c.promotedToOwnHome),
+                promotedToSharedHome: Boolean(c.promotedToSharedHome),
+                promotedToRecommended: Boolean(c.promotedToRecommended),
             }));
         } catch (err) {
             this.handleError(`getCollections(${sectionId})`, err);
@@ -321,6 +330,31 @@ export class PlexClient {
             await this.http.delete(`/library/collections/${collectionId}`);
         } catch (err) {
             this.handleError(`deleteCollection(${collectionId})`, err);
+        }
+    }
+
+    /**
+     * Plex promotes collections through the section hub management endpoint.
+     * This controls visibility, but Plex does not expose stable ordering among
+     * unrelated Home hubs; WatchWarden priority therefore governs the budget.
+     */
+    async setCollectionRecommendation(params: {
+        sectionId: string;
+        collectionId: string;
+        publishToHome: boolean;
+        publishToSharedHome: boolean;
+    }): Promise<void> {
+        try {
+            await this.http.put(`/hubs/sections/${params.sectionId}/manage`, null, {
+                params: {
+                    metadataItemId: params.collectionId,
+                    promotedToRecommended: params.publishToHome || params.publishToSharedHome,
+                    promotedToOwnHome: params.publishToHome,
+                    promotedToSharedHome: params.publishToSharedHome,
+                },
+            });
+        } catch (err) {
+            this.handleError(`setCollectionRecommendation(${params.collectionId})`, err);
         }
     }
 

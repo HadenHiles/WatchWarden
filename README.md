@@ -1,8 +1,22 @@
 # Watch Warden
 
-**Automated playlists, actually worth watching.**
+**Turn a static Plex library into a living streaming experience.**
 
-Watch Warden is a self-hosted tool that scores every movie and TV show using real trending data and your household's watch history, then drives the full pipeline — Jellyseerr request automation, Kometa Plex collections, and Maintainerr cleanup — on a schedule you control.
+Watch Warden automatically surfaces culturally relevant movies and shows already available on your Plex server. It curates owner and shared-user Home shelves while retaining its acquisition, lifecycle, export, and cleanup workflows.
+
+## Plex Home curation
+
+Open **Plex Home Curation**, connect Plex, then choose **Add default shelves**. This creates disabled templates—existing installs never publish rows automatically—for Popular Movies/Shows Right Now, Recently Released Movies, and Netflix, Disney+, Prime Video, and Apple TV+ provider shelves. Crave, Paramount+, and other configured TMDB providers remain available for custom shelves.
+
+- **Cultural Heat** ranks current TMDB and Trakt activity, rank, snapshot freshness, and region. It intentionally excludes household watch preferences.
+- **Platform Heat** ranks subscription-streaming (`flatrate`) provider snapshots by platform rank, freshness, and explicit region priority.
+- Canada is the default primary region and the US is fallback. A title's Canadian snapshot wins when present; US data fills gaps.
+- **Recently Released Movies** uses the movie release date (90 days by default), never Plex's date-added field.
+- The default Home budget is six Watch Warden shelves. `homePriority` chooses which enabled rows fit; Plex controls final placement among its own/unrelated hubs because PMS does not expose a stable global row-order API.
+- Only local titles with a Plex rating key enter final collections. Preview and manual include/exclude controls remain available before publishing.
+- Shared Home publication depends on the Plex server/account accepting `promotedToSharedHome`; failures are reported and never treated as successful.
+
+Watch Warden only mutates collections whose Plex rating key it persistently tracks. It does not adopt same-named manual collections, delete arbitrary collections, or alter unrelated recommendations.
 
 ## Architecture Overview
 

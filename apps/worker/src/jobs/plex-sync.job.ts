@@ -2,6 +2,7 @@ import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
+import { culturalHeat, resolvePlatformSnapshots, selectPublishedShelfIds } from "@watchwarden/scoring";
 
 const logger = createLogger("plex-sync-job");
 
@@ -137,7 +138,7 @@ async function resolveTopTrendingKeys(
         streamingProviders: string[];
         mediaType: string;
         maxItemsPerProvider: number;
-    },
+    }, regionConfig = { primaryRegion: "CA", fallbackRegion: "US" },
 ): Promise<string[]> {
     if (!collection.streamingProviders.length) {
         logger.warn("TOP_TRENDING collection has no streamingProviders — skipping");
@@ -168,39 +169,20 @@ async function resolveTopTrendingKeys(
                     // Use snapshots from the last 8 days (gives ~1 weekly cycle of freshness)
                     snapshotAt: { gte: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) },
                 },
-                orderBy: [
-                    // Prefer CA snapshots, then by providerRank
-                    { region: "desc" }, // "US" < "CA" alphabetically — so this is CA first
-                    { providerRank: "asc" },
-                ],
-                take: cap * 3, // over-fetch to account for deduplication
                 select: {
                     titleId: true,
                     providerRank: true,
                     region: true,
+                    snapshotAt: true,
                     title: { select: { plexRatingKey: true } },
                 },
             });
-
-            // Deduplicate: keep best (lowest) rank per title, preferring CA over US
-            const seen = new Map<string, { rank: number; region: string }>();
-            for (const snap of snapshots) {
-                const existing = seen.get(snap.titleId);
-                if (!existing) {
-                    seen.set(snap.titleId, { rank: snap.providerRank!, region: snap.region ?? "US" });
-                } else {
-                    const caPrefer = snap.region === "CA" && existing.region !== "CA";
-                    const betterRank = (snap.providerRank ?? 999) < existing.rank;
-                    if (caPrefer || betterRank) {
-                        seen.set(snap.titleId, { rank: snap.providerRank!, region: snap.region ?? "US" });
-                    }
-                }
-            }
-
-            titleIds = Array.from(seen.entries())
-                .sort(([, a], [, b]) => a.rank - b.rank)
-                .slice(0, cap)
-                .map(([id]) => id);
+            titleIds = resolvePlatformSnapshots(snapshots.map((s) => ({
+                titleId: s.titleId,
+                providerRank: s.providerRank!,
+                region: s.region,
+                snapshotAt: s.snapshotAt,
+            })), { freshnessHalfLifeHours: 72, maxRank: 100, ...regionConfig }).slice(0, cap).map((s) => s.titleId);
         } else {
             // Fall back: filter by streamingOn provider name, sort by overall trend score
             const titles = await prisma.title.findMany({
@@ -248,6 +230,38 @@ async function resolveTopTrendingKeys(
     return withOverrides.map((id) => keyMap.get(id)).filter(Boolean) as string[];
 }
 
+async function resolveCulturalKeys(collection: { id: string; mediaType: string; maxItems: number }): Promise<string[]> {
+    const titles = await prisma.title.findMany({
+        where: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
+        select: { id: true, plexRatingKey: true, trendSnapshots: { where: { providerId: null }, orderBy: { snapshotAt: "desc" }, take: 20 } },
+    });
+    const now = new Date();
+    const ordered = titles.map((title) => {
+        const tmdb = title.trendSnapshots.find((s) => s.source.startsWith("tmdb"));
+        const trakt = title.trendSnapshots.find((s) => s.source.startsWith("trakt"));
+        const newest = [tmdb, trakt].filter(Boolean).sort((a, b) => b!.snapshotAt.getTime() - a!.snapshotAt.getTime())[0];
+        return { title, score: newest ? culturalHeat({ tmdbTrend: tmdb?.trendScore, traktTrend: trakt?.trendScore, rank: newest.rank, snapshotAt: newest.snapshotAt, region: newest.region }, now) : 0 };
+    }).sort((a, b) => b.score - a.score || a.title.id.localeCompare(b.title.id))
+        .slice(0, collection.maxItems).map((x) => x.title.id);
+    const ids = await applyManualOverrides(ordered, collection.id);
+    const map = new Map(titles.map((t) => [t.id, t.plexRatingKey!]));
+    return ids.map((id) => map.get(id)).filter(Boolean) as string[];
+}
+
+async function resolveRecentlyReleasedKeys(collection: { id: string; mediaType: string; maxItems: number; releaseWindowDays: number }): Promise<string[]> {
+    if (collection.mediaType !== "MOVIE") return [];
+    const since = new Date(Date.now() - collection.releaseWindowDays * 86_400_000);
+    const titles = await prisma.title.findMany({
+        where: { mediaType: "MOVIE", inLibrary: true, plexRatingKey: { not: null }, releaseDate: { gte: since, lte: new Date() } },
+        orderBy: [{ releaseDate: "desc" }, { id: "asc" }], take: collection.maxItems,
+        select: { id: true, plexRatingKey: true },
+    });
+    const ids = await applyManualOverrides(titles.map((t) => t.id), collection.id);
+    const all = await prisma.title.findMany({ where: { id: { in: ids }, plexRatingKey: { not: null } }, select: { id: true, plexRatingKey: true } });
+    const map = new Map(all.map((t) => [t.id, t.plexRatingKey!]));
+    return ids.map((id) => map.get(id)).filter(Boolean) as string[];
+}
+
 /**
  * Syncs all enabled PlexCollection rows to the actual Plex server.
  * WatchWarden manages collections for "Top 10 on Platform" visibility only —
@@ -261,26 +275,37 @@ export async function plexSyncJob(): Promise<void> {
         return;
     }
 
-    const collections = await prisma.plexCollection.findMany({
-        where: { enabled: true },
-    });
+    const collections = await prisma.plexCollection.findMany({ orderBy: [{ homePriority: "asc" }, { id: "asc" }] });
 
     if (collections.length === 0) {
-        logger.info("No enabled Plex collections configured — skipping plex-sync");
+        logger.info("No Plex collections configured — skipping plex-sync");
         return;
     }
 
     const client = new PlexClient({ baseUrl: plex.baseUrl, token: plex.token });
     const service = new PlexService(client);
+    const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
+    const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string };
+    const publishedIds = new Set(selectPublishedShelfIds(collections, homeConfig.shelfLimit ?? 6));
 
     let syncedCount = 0;
     let errorCount = 0;
 
     for (const collection of collections) {
         try {
+            if (!collection.enabled) {
+                if (collection.plexKey) {
+                    await service.syncCollectionRecommendation({ sectionId: collection.sectionId, collectionId: collection.plexKey, publishToHome: false, publishToSharedHome: false });
+                }
+                continue;
+            }
             let targetKeys: string[];
-            if (collection.collectionType === "TOP_TRENDING") {
-                targetKeys = await resolveTopTrendingKeys(collection);
+            if (collection.shelfType === "CULTURAL_TRENDING") {
+                targetKeys = await resolveCulturalKeys(collection);
+            } else if (collection.shelfType === "RECENTLY_RELEASED") {
+                targetKeys = await resolveRecentlyReleasedKeys(collection);
+            } else if (collection.shelfType === "PROVIDER_TRENDING" || collection.collectionType === "TOP_TRENDING") {
+                targetKeys = await resolveTopTrendingKeys(collection, { primaryRegion: homeConfig.primaryRegion ?? "CA", fallbackRegion: homeConfig.fallbackRegion ?? "US" });
             } else {
                 targetKeys = await resolveSmartKeys(collection);
             }
@@ -309,6 +334,22 @@ export async function plexSyncJob(): Promise<void> {
                     lastSyncAt: new Date(),
                 },
             });
+
+            if (result.collectionRatingKey) {
+                const publish = publishedIds.has(collection.id);
+                await service.syncCollectionRecommendation({
+                    sectionId: collection.sectionId,
+                    collectionId: result.collectionRatingKey,
+                    publishToHome: publish,
+                    publishToSharedHome: publish && collection.publishToSharedHome,
+                });
+                logger.info(publish ? "Home shelf published" : "Home shelf unpublished", {
+                    collectionId: collection.id, plexKey: result.collectionRatingKey,
+                    shelfType: collection.shelfType, provider: collection.provider,
+                    itemCount: targetKeys.length, published: publish,
+                });
+                if (collection.publishToHome && !publish) logger.info("Shelf skipped due to Home limit", { collectionId: collection.id });
+            }
 
             logger.info("Plex collection synced", {
                 name: collection.name,
