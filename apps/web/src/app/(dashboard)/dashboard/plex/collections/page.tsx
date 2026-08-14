@@ -1,1165 +1,223 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import {
-    Plus,
-    Pencil,
-    List,
-    Trash2,
-    ToggleLeft,
-    ToggleRight,
-    RefreshCw,
-    Loader2,
-    Clapperboard,
-    Film,
-    Tv2,
-    AlertCircle,
-    Sparkles,
-    TrendingUp,
-    X,
-    Search,
-    Send,
-} from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronUp, Clapperboard, Film, GripVertical, Loader2, Plus, RefreshCw, Search, Settings2, Trash2, Tv2, X } from "lucide-react";
 import { apiUrl } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
-const fetcher = (url: string) => fetch(url, { credentials: "include" }).then((r) => r.json());
+const fetcher = (url: string) => fetch(url, { credentials: "include" }).then(async (response) => {
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "Request failed");
+    return body;
+});
 
-interface PlexSection {
-    key: string;
-    title: string;
-    type: "movie" | "show" | string;
-}
+const PROVIDERS = ["Netflix", "Disney+", "Prime Video", "Apple TV+", "Crave", "Paramount+", "Max", "Crunchyroll", "Shudder", "BritBox", "AMC+", "STARZ", "Hulu", "Peacock"];
+const INPUT = "w-full rounded-lg bg-gray-950/70 border border-gray-700/70 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/70";
 
-interface PlexCollection {
-    id: string;
-    name: string;
-    plexKey: string | null;
-    sectionId: string;
-    mediaType: "MOVIE" | "SHOW";
-    collectionType: "SMART" | "TOP_TRENDING";
-    filter: "ACTIVE_TRENDING" | "PINNED" | "APPROVED";
-    streamingProviders: string[];
-    maxItemsPerProvider: number;
-    enabled: boolean;
-    autoRequest: boolean;
-    lastSyncAt: string | null;
-    itemCount: number;
+interface PlexSection { key: string; title: string; type: string }
+interface Shelf {
+    id: string; name: string; plexKey: string | null; sectionId: string; mediaType: "MOVIE" | "SHOW";
     shelfType: "CULTURAL_TRENDING" | "PROVIDER_TRENDING" | "RECENTLY_RELEASED" | "SMART" | "CUSTOM";
-    provider: string | null;
-    publishToHome: boolean;
-    publishToSharedHome: boolean;
-    homePriority: number;
-    maxItems: number;
+    provider: string | null; collectionType: "SMART" | "TOP_TRENDING"; streamingProviders: string[];
+    enabled: boolean; publishToHome: boolean; publishToSharedHome: boolean; homePriority: number;
+    maxItems: number; releaseWindowDays: number; itemCount: number; lastSyncAt: string | null;
+}
+interface HomeSettings { primaryRegion: string; fallbackRegion: string; shelfLimit: number; recentlyReleasedDays: number; defaultMaxItems: number }
+interface HomeResponse { settings: HomeSettings; shelves: Shelf[] }
+interface ShelfItem {
+    id: string; title: string; year: number | null; posterPath: string | null; mediaType: "MOVIE" | "SHOW";
+    inLibrary: boolean; manuallyAdded: boolean; manuallyExcluded: boolean;
+    trendSnapshots: Array<{ trendScore: number; providerRank: number | null }>;
 }
 
-interface PlexHomeData { settings: { shelfLimit: number; primaryRegion: string; fallbackRegion: string; recentlyReleasedDays: number; defaultMaxItems: number }; shelves: PlexCollection[] }
-
-const FILTER_LABELS: Record<string, string> = {
-    ACTIVE_TRENDING: "Active & Trending",
-    PINNED: "Pinned Titles",
-    APPROVED: "Approved Titles",
+const SHELF_LABELS: Record<Shelf["shelfType"], string> = {
+    CULTURAL_TRENDING: "Cultural",
+    PROVIDER_TRENDING: "Platform",
+    RECENTLY_RELEASED: "Recent releases",
+    SMART: "Smart",
+    CUSTOM: "Custom",
 };
 
-const FILTER_DESCRIPTIONS: Record<string, string> = {
-    ACTIVE_TRENDING: "Titles currently trending that WatchWarden is actively watching",
-    PINNED: "Titles manually pinned by an admin — curated picks",
-    APPROVED: "Titles approved for acquisition that are now in the library",
-};
-
-const STREAMING_PROVIDERS = [
-    // ── Global services available in Canada ─────────────────────────────────
-    "Netflix",
-    "Amazon Prime Video",
-    "Disney Plus",           // TMDB CA canonical name
-    "Apple TV Plus",         // TMDB CA canonical name
-    "Crave",                 // Major Canadian — Bell Media
-    "Max",
-    "Paramount Plus",        // TMDB CA canonical name
-    "Crunchyroll",
-    "Shudder",
-    "BritBox",
-    "AMC+",
-    "STARZ",
-    "Plex",
-    "Kanopy",
-    // ── Canadian-specific ────────────────────────────────────────────────────
-    "CBC Gem",               // Free — Canadian Broadcasting Corporation
-    "Tubi TV",              // TMDB CA canonical name
-    "Pluto TV",
-    "hayu",                  // Reality TV — TMDB uses lowercase
-    "STACKTV",               // Corus / Global / HGTV Canada etc.
-    "Super Channel On Demand",
-    // ── US-only (appear via US fallback in trend-sync) ────────────────────
-    "Hulu",
-    "Peacock",
-    // ── Alternate spellings stored by older TMDB responses ───────────────
-    "Prime Video",
-    "Disney+",
-    "Apple TV+",
-    "Paramount+",
-    "HBO Max",
-    "Tubi",
-];
-
-const INPUT_CLS =
-    "w-full rounded-lg bg-gray-800/80 border border-gray-700/60 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/60 focus:border-brand-500/40 placeholder-gray-600 transition-all";
-
-/** Small inline component for adding providers via a text+datalist input */
-function ProviderInput({ current, onAdd }: { current: string[]; onAdd: (p: string) => void }) {
-    const ref = useRef<HTMLInputElement>(null);
-
-    function commit() {
-        const val = ref.current?.value.trim();
-        if (val) {
-            onAdd(val);
-            if (ref.current) ref.current.value = "";
-        }
-    }
-
+function Toggle({ checked, disabled, label, onChange }: { checked: boolean; disabled?: boolean; label: string; onChange: (checked: boolean) => void }) {
     return (
-        <div className="flex gap-2">
-            <input
-                ref={ref}
-                type="text"
-                list="providers-list"
-                placeholder="Add provider…"
-                className={INPUT_CLS}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); commit(); }
-                }}
-            />
-            <datalist id="providers-list">
-                {STREAMING_PROVIDERS.filter((p) => !current.includes(p)).map((p) => (
-                    <option key={p} value={p} />
-                ))}
-            </datalist>
-            <button
-                type="button"
-                onClick={commit}
-                className="flex-shrink-0 px-3 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:text-white hover:border-gray-500 transition-colors"
-            >
-                <Plus className="w-4 h-4" />
-            </button>
-        </div>
+        <button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className="flex items-center gap-2 text-left disabled:opacity-40">
+            <span className={cn("relative h-5 w-9 rounded-full transition-colors", checked ? "bg-brand-500" : "bg-gray-700")}>
+                <span className={cn("absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform", checked && "translate-x-4")} />
+            </span>
+            <span className="text-xs text-gray-300">{label}</span>
+        </button>
     );
 }
 
-interface CollectionItem {
-    id: string;
-    title: string;
-    year: number | null;
-    posterPath: string | null;
-    mediaType: "MOVIE" | "SHOW";
-    streamingOn: string[];
-    inLibrary: boolean;
-    isRequested: boolean;
-    manuallyAdded: boolean;
-    manuallyExcluded: boolean;
-    trendSnapshots: Array<{ trendScore: number; providerId: string | null; providerRank: number | null }>;
-}
+function ShelfPreview({ shelf, onChanged }: { shelf: Shelf; onChanged: () => void }) {
+    const { data, isLoading, mutate } = useSWR<{ data: ShelfItem[] }>(apiUrl(`/plex/collections/${shelf.id}/items`), fetcher);
+    const [query, setQuery] = useState("");
+    const [results, setResults] = useState<Array<{ id: string; title: string; year: number | null }>>([]);
 
-function CollectionItemsPanel({ collectionId, mediaType }: { collectionId: string; mediaType: "MOVIE" | "SHOW" }) {
-    const { data, error, mutate } = useSWR<{ data: CollectionItem[] }>(
-        apiUrl(`/plex/collections/${collectionId}/items`),
-        fetcher
-    );
-
-    const [searchQuery, setSearchQuery] = useState("");
-    const [searchResults, setSearchResults] = useState<Array<{ id: string; title: string; year: number | null; posterPath: string | null }>>([]);
-    const [searching, setSearching] = useState(false);
-    const [addingId, setAddingId] = useState<string | null>(null);
-    const [removingId, setRemovingId] = useState<string | null>(null);
-
-    async function handleSearch(q: string) {
-        setSearchQuery(q);
-        if (q.length < 2) { setSearchResults([]); return; }
-        setSearching(true);
-        try {
-            const res = await fetch(apiUrl(`/titles?search=${encodeURIComponent(q)}&mediaType=${mediaType}&pageSize=10`), { credentials: "include" });
-            const json = await res.json();
-            setSearchResults(json.data?.items ?? []);
-        } finally {
-            setSearching(false);
-        }
+    async function search(value: string) {
+        setQuery(value);
+        if (value.trim().length < 2) return setResults([]);
+        const response = await fetch(apiUrl(`/titles?search=${encodeURIComponent(value)}&mediaType=${shelf.mediaType}&inLibrary=true&pageSize=8`), { credentials: "include" });
+        const body = await response.json();
+        setResults(body.data?.items ?? []);
     }
 
-    async function handleAddTitle(titleId: string) {
-        setAddingId(titleId);
-        try {
-            await fetch(apiUrl(`/plex/collections/${collectionId}/titles`), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ titleId, action: "include" }),
-            });
-            setSearchQuery("");
-            setSearchResults([]);
-            await mutate();
-        } finally {
-            setAddingId(null);
-        }
-    }
-
-    async function handleRemoveTitle(titleId: string) {
-        setRemovingId(titleId);
-        try {
-            await fetch(apiUrl(`/plex/collections/${collectionId}/titles/${titleId}`), {
-                method: "DELETE",
-                credentials: "include",
-            });
-            await mutate();
-        } finally {
-            setRemovingId(null);
-        }
-    }
-
-    async function handleExcludeTitle(titleId: string) {
-        setRemovingId(titleId);
-        try {
-            await fetch(apiUrl(`/plex/collections/${collectionId}/titles`), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ titleId, action: "exclude" }),
-            });
-            await mutate();
-        } finally {
-            setRemovingId(null);
-        }
-    }
-
-    if (!data && !error) {
-        return (
-            <div className="border-t border-gray-700/40 p-8 flex justify-center">
-                <Loader2 className="w-5 h-5 text-gray-600 animate-spin" />
-            </div>
-        );
+    async function override(titleId: string, action: "include" | "exclude") {
+        await fetch(apiUrl(`/plex/collections/${shelf.id}/titles`), { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ titleId, action }) });
+        setQuery(""); setResults([]); await mutate(); onChanged();
     }
 
     const items = data?.data ?? [];
-
     return (
-        <div className="border-t border-gray-700/40">
-            <div className="px-4 py-2 bg-gray-900/40 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                    <List className="w-3.5 h-3.5 text-gray-500" />
-                    <span className="text-xs text-gray-500">{items.length} title{items.length !== 1 ? "s" : ""} in collection</span>
-                </div>
-                <span className="text-xs text-gray-600">Hover a poster to remove</span>
+        <div className="border-t border-gray-800/80 bg-gray-950/35 p-4 space-y-4">
+            <div className="relative max-w-md">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                <input value={query} onChange={(event) => search(event.target.value)} placeholder="Add a local title manually…" className={`${INPUT} pl-9`} />
+                {results.length > 0 && <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-xl">
+                    {results.map((title) => <button key={title.id} onClick={() => override(title.id, "include")} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-gray-800">
+                        <span className="text-sm text-gray-200">{title.title} {title.year ? <span className="text-gray-500">({title.year})</span> : null}</span><Plus className="h-3.5 w-3.5 text-brand-400" />
+                    </button>)}
+                </div>}
             </div>
-
-            {/* Manual title search + add */}
-            <div className="px-4 py-2 border-b border-gray-700/30">
-                <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => handleSearch(e.target.value)}
-                        placeholder="Search to manually add a title…"
-                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-gray-800/60 border border-gray-700/60 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
-                    />
-                    {searching && <Loader2 className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
-                </div>
-                {searchResults.length > 0 && (
-                    <div className="mt-1 rounded-lg border border-gray-700/60 bg-gray-900 overflow-hidden divide-y divide-gray-700/40 max-h-48 overflow-y-auto">
-                        {searchResults.map((r) => (
-                            <div key={r.id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-800/60 transition-colors">
-                                {r.posterPath ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={`https://image.tmdb.org/t/p/w92${r.posterPath}`} alt="" className="w-7 h-10 rounded object-cover bg-gray-800 flex-shrink-0" loading="lazy" />
-                                ) : (
-                                    <div className="w-7 h-10 rounded bg-gray-800 flex-shrink-0" />
-                                )}
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs text-white font-medium truncate">{r.title}</p>
-                                    {r.year && <p className="text-[10px] text-gray-500">{r.year}</p>}
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handleAddTitle(r.id)}
-                                    disabled={addingId === r.id}
-                                    className="flex-shrink-0 flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-brand-500/15 border border-brand-500/30 text-brand-400 hover:bg-brand-500/30 transition-colors disabled:opacity-40"
-                                >
-                                    {addingId === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                                    Add
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {items.length === 0 ? (
-                <div className="p-6 text-center">
-                    <p className="text-sm text-gray-500">No items in this collection yet.</p>
-                    <p className="text-xs text-gray-600 mt-1">Items appear after the next sync runs or use the search above to add titles manually.</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-2 p-4 max-h-64 overflow-y-auto">
-                    {items.map((item) => (
-                        <div key={item.id} className="group relative">
-                            {item.posterPath ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={`https://image.tmdb.org/t/p/w185${item.posterPath}`}
-                                    alt={item.title}
-                                    className="w-full aspect-[2/3] rounded object-cover bg-gray-800"
-                                    loading="lazy"
-                                />
-                            ) : (
-                                <div className="w-full aspect-[2/3] rounded bg-gray-800 flex items-center justify-center">
-                                    {item.mediaType === "MOVIE"
-                                        ? <Film className="w-6 h-6 text-gray-600" />
-                                        : <Tv2 className="w-6 h-6 text-gray-600" />
-                                    }
-                                </div>
-                            )}
-                            {item.manuallyAdded && (
-                                <div className="absolute top-0.5 left-0.5">
-                                    <span className="text-[8px] px-1 py-0.5 rounded bg-brand-500/80 text-white font-medium">Added</span>
-                                </div>
-                            )}
-                            <div className="absolute inset-0 rounded bg-gray-950/85 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-1 text-center">
-                                <p className="text-[10px] text-white font-medium leading-tight line-clamp-2">{item.title}</p>
-                                {item.year && <p className="text-[9px] text-gray-400 mt-0.5">{item.year}</p>}
-                                <div className="flex gap-1 mt-1.5">
-                                    {item.manuallyAdded ? (
-                                        <button
-                                            type="button"
-                                            title="Remove manual addition"
-                                            onClick={() => handleRemoveTitle(item.id)}
-                                            disabled={removingId === item.id}
-                                            className="flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 transition-colors disabled:opacity-40"
-                                        >
-                                            {removingId === item.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <X className="w-2.5 h-2.5" />}
-                                            Remove
-                                        </button>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            title="Exclude from collection"
-                                            onClick={() => handleExcludeTitle(item.id)}
-                                            disabled={removingId === item.id}
-                                            className="flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 transition-colors disabled:opacity-40"
-                                        >
-                                            {removingId === item.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <X className="w-2.5 h-2.5" />}
-                                            Exclude
-                                        </button>
-                                    )}
-                                    {item.manuallyExcluded && (
-                                        <button
-                                            type="button"
-                                            title="Clear exclusion"
-                                            onClick={() => handleRemoveTitle(item.id)}
-                                            disabled={removingId === item.id}
-                                            className="flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/40 transition-colors disabled:opacity-40"
-                                        >
-                                            <Send className="w-2.5 h-2.5" />
-                                            Restore
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+            {isLoading ? <div className="flex h-32 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-500" /></div> : items.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-800 py-10 text-center text-sm text-gray-500">No local matches yet. Run a trend and Plex sync to populate this shelf.</div>
+            ) : <div className="flex gap-3 overflow-x-auto pb-2">
+                {items.map((item) => {
+                    const rank = item.trendSnapshots.find((snapshot) => snapshot.providerRank)?.providerRank;
+                    const heat = Math.round(Math.max(0, ...item.trendSnapshots.map((snapshot) => snapshot.trendScore)) * 100);
+                    return <div key={item.id} className="group relative w-24 flex-none">
+                        {item.posterPath ? <img src={`https://image.tmdb.org/t/p/w185${item.posterPath}`} alt="" className="aspect-[2/3] w-full rounded-lg bg-gray-800 object-cover" /> : <div className="flex aspect-[2/3] items-center justify-center rounded-lg bg-gray-800"><Film className="h-5 w-5 text-gray-600" /></div>}
+                        <button onClick={() => override(item.id, "exclude")} title="Exclude from this shelf" className="absolute right-1 top-1 rounded-full bg-gray-950/90 p-1 text-gray-400 opacity-0 group-hover:opacity-100 hover:text-red-400"><X className="h-3 w-3" /></button>
+                        <p className="mt-1 truncate text-xs font-medium text-gray-200">{item.title}</p>
+                        <p className="text-[11px] text-gray-500">{rank ? `Platform #${rank}` : `Heat ${heat}`}{item.manuallyAdded ? " · Added" : ""}</p>
+                    </div>;
+                })}
+            </div>}
         </div>
     );
 }
 
-export default function PlexCollectionsPage() {
-    const { data: collectionsData, mutate } = useSWR<{ data: PlexCollection[] }>(
-        apiUrl("/plex/collections"),
-        fetcher
-    );
-    const { data: sectionsData } = useSWR<{ data: PlexSection[] }>(
-        apiUrl("/plex/sections"),
-        fetcher
-    );
-    const { data: homeData, mutate: mutateHome } = useSWR<{ data: PlexHomeData }>(apiUrl("/plex/home"), fetcher);
+export default function PlexHomePage() {
+    const { data, error, mutate, isLoading } = useSWR<{ data: HomeResponse }>(apiUrl("/plex/home"), fetcher);
+    const { data: sectionData } = useSWR<{ data: PlexSection[] }>(apiUrl("/plex/sections"), fetcher);
+    const shelves = useMemo(() => [...(data?.data.shelves ?? [])].sort((a, b) => a.homePriority - b.homePriority || a.id.localeCompare(b.id)), [data]);
+    const sections = sectionData?.data ?? [];
+    const movieSections = sections.filter((section) => section.type === "movie");
+    const showSections = sections.filter((section) => section.type === "show");
+    const [expanded, setExpanded] = useState<string | null>(null);
+    const [setupOpen, setSetupOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [busy, setBusy] = useState<string | null>(null);
+    const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+    const [settings, setSettings] = useState<HomeSettings>({ primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, defaultMaxItems: 20 });
+    const [setup, setSetup] = useState({ movieSectionId: "", showSectionId: "", providers: ["Netflix", "Disney+", "Prime Video", "Apple TV+"] });
 
-    const collections = collectionsData?.data ?? [];
-    const sections = sectionsData?.data ?? [];
+    useEffect(() => { if (data?.data.settings) setSettings(data.data.settings); }, [data]);
+    useEffect(() => { setSetup((current) => ({ ...current, movieSectionId: current.movieSectionId || movieSections[0]?.key || "", showSectionId: current.showSectionId || showSections[0]?.key || "" })); }, [sectionData]);
 
-    const [showForm, setShowForm] = useState(false);
-    const [form, setForm] = useState({
-        name: "",
-        sectionId: "",
-        mediaType: "MOVIE" as "MOVIE" | "SHOW",
-        collectionType: "SMART" as "SMART" | "TOP_TRENDING",
-        filter: "ACTIVE_TRENDING" as "ACTIVE_TRENDING" | "PINNED" | "APPROVED",
-        streamingProviders: [] as string[],
-        maxItemsPerProvider: 10,
-        autoRequest: false,
-    });
-    const [creating, setCreating] = useState(false);
-    const [createError, setCreateError] = useState<string | null>(null);
-
-    const [triggeringSync, setTriggeringSync] = useState(false);
-    const [expandedItemsId, setExpandedItemsId] = useState<string | null>(null);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editForm, setEditForm] = useState({
-        name: "",
-        filter: "ACTIVE_TRENDING" as "ACTIVE_TRENDING" | "PINNED" | "APPROVED",
-        streamingProviders: [] as string[],
-        maxItemsPerProvider: 10,
-        autoRequest: false,
-    });
-    const [editError, setEditError] = useState<string | null>(null);
-    const [saving, setSaving] = useState(false);
-
-    const movieSections = sections.filter((s) => s.type === "movie");
-    const showSections = sections.filter((s) => s.type === "show");
-    const availableSections = form.mediaType === "MOVIE" ? movieSections : showSections;
-
-    function resetForm() {
-        setForm({
-            name: "",
-            sectionId: "",
-            mediaType: "MOVIE",
-            collectionType: "SMART",
-            filter: "ACTIVE_TRENDING",
-            streamingProviders: [] as string[],
-            maxItemsPerProvider: 10,
-            autoRequest: false,
-        });
-        setCreateError(null);
-    }
-
-    async function handleCreate() {
-        if (!form.name || !form.sectionId) return;
-        if (form.collectionType === "TOP_TRENDING" && form.streamingProviders.length === 0) {
-            setCreateError("At least one streaming provider is required for Top Trending collections");
-            return;
-        }
-        setCreating(true);
-        setCreateError(null);
+    function flash(tone: "success" | "error", text: string) { setNotice({ tone, text }); window.setTimeout(() => setNotice(null), 3500); }
+    async function patchShelf(shelf: Shelf, patch: Record<string, unknown>, message?: string) {
+        setBusy(shelf.id);
         try {
-            const payload = {
-                name: form.name,
-                sectionId: form.sectionId,
-                mediaType: form.mediaType,
-                collectionType: form.collectionType,
-                autoRequest: form.autoRequest,
-                ...(form.collectionType === "SMART"
-                    ? { filter: form.filter }
-                    : { streamingProviders: form.streamingProviders, maxItemsPerProvider: form.maxItemsPerProvider }),
-            };
-            const res = await fetch(apiUrl("/plex/collections"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify(payload),
-            });
-            const json = await res.json();
-            if (!res.ok) {
-                setCreateError(json.error ?? "Failed to create collection");
-                return;
-            }
-            setShowForm(false);
-            resetForm();
+            const response = await fetch(apiUrl(`/plex/collections/${shelf.id}`), { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(patch) });
+            const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Could not update shelf");
+            await mutate(); if (message) flash("success", message);
+        } catch (reason) { flash("error", reason instanceof Error ? reason.message : "Could not update shelf"); } finally { setBusy(null); }
+    }
+    async function moveShelf(index: number, direction: -1 | 1) {
+        const other = shelves[index + direction]; const shelf = shelves[index]; if (!other) return;
+        setBusy(shelf.id);
+        try {
+            const reordered = [...shelves];
+            reordered.splice(index, 1); reordered.splice(index + direction, 0, shelf);
+            await Promise.all(reordered.map((item, position) => fetch(apiUrl(`/plex/collections/${item.id}`), { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ homePriority: (position + 1) * 10 }) })));
             await mutate();
-        } finally {
-            setCreating(false);
-        }
+        } finally { setBusy(null); }
     }
-
-    async function handleToggle(collection: PlexCollection) {
-        await fetch(apiUrl(`/plex/collections/${collection.id}`), {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ enabled: !collection.enabled }),
-        });
-        await mutate();
-    }
-
-    async function patchShelf(collection: PlexCollection, patch: Record<string, unknown>) {
-        await fetch(apiUrl(`/plex/collections/${collection.id}`), { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(patch) });
-        await Promise.all([mutate(), mutateHome()]);
-    }
-
-    async function setupDefaultShelves() {
-        const movie = movieSections[0]?.key; const show = showSections[0]?.key;
-        if (!movie || !show) return;
-        await fetch(apiUrl("/plex/home/setup"), { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ movieSectionId: movie, showSectionId: show, providers: ["Netflix", "Disney+", "Prime Video", "Apple TV+"] }) });
-        await Promise.all([mutate(), mutateHome()]);
-    }
-
-    async function handleDelete(collection: PlexCollection) {
-        if (!confirm(`Remove "${collection.name}" from WatchWarden? This will NOT delete the collection from Plex.`)) return;
-        await fetch(apiUrl(`/plex/collections/${collection.id}`), {
-            method: "DELETE",
-            credentials: "include",
-        });
-        await mutate();
-    }
-
-    async function handleTriggerSync() {
-        setTriggeringSync(true);
+    async function saveSettings() {
+        setBusy("settings");
         try {
-            await fetch(apiUrl("/jobs/plex-library-sync/trigger"), {
-                method: "POST",
-                credentials: "include",
-            });
-            await new Promise((r) => setTimeout(r, 500));
-            await fetch(apiUrl("/jobs/plex-sync/trigger"), {
-                method: "POST",
-                credentials: "include",
-            });
-        } finally {
-            setTimeout(() => setTriggeringSync(false), 2000);
-        }
+            const response = await fetch(apiUrl("/plex/home/settings"), { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(settings) });
+            if (!response.ok) throw new Error("Could not save Home settings"); await mutate(); setSettingsOpen(false); flash("success", "Home settings saved");
+        } catch (reason) { flash("error", reason instanceof Error ? reason.message : "Could not save settings"); } finally { setBusy(null); }
     }
-
-    function handleStartEdit(c: PlexCollection) {
-        setShowForm(false);
-        resetForm();
-        setExpandedItemsId(null);
-        setEditingId(c.id);
-        setEditForm({
-            name: c.name,
-            filter: c.filter,
-            streamingProviders: [...c.streamingProviders],
-            maxItemsPerProvider: c.maxItemsPerProvider,
-            autoRequest: c.autoRequest,
-        });
-        setEditError(null);
-    }
-
-    function handleCancelEdit() {
-        setEditingId(null);
-        setEditError(null);
-    }
-
-    async function handleSaveEdit() {
-        if (!editForm.name) return;
-        const col = collections.find((c) => c.id === editingId);
-        if (col?.collectionType === "TOP_TRENDING" && editForm.streamingProviders.length === 0) {
-            setEditError("At least one streaming provider is required");
-            return;
-        }
-        setSaving(true);
-        setEditError(null);
+    async function createDefaults() {
+        if (!setup.movieSectionId || !setup.showSectionId) return flash("error", "Choose both Plex libraries first");
+        setBusy("setup");
         try {
-            const payload: Record<string, unknown> = { name: editForm.name, autoRequest: editForm.autoRequest };
-            if (col?.collectionType === "SMART") {
-                payload.filter = editForm.filter;
-            } else if (col?.collectionType === "TOP_TRENDING") {
-                payload.streamingProviders = editForm.streamingProviders;
-                payload.maxItemsPerProvider = editForm.maxItemsPerProvider;
-            }
-            const res = await fetch(apiUrl(`/plex/collections/${editingId}`), {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify(payload),
-            });
-            const json = await res.json();
-            if (!res.ok) {
-                setEditError(json.error ?? "Failed to save changes");
-                return;
-            }
-            setEditingId(null);
-            await mutate();
-        } finally {
-            setSaving(false);
-        }
+            const response = await fetch(apiUrl("/plex/home/setup"), { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(setup) });
+            const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Could not create shelves");
+            await mutate(); setSetupOpen(false); flash("success", `${body.data.length} disabled shelves added. Review them before publishing.`);
+        } catch (reason) { flash("error", reason instanceof Error ? reason.message : "Could not create shelves"); } finally { setBusy(null); }
+    }
+    async function syncNow() {
+        setBusy("sync");
+        try {
+            await fetch(apiUrl("/jobs/plex-library-sync/trigger"), { method: "POST", credentials: "include" });
+            const response = await fetch(apiUrl("/jobs/plex-sync/trigger"), { method: "POST", credentials: "include" });
+            if (!response.ok) throw new Error("Plex sync could not be started"); flash("success", "Plex Home sync started");
+        } catch (reason) { flash("error", reason instanceof Error ? reason.message : "Could not start sync"); } finally { setBusy(null); }
+    }
+    async function removeShelf(shelf: Shelf) {
+        if (!window.confirm(`Stop managing “${shelf.name}”? The Plex collection will be left untouched.`)) return;
+        await fetch(apiUrl(`/plex/collections/${shelf.id}`), { method: "DELETE", credentials: "include" }); await mutate(); flash("success", "Shelf removed from Watch Warden");
     }
 
-    const plexConfigured = sectionsData && !("error" in (sectionsData as object))
-        && Array.isArray(sectionsData.data);
-
-    return (
-        <div className="p-6 max-w-4xl mx-auto space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
-                        <Clapperboard className="w-4.5 h-4.5 text-brand-400" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-bold text-white">Plex Home Curation</h1>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                            Build useful discovery shelves from titles already on your server
-                        </p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleTriggerSync}
-                        disabled={triggeringSync || !plexConfigured}
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 transition-colors disabled:opacity-40"
-                    >
-                        {triggeringSync ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <RefreshCw className="w-4 h-4" />
-                        )}
-                        Sync Now
-                    </button>
-                    <button
-                        onClick={() => { setShowForm(true); setEditingId(null); setExpandedItemsId(null); }}
-                        disabled={!plexConfigured}
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-gray-950 font-semibold transition-colors disabled:opacity-40"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Add Collection
-                    </button>
-                </div>
+    const published = shelves.filter((shelf) => shelf.enabled && shelf.publishToHome).length;
+    return <div className="mx-auto w-full max-w-6xl space-y-5">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><h1 className="text-xl font-bold tracking-tight text-white">Plex Home</h1><p className="mt-1 text-sm text-gray-400">Shape the streaming experience your household sees when Plex opens.</p></div>
+            <div className="flex flex-wrap gap-2">
+                <button onClick={() => setSettingsOpen(!settingsOpen)} className="flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-500 hover:text-white"><Settings2 className="h-4 w-4" />Home settings</button>
+                <button onClick={() => setSetupOpen(!setupOpen)} className="flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-500 hover:text-white"><Plus className="h-4 w-4" />Add recommended shelves</button>
+                <button onClick={syncNow} disabled={busy === "sync"} className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-gray-950 hover:bg-brand-400 disabled:opacity-50">{busy === "sync" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Sync Home</button>
             </div>
+        </header>
 
-            {/* Plex not configured warning */}
-            {sectionsData && !plexConfigured && (
-                <div className="flex items-start gap-3 rounded-xl border border-yellow-700/50 bg-yellow-900/20 p-4 text-sm text-yellow-300">
-                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>
-                        Plex is not configured. Go to{" "}
-                        <a href="/dashboard/settings" className="underline underline-offset-2 hover:text-yellow-200">
-                            Settings
-                        </a>{" "}
-                        and enter your Plex Server URL and token.
-                    </span>
-                </div>
-            )}
+        {notice && <div className={cn("rounded-lg border px-4 py-3 text-sm", notice.tone === "success" ? "border-green-800/60 bg-green-950/30 text-green-300" : "border-red-800/60 bg-red-950/30 text-red-300")}>{notice.text}</div>}
+        {error && <div className="flex gap-2 rounded-lg border border-red-800/60 bg-red-950/30 px-4 py-3 text-sm text-red-300"><AlertCircle className="h-4 w-4" />{error.message}</div>}
 
-            <section className="rounded-xl border border-gray-700/60 bg-gray-900/50 p-4 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                    <div>
-                        <h2 className="text-sm font-semibold text-white">Your Plex Home</h2>
-                        <p className="text-xs text-gray-500">Canada first, US fallback · up to {homeData?.data.settings.shelfLimit ?? 6} Watch Warden shelves</p>
-                    </div>
-                    <button onClick={setupDefaultShelves} disabled={!movieSections.length || !showSections.length} className="text-xs px-3 py-2 rounded-lg border border-gray-700 text-gray-300 hover:text-white disabled:opacity-40">Add default shelves</button>
-                </div>
-                <div className="space-y-2">
-                    {collections.slice().sort((a, b) => a.homePriority - b.homePriority || a.id.localeCompare(b.id)).map((c, index) => (
-                        <div key={c.id} className="grid grid-cols-[2rem_1fr_auto_auto] items-center gap-2 rounded-lg bg-gray-800/50 px-3 py-2">
-                            <input aria-label="Home priority" type="number" value={c.homePriority} onChange={(e) => patchShelf(c, { homePriority: Number(e.target.value) })} className="w-8 bg-transparent text-xs text-gray-500" />
-                            <div className="min-w-0"><p className="text-sm text-white truncate">{index + 1}. {c.name}</p><p className="text-[10px] text-gray-500">{c.mediaType === "MOVIE" ? "Movies" : "Shows"} · {c.itemCount} local titles</p></div>
-                            <label className="flex items-center gap-1 text-xs text-gray-400"><input type="checkbox" checked={c.publishToHome} onChange={(e) => patchShelf(c, { publishToHome: e.target.checked })} /> Show on Home</label>
-                            <label className="flex items-center gap-1 text-xs text-gray-400"><input type="checkbox" checked={c.publishToSharedHome} disabled={!c.publishToHome} onChange={(e) => patchShelf(c, { publishToSharedHome: e.target.checked })} /> Shared users</label>
+        {settingsOpen && <section className="rounded-xl border border-gray-700 bg-gray-900 p-5">
+            <div className="mb-4"><h2 className="font-semibold text-white">Home behavior</h2><p className="text-xs text-gray-400">These settings apply to every managed shelf.</p></div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <label className="text-xs text-gray-400">Primary region<select value={settings.primaryRegion} onChange={(e) => { const primaryRegion = e.target.value; setSettings({ ...settings, primaryRegion, fallbackRegion: primaryRegion === "CA" ? "US" : "CA" }); }} className={`${INPUT} mt-1`}><option>CA</option><option>US</option></select></label>
+                <label className="text-xs text-gray-400">Fallback region<select value={settings.fallbackRegion} onChange={(e) => setSettings({ ...settings, fallbackRegion: e.target.value })} className={`${INPUT} mt-1`}><option disabled value={settings.primaryRegion}>{settings.primaryRegion}</option><option value={settings.primaryRegion === "CA" ? "US" : "CA"}>{settings.primaryRegion === "CA" ? "US" : "CA"}</option></select></label>
+                <label className="text-xs text-gray-400">Home shelf limit<input type="number" min={0} max={20} value={settings.shelfLimit} onChange={(e) => setSettings({ ...settings, shelfLimit: Number(e.target.value) })} className={`${INPUT} mt-1`} /></label>
+                <label className="text-xs text-gray-400">Recent movie window<input type="number" min={1} max={365} value={settings.recentlyReleasedDays} onChange={(e) => setSettings({ ...settings, recentlyReleasedDays: Number(e.target.value) })} className={`${INPUT} mt-1`} /></label>
+                <label className="text-xs text-gray-400">Default items<input type="number" min={1} max={100} value={settings.defaultMaxItems} onChange={(e) => setSettings({ ...settings, defaultMaxItems: Number(e.target.value) })} className={`${INPUT} mt-1`} /></label>
+            </div><div className="mt-4 flex justify-end"><button onClick={saveSettings} disabled={busy === "settings"} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-gray-950">Save settings</button></div>
+        </section>}
+
+        {setupOpen && <section className="rounded-xl border border-brand-500/30 bg-gray-900 p-5">
+            <h2 className="font-semibold text-white">Add recommended shelves</h2><p className="mt-1 text-sm text-gray-400">Choose the libraries and platforms you want represented. Shelves are created disabled so nothing appears in Plex until you review it.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <label className="text-xs text-gray-400">Movie library<select value={setup.movieSectionId} onChange={(e) => setSetup({ ...setup, movieSectionId: e.target.value })} className={`${INPUT} mt-1`}><option value="">Choose…</option>{movieSections.map((s) => <option key={s.key} value={s.key}>{s.title}</option>)}</select></label>
+                <label className="text-xs text-gray-400">TV library<select value={setup.showSectionId} onChange={(e) => setSetup({ ...setup, showSectionId: e.target.value })} className={`${INPUT} mt-1`}><option value="">Choose…</option>{showSections.map((s) => <option key={s.key} value={s.key}>{s.title}</option>)}</select></label>
+            </div><div className="mt-4"><p className="mb-2 text-xs text-gray-400">Streaming platforms</p><div className="flex flex-wrap gap-2">{PROVIDERS.map((provider) => <button key={provider} onClick={() => setSetup({ ...setup, providers: setup.providers.includes(provider) ? setup.providers.filter((p) => p !== provider) : [...setup.providers, provider] })} className={cn("rounded-full border px-3 py-1.5 text-xs", setup.providers.includes(provider) ? "border-brand-500/50 bg-brand-500/15 text-brand-300" : "border-gray-700 text-gray-500 hover:text-gray-300")}>{provider}</button>)}</div></div>
+            <div className="mt-5 flex justify-end"><button onClick={createDefaults} disabled={busy === "setup"} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-gray-950 disabled:opacity-50">Create disabled shelves</button></div>
+        </section>}
+
+        <section className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900/70">
+            <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4"><div><h2 className="font-semibold text-white">Your shelf lineup</h2><p className="mt-0.5 text-xs text-gray-400">{published} of {settings.shelfLimit} Home slots selected · rows beyond the limit stay unpublished</p></div></div>
+            {isLoading ? <div className="flex h-52 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-500" /></div> : shelves.length === 0 ? <div className="py-16 text-center"><Clapperboard className="mx-auto h-8 w-8 text-gray-700" /><p className="mt-3 text-sm text-gray-400">No shelves configured yet.</p><button onClick={() => setSetupOpen(true)} className="mt-3 text-sm text-brand-400 hover:text-brand-300">Add the recommended lineup →</button></div> : shelves.map((shelf, index) => {
+                const overBudget = shelf.enabled && shelf.publishToHome && shelves.filter((candidate) => candidate.enabled && candidate.publishToHome && (candidate.homePriority < shelf.homePriority || candidate.homePriority === shelf.homePriority && candidate.id <= shelf.id)).length > settings.shelfLimit;
+                return <div key={shelf.id} className={cn("border-b border-gray-800/80 last:border-b-0", !shelf.enabled && "opacity-65")}>
+                    <div className="grid gap-4 p-4 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
+                        <div className="flex items-center gap-1"><GripVertical className="mr-1 h-4 w-4 text-gray-700" /><div className="flex flex-col"><button onClick={() => moveShelf(index, -1)} disabled={index === 0 || busy === shelf.id} className="text-gray-500 hover:text-white disabled:opacity-20"><ChevronUp className="h-4 w-4" /></button><button onClick={() => moveShelf(index, 1)} disabled={index === shelves.length - 1 || busy === shelf.id} className="text-gray-500 hover:text-white disabled:opacity-20"><ChevronDown className="h-4 w-4" /></button></div></div>
+                        <button onClick={() => setExpanded(expanded === shelf.id ? null : shelf.id)} className="min-w-0 text-left"><div className="flex items-center gap-2"><span className="text-xs tabular-nums text-gray-500">{index + 1}</span>{shelf.mediaType === "MOVIE" ? <Film className="h-4 w-4 text-brand-400" /> : <Tv2 className="h-4 w-4 text-brand-400" />}<h3 className="truncate text-sm font-semibold text-white">{shelf.name}</h3><span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-400">{SHELF_LABELS[shelf.shelfType]}</span>{overBudget && <span className="rounded-full bg-amber-950/50 px-2 py-0.5 text-[11px] text-amber-400">Beyond Home limit</span>}</div><p className="mt-1 text-xs text-gray-400">{shelf.itemCount} local titles · {shelf.lastSyncAt ? `synced ${new Date(shelf.lastSyncAt).toLocaleString()}` : "not synced yet"}</p></button>
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 md:justify-end">
+                            <Toggle checked={shelf.enabled} label="Maintain shelf" onChange={(checked) => patchShelf(shelf, { enabled: checked }, checked ? "Shelf enabled" : "Shelf disabled")} />
+                            <Toggle checked={shelf.publishToHome} disabled={!shelf.enabled} label="Show on Home" onChange={(checked) => patchShelf(shelf, { publishToHome: checked, ...(!checked ? { publishToSharedHome: false } : {}) })} />
+                            <Toggle checked={shelf.publishToSharedHome} disabled={!shelf.enabled || !shelf.publishToHome} label="Share with users" onChange={(checked) => patchShelf(shelf, { publishToSharedHome: checked })} />
+                            <label className="flex items-center gap-2 text-xs text-gray-400">Items<input type="number" min={1} max={100} defaultValue={shelf.maxItems} onBlur={(e) => patchShelf(shelf, { maxItems: Number(e.target.value), maxItemsPerProvider: Number(e.target.value) })} className="w-16 rounded-md border border-gray-700 bg-gray-950 px-2 py-1 text-white" /></label>
+                            <button onClick={() => removeShelf(shelf)} title="Stop managing shelf" className="rounded-md p-1.5 text-gray-600 hover:bg-red-950/30 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
+                            <button onClick={() => setExpanded(expanded === shelf.id ? null : shelf.id)} className="text-gray-500 hover:text-white">{expanded === shelf.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
                         </div>
-                    ))}
-                </div>
-            </section>
-
-            {/* Create form */}
-            {showForm && (
-                <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-5 space-y-5">
-                    <h2 className="font-semibold text-white text-sm">New Collection</h2>
-
-                    {/* Collection type toggle */}
-                    <div className="space-y-1.5">
-                        <label className="text-xs text-gray-400">Collection Type</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setForm((f) => ({ ...f, collectionType: "SMART" }))}
-                                className={cn(
-                                    "rounded-lg border px-4 py-3 text-left transition-colors",
-                                    form.collectionType === "SMART"
-                                        ? "border-brand-500/60 bg-brand-500/10 text-brand-300"
-                                        : "border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-300"
-                                )}
-                            >
-                                <div className="flex items-center gap-2 font-medium text-sm">
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                    Smart Collection
-                                </div>
-                                <p className="text-xs mt-1 opacity-70 leading-relaxed">
-                                    Scored suggestions — trending titles + family watch patterns
-                                </p>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setForm((f) => ({ ...f, collectionType: "TOP_TRENDING" }))}
-                                className={cn(
-                                    "rounded-lg border px-4 py-3 text-left transition-colors",
-                                    form.collectionType === "TOP_TRENDING"
-                                        ? "border-brand-500/60 bg-brand-500/10 text-brand-300"
-                                        : "border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-300"
-                                )}
-                            >
-                                <div className="flex items-center gap-2 font-medium text-sm">
-                                    <TrendingUp className="w-3.5 h-3.5" />
-                                    Top Trending
-                                </div>
-                                <p className="text-xs mt-1 opacity-70 leading-relaxed">
-                                    Top-ranked titles available on a specific streaming service
-                                </p>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5 col-span-2">
-                            <label className="text-xs text-gray-400">Collection Name</label>
-                            <input
-                                type="text"
-                                value={form.name}
-                                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                                placeholder={
-                                    form.collectionType === "TOP_TRENDING"
-                                        ? "Top Netflix Movies"
-                                        : "Hot on FamFlix"
-                                }
-                                className={INPUT_CLS}
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-xs text-gray-400">Media Type</label>
-                            <select
-                                value={form.mediaType}
-                                onChange={(e) =>
-                                    setForm((f) => ({
-                                        ...f,
-                                        mediaType: e.target.value as "MOVIE" | "SHOW",
-                                        sectionId: "",
-                                    }))
-                                }
-                                className={INPUT_CLS}
-                            >
-                                <option value="MOVIE">Movies</option>
-                                <option value="SHOW">TV Shows</option>
-                            </select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-xs text-gray-400">Plex Library Section</label>
-                            <select
-                                value={form.sectionId}
-                                onChange={(e) => setForm((f) => ({ ...f, sectionId: e.target.value }))}
-                                className={INPUT_CLS}
-                                disabled={availableSections.length === 0}
-                            >
-                                <option value="">Select a section…</option>
-                                {availableSections.map((s) => (
-                                    <option key={s.key} value={s.key}>
-                                        {s.title}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* SMART — filter picker */}
-                        {form.collectionType === "SMART" && (
-                            <div className="space-y-1.5 col-span-2">
-                                <label className="text-xs text-gray-400">Filter</label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {(["ACTIVE_TRENDING", "PINNED", "APPROVED"] as const).map((f) => (
-                                        <button
-                                            key={f}
-                                            type="button"
-                                            onClick={() => setForm((prev) => ({ ...prev, filter: f }))}
-                                            className={cn(
-                                                "rounded-lg border px-3 py-2 text-xs text-left transition-colors",
-                                                form.filter === f
-                                                    ? "border-brand-500/60 bg-brand-500/10 text-brand-300"
-                                                    : "border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-300"
-                                            )}
-                                        >
-                                            <div className="font-medium">{FILTER_LABELS[f]}</div>
-                                            <div className="text-gray-500 mt-0.5 leading-relaxed">
-                                                {FILTER_DESCRIPTIONS[f]}
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* TOP_TRENDING — providers tag input + maxItems */}
-                        {form.collectionType === "TOP_TRENDING" && (
-                            <>
-                                <div className="space-y-1.5 col-span-2">
-                                    <label className="text-xs text-gray-400">Streaming Providers</label>
-                                    {/* Tag pills */}
-                                    <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                        {form.streamingProviders.map((p) => (
-                                            <span key={p} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-brand-500/15 border border-brand-500/30 text-brand-300">
-                                                {p}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setForm((f) => ({ ...f, streamingProviders: f.streamingProviders.filter((x) => x !== p) }))}
-                                                    className="leading-none text-brand-400 hover:text-red-400 transition-colors"
-                                                    aria-label={`Remove ${p}`}
-                                                >
-                                                    ×
-                                                </button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                    {/* Add provider input */}
-                                    <ProviderInput
-                                        current={form.streamingProviders}
-                                        onAdd={(p) => setForm((f) => ({
-                                            ...f,
-                                            streamingProviders: f.streamingProviders.includes(p)
-                                                ? f.streamingProviders
-                                                : [...f.streamingProviders, p],
-                                        }))}
-                                    />
-                                    <p className="text-xs text-gray-600">
-                                        Provider names must match what&apos;s stored on titles (e.g. &quot;Netflix&quot;, &quot;Disney+&quot;)
-                                    </p>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs text-gray-400">Max Items Per Provider</label>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={50}
-                                        value={form.maxItemsPerProvider}
-                                        onChange={(e) =>
-                                            setForm((f) => ({ ...f, maxItemsPerProvider: Math.max(1, parseInt(e.target.value) || 10) }))
-                                        }
-                                        className={INPUT_CLS}
-                                    />
-                                    <p className="text-xs text-gray-600">Top N titles per provider, interleaved (#1 Netflix, #1 Prime, #1 Disney+, #2 Netflix…)</p>
-                                </div>
-                            </>
-                        )}
-
-                        {/* Auto-request toggle */}
-                        <div className="col-span-2 flex items-center justify-between rounded-lg border border-gray-700/60 bg-gray-800/40 px-4 py-3">
-                            <div>
-                                <p className="text-sm font-medium text-white">Auto-request in Jellyseerr</p>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    Automatically submit Jellyseerr requests for collection titles not yet in your library
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setForm((f) => ({ ...f, autoRequest: !f.autoRequest }))}
-                                className={cn(
-                                    "relative flex-shrink-0 w-10 h-5 rounded-full transition-colors",
-                                    form.autoRequest ? "bg-brand-500" : "bg-gray-700"
-                                )}
-                            >
-                                <span className={cn(
-                                    "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
-                                    form.autoRequest ? "translate-x-5" : "translate-x-0"
-                                )} />
-                            </button>
-                        </div>
-                    </div>
-
-                    {createError && (
-                        <p className="text-sm text-red-400 rounded-lg bg-red-900/20 border border-red-800 px-3 py-2">
-                            {createError}
-                        </p>
-                    )}
-                    <div className="flex gap-2 pt-1">
-                        <button
-                            onClick={() => { setShowForm(false); resetForm(); }}
-                            className="text-sm px-3 py-2 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleCreate}
-                            disabled={creating || !form.name || !form.sectionId}
-                            className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-gray-950 font-semibold transition-colors disabled:opacity-40"
-                        >
-                            {creating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            Create Collection
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Empty state */}
-            {collections.length === 0 && !showForm && (
-                <div className="rounded-xl border border-dashed border-gray-700/60 p-12 text-center">
-                    <Clapperboard className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-                    <p className="text-sm font-medium text-gray-400">No collections yet</p>
-                    <p className="text-xs text-gray-600 mt-1 mb-4">
-                        Create a collection to start syncing titles directly to Plex
-                    </p>
-                    {plexConfigured && (
-                        <button
-                            onClick={() => { setShowForm(true); setEditingId(null); }}
-                            className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-gray-950 font-semibold transition-colors"
-                        >
-                            <Plus className="w-4 h-4" />
-                            Add your first collection
-                        </button>
-                    )}
-                </div>
-            )}
-
-            {/* Collection list */}
-            {collections.length > 0 && (
-                <div className="space-y-3">
-                    {collections.map((c) => (
-                        <div
-                            key={c.id}
-                            className={cn(
-                                "rounded-xl border overflow-hidden transition-colors",
-                                c.enabled
-                                    ? "border-gray-700/60 bg-gray-900/50"
-                                    : "border-gray-800/40 bg-gray-900/20 opacity-60"
-                            )}
-                        >
-                            <div className="flex items-start justify-between gap-4 p-4">
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <div className={cn(
-                                        "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                                        c.enabled ? "bg-brand-500/10 border border-brand-500/20" : "bg-gray-800/60 border border-gray-700/40"
-                                    )}>
-                                        {c.mediaType === "MOVIE" ? (
-                                            <Film className={cn("w-4 h-4", c.enabled ? "text-brand-400" : "text-gray-600")} />
-                                        ) : (
-                                            <Tv2 className={cn("w-4 h-4", c.enabled ? "text-brand-400" : "text-gray-600")} />
-                                        )}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <p className="font-medium text-white text-sm truncate">{c.name}</p>
-                                            {/* Collection type badge */}
-                                            {c.collectionType === "TOP_TRENDING" ? (
-                                                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 flex-shrink-0">
-                                                    <TrendingUp className="w-2.5 h-2.5" />
-                                                    Top Trending
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-brand-500/10 border border-brand-500/30 text-brand-400 flex-shrink-0">
-                                                    <Sparkles className="w-2.5 h-2.5" />
-                                                    Smart
-                                                </span>
-                                            )}
-                                            {/* Filter or provider badge */}
-                                            {c.collectionType === "SMART" ? (
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 flex-shrink-0">
-                                                    {FILTER_LABELS[c.filter] ?? c.filter}
-                                                </span>
-                                            ) : c.streamingProviders?.length ? (
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 flex-shrink-0">
-                                                    {c.streamingProviders.join(", ")} · top {c.maxItemsPerProvider}/provider
-                                                </span>
-                                            ) : null}
-                                        </div>
-                                        <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                            <span className="text-xs text-gray-500">
-                                                {c.mediaType === "MOVIE" ? "Movies" : "TV Shows"}
-                                            </span>
-                                            <span className="text-xs text-gray-600">·</span>
-                                            <span className="text-xs text-gray-500">
-                                                {c.itemCount} item{c.itemCount !== 1 ? "s" : ""}
-                                            </span>
-                                            {c.plexKey && (
-                                                <>
-                                                    <span className="text-xs text-gray-600">·</span>
-                                                    <span className="text-xs text-green-500/80">Synced to Plex</span>
-                                                </>
-                                            )}
-                                            {c.lastSyncAt && (
-                                                <>
-                                                    <span className="text-xs text-gray-600">·</span>
-                                                    <span className="text-xs text-gray-600">
-                                                        Last synced {new Date(c.lastSyncAt).toLocaleDateString()}
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-1.5 flex-shrink-0">
-                                    <button
-                                        onClick={() => { setEditingId(null); setExpandedItemsId(expandedItemsId === c.id ? null : c.id); }}
-                                        title="View collection items"
-                                        className={cn(
-                                            "p-2 rounded-lg transition-colors",
-                                            expandedItemsId === c.id && editingId !== c.id
-                                                ? "text-brand-400 bg-brand-500/10"
-                                                : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/60"
-                                        )}
-                                    >
-                                        <List className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleStartEdit(c)}
-                                        title="Edit collection settings"
-                                        className={cn(
-                                            "p-2 rounded-lg transition-colors",
-                                            editingId === c.id
-                                                ? "text-brand-400 bg-brand-500/10"
-                                                : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/60"
-                                        )}
-                                    >
-                                        <Pencil className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleToggle(c)}
-                                        title={c.enabled ? "Disable collection" : "Enable collection"}
-                                        className="p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800/60 transition-colors"
-                                    >
-                                        {c.enabled ? (
-                                            <ToggleRight className="w-5 h-5 text-brand-400" />
-                                        ) : (
-                                            <ToggleLeft className="w-5 h-5" />
-                                        )}
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(c)}
-                                        title="Remove from WatchWarden"
-                                        className="p-2 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-900/20 transition-colors"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Inline edit panel */}
-                            {editingId === c.id && (
-                                <div className="border-t border-gray-700/40 p-4 bg-gray-900/80 space-y-4">
-                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Edit Collection</p>
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs text-gray-400">Name</label>
-                                        <input
-                                            type="text"
-                                            value={editForm.name}
-                                            onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                                            className={INPUT_CLS}
-                                        />
-                                    </div>
-                                    {c.collectionType === "SMART" && (
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs text-gray-400">Filter</label>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {(["ACTIVE_TRENDING", "PINNED", "APPROVED"] as const).map((f) => (
-                                                    <button
-                                                        key={f}
-                                                        type="button"
-                                                        onClick={() => setEditForm((ef) => ({ ...ef, filter: f }))}
-                                                        className={cn(
-                                                            "rounded-lg border px-3 py-2 text-xs text-left transition-colors",
-                                                            editForm.filter === f
-                                                                ? "border-brand-500/60 bg-brand-500/10 text-brand-300"
-                                                                : "border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-300"
-                                                        )}
-                                                    >
-                                                        <div className="font-medium">{FILTER_LABELS[f]}</div>
-                                                        <div className="text-gray-500 mt-0.5 text-[10px] leading-relaxed">{FILTER_DESCRIPTIONS[f]}</div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {c.collectionType === "TOP_TRENDING" && (
-                                        <div className="space-y-3">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs text-gray-400">Streaming Providers</label>
-                                                <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                                    {editForm.streamingProviders.map((p) => (
-                                                        <span key={p} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-brand-500/15 border border-brand-500/30 text-brand-300">
-                                                            {p}
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setEditForm((ef) => ({ ...ef, streamingProviders: ef.streamingProviders.filter((x) => x !== p) }))}
-                                                                className="leading-none text-brand-400 hover:text-red-400 transition-colors"
-                                                            >&times;</button>
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                                <ProviderInput
-                                                    current={editForm.streamingProviders}
-                                                    onAdd={(p) => setEditForm((ef) => ({
-                                                        ...ef,
-                                                        streamingProviders: ef.streamingProviders.includes(p)
-                                                            ? ef.streamingProviders
-                                                            : [...ef.streamingProviders, p],
-                                                    }))}
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs text-gray-400">Max Items Per Provider</label>
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    max={50}
-                                                    value={editForm.maxItemsPerProvider}
-                                                    onChange={(e) => setEditForm((ef) => ({ ...ef, maxItemsPerProvider: Math.max(1, parseInt(e.target.value) || 10) }))}
-                                                    className={INPUT_CLS}
-                                                />
-                                                <p className="text-xs text-gray-600">Top N per provider, interleaved across providers</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {/* Auto-request toggle */}
-                                    <div className="flex items-center justify-between rounded-lg border border-gray-700/60 bg-gray-800/40 px-4 py-3">
-                                        <div>
-                                            <p className="text-xs font-medium text-white">Auto-request in Jellyseerr</p>
-                                            <p className="text-[10px] text-gray-500 mt-0.5">Submit requests for collection titles not yet in library</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditForm((ef) => ({ ...ef, autoRequest: !ef.autoRequest }))}
-                                            className={cn(
-                                                "relative flex-shrink-0 w-10 h-5 rounded-full transition-colors",
-                                                editForm.autoRequest ? "bg-brand-500" : "bg-gray-700"
-                                            )}
-                                        >
-                                            <span className={cn(
-                                                "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
-                                                editForm.autoRequest ? "translate-x-5" : "translate-x-0"
-                                            )} />
-                                        </button>
-                                    </div>
-                                    {editError && (
-                                        <p className="text-sm text-red-400 rounded-lg bg-red-900/20 border border-red-800 px-3 py-2">{editError}</p>
-                                    )}
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={handleCancelEdit}
-                                            className="text-sm px-3 py-2 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            onClick={handleSaveEdit}
-                                            disabled={saving || !editForm.name}
-                                            className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-gray-950 font-semibold transition-colors disabled:opacity-40"
-                                        >
-                                            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                            Save Changes
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Items panel */}
-                            {expandedItemsId === c.id && editingId !== c.id && (
-                                <CollectionItemsPanel collectionId={c.id} mediaType={c.mediaType} />
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* How it works footer */}
-            <div className="rounded-xl border border-gray-800/40 p-4 text-xs text-gray-500 space-y-2 leading-relaxed">
-                <p className="font-medium text-gray-400">How collections work</p>
-                <p>
-                    <span className="text-brand-400 font-medium">Smart Collections</span> are driven by WatchWarden&apos;s
-                    scoring engine — titles that score highly based on trending signals, local watch history, and editorial
-                    boosts are automatically added or removed as scores change.
-                </p>
-                <p>
-                    <span className="text-amber-400 font-medium">Top Trending</span> collections pull from streaming
-                    platform-specific popularity rankings (via TMDB Discover) for each selected provider. With multiple
-                    providers, titles are interleaved by rank: #1 Netflix, #1 Prime, #1 Disney+, #2 Netflix… giving
-                    you an accurate per-platform top list ordered by position.
-                </p>
-                <p>
-                    Collections sync on a schedule (default every 6h 45min). Use{" "}
-                    <span className="text-gray-300">Sync Now</span> for an immediate library scan + collection update.
-                    Collections are created in Plex automatically on first sync and appear on the home screen for all users.
-                </p>
-            </div>
-        </div>
-    );
+                    </div>{expanded === shelf.id && <ShelfPreview shelf={shelf} onChanged={() => mutate()} />}
+                </div>;
+            })}
+        </section>
+        <p className="px-1 text-xs leading-relaxed text-gray-500">Watch Warden only changes collections it created and tracks. Plex decides where these rows sit relative to its own Home sections.</p>
+    </div>;
 }

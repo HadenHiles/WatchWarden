@@ -20,13 +20,19 @@ const homeSettingsSchema = z.object({
     defaultMaxItems: z.number().int().min(1).max(100).default(20),
 });
 plexRouter.patch("/home/settings", validateBody(homeSettingsSchema), asyncHandler(async (req, res) => {
-    const setting = await prisma.appSetting.upsert({ where: { key: "plexHome" }, update: { value: req.body }, create: { key: "plexHome", value: req.body, category: "plex" } });
+    const body = req.body as z.infer<typeof homeSettingsSchema>;
+    const [setting] = await prisma.$transaction([
+        prisma.appSetting.upsert({ where: { key: "plexHome" }, update: { value: body }, create: { key: "plexHome", value: body, category: "plex" } }),
+        prisma.plexCollection.updateMany({ where: { shelfType: "RECENTLY_RELEASED" }, data: { releaseWindowDays: body.recentlyReleasedDays } }),
+    ]);
     res.json({ success: true, data: setting.value });
 }));
 
 const setupShelvesSchema = z.object({ movieSectionId: z.string().min(1), showSectionId: z.string().min(1), providers: z.array(z.string().min(1)).default(["Netflix", "Disney+", "Prime Video", "Apple TV+"]) });
 plexRouter.post("/home/setup", validateBody(setupShelvesSchema), asyncHandler(async (req, res) => {
     const body = req.body as z.infer<typeof setupShelvesSchema>;
+    const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
+    const home = { ...DEFAULT_HOME_SETTINGS, ...((homeSetting?.value ?? {}) as Partial<typeof DEFAULT_HOME_SETTINGS>) };
     const base = [
         { name: "Popular Movies Right Now", sectionId: body.movieSectionId, mediaType: "MOVIE" as const, shelfType: "CULTURAL_TRENDING" as const },
         { name: "Popular Shows Right Now", sectionId: body.showSectionId, mediaType: "SHOW" as const, shelfType: "CULTURAL_TRENDING" as const },
@@ -42,7 +48,8 @@ plexRouter.post("/home/setup", validateBody(setupShelvesSchema), asyncHandler(as
         created.push(await prisma.plexCollection.create({ data: {
             ...shelf, collectionType: shelf.shelfType === "PROVIDER_TRENDING" ? "TOP_TRENDING" : "SMART",
             provider, streamingProviders: provider ? [provider] : [], enabled: false, publishToHome: false,
-            homePriority: (index + 1) * 10, maxItems: 20, maxItemsPerProvider: 20,
+            homePriority: (index + 1) * 10, maxItems: home.defaultMaxItems, maxItemsPerProvider: home.defaultMaxItems,
+            releaseWindowDays: home.recentlyReleasedDays,
         } }));
     }
     res.status(201).json({ success: true, data: created });

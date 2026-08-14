@@ -86,7 +86,7 @@ const KNOWN_SETTINGS: SettingSection[] = [
             { key: "refreshIntervals", subKey: "lifecycleEvalCron", label: "Lifecycle Evaluation", type: "text", placeholder: "0 4 * * *" },
             { key: "refreshIntervals", subKey: "exportCron", label: "Export", type: "text", placeholder: "15 */6 * * *" },
             { key: "refreshIntervals", subKey: "plexLibrarySyncCron", label: "Plex Library Scan", type: "text", placeholder: "0 */4 * * *" },
-            { key: "refreshIntervals", subKey: "plexSyncCron", label: "Plex Collection Sync", type: "text", placeholder: "45 */6 * * *" },
+            { key: "refreshIntervals", subKey: "plexSyncCron", label: "Plex Home Sync", type: "text", placeholder: "45 */6 * * *" },
         ],
     },
 ];

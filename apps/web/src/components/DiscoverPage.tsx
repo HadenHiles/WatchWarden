@@ -220,7 +220,7 @@ export function DiscoverPage() {
             <div className="rounded-xl bg-gray-900/50 border border-gray-800/40 p-4">
                 <p className="text-xs text-gray-600 leading-relaxed">
                     <span className="text-gray-400 font-medium">How it works:</span> WatchWarden tracks trending titles
-                    on each streaming platform and creates managed sliders in Jellyseerr&apos;s Discover tab. Your Famflix
+                    on each streaming platform and creates managed sliders in Jellyseerr&apos;s Discover tab. Your household
                     users browse Jellyseerr, see WatchWarden&apos;s curated content, and request what they want — you
                     review and approve in Jellyseerr as normal. WatchWarden never auto-downloads anything.
                 </p>

@@ -101,14 +101,14 @@ export function OverviewPage() {
     return (
         <div className="space-y-6 max-w-4xl w-full">
             <div className="flex items-center justify-between">
-                <h1 className="text-lg font-semibold text-white tracking-tight">Overview</h1>
-                <button
+                <div><h1 className="text-lg font-semibold text-white tracking-tight">Overview</h1><p className="mt-0.5 text-xs text-gray-500">Keep Plex fresh, discover titles, and monitor automation.</p></div>
+                <div className="flex items-center gap-2"><Link href="/dashboard/plex/collections" className="rounded-lg bg-brand-500/15 px-3 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-500/25">Manage Plex Home</Link><button
                     onClick={() => mutate()}
                     className="p-1.5 rounded-lg text-gray-600 hover:text-gray-300 transition-colors"
                     title="Refresh"
                 >
                     <RefreshCw className="w-4 h-4" />
-                </button>
+                </button></div>
             </div>
 
             {/* ── Attention banner ── */}

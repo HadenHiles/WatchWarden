@@ -17,11 +17,11 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+    { href: "/dashboard/plex/collections", label: "Plex Home", icon: Clapperboard },
     { href: "/dashboard/suggestions", label: "Suggestions", icon: Sparkles },
     { href: "/dashboard/discover", label: "Discover", icon: Radio },
     { href: "/dashboard/library", label: "Library", icon: Library },
-    { href: "/dashboard/plex/collections", label: "Plex Collections", icon: Clapperboard },
-    { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
+    { href: "/dashboard/jobs", label: "Automation", icon: Briefcase },
     { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
@@ -103,4 +103,3 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         </>
     );
 }
-

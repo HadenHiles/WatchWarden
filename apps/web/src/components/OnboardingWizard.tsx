@@ -347,7 +347,7 @@ export function OnboardingWizard() {
                             <h2 className="text-xl font-bold text-white mb-1">Plex Media Server</h2>
                             <p className="text-gray-400 text-sm mb-5 leading-relaxed">
                                 WatchWarden connects directly to Plex to scan your library and keep your
-                                collections up to date. You can configure collections (e.g. &#34;Hot on FamFlix&#34;)
+                                discovery shelves up to date. You can choose which shelves appear on Plex Home
                                 from the dashboard after setup.
                             </p>
                             <div className="space-y-4">
@@ -586,7 +586,7 @@ export function OnboardingWizard() {
                             </p>
                             <div className="rounded-lg border border-brand-700/40 bg-brand-900/20 p-3 text-xs text-brand-300 mb-6 leading-relaxed space-y-1">
                                 <p className="font-semibold text-brand-200">Next steps:</p>
-                                <p>1. Go to <span className="font-medium text-white">Settings → Plex</span> and create a collection (e.g. &#34;Hot on FamFlix&#34;)</p>
+                                <p>1. Open <span className="font-medium text-white">Plex Home</span> and add the recommended shelf lineup</p>
                                 <p>2. Trigger a <span className="font-medium text-white">Plex Library Scan</span> from the Jobs page to populate library state</p>
                                 <p>3. Trigger <span className="font-medium text-white">Plex Collection Sync</span> to push the collection to Plex</p>
                             </div>
@@ -634,4 +634,3 @@ export function OnboardingWizard() {
         </div>
     );
 }
-
