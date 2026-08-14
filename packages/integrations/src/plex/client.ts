@@ -345,14 +345,31 @@ export class PlexClient {
         publishToSharedHome: boolean;
     }): Promise<void> {
         try {
-            await this.http.put(`/hubs/sections/${params.sectionId}/manage`, null, {
-                params: {
-                    metadataItemId: params.collectionId,
-                    promotedToRecommended: params.publishToHome || params.publishToSharedHome,
-                    promotedToOwnHome: params.publishToHome,
-                    promotedToSharedHome: params.publishToSharedHome,
-                },
-            });
+            const visibility = {
+                promotedToRecommended: Number(params.publishToHome || params.publishToSharedHome),
+                promotedToOwnHome: Number(params.publishToHome),
+                promotedToSharedHome: Number(params.publishToSharedHome),
+            };
+            const managed = await this.http.get<{
+                MediaContainer: { Hub?: Array<{ identifier: string }> };
+            }>(`/hubs/sections/${params.sectionId}/manage`);
+            const existing = (managed.data.MediaContainer.Hub ?? []).find((hub) =>
+                hub.identifier.endsWith(`.${params.collectionId}`)
+            );
+
+            if (existing) {
+                await this.http.put(
+                    `/hubs/sections/${params.sectionId}/manage/${existing.identifier}`,
+                    null,
+                    { params: visibility },
+                );
+            } else if (params.publishToHome || params.publishToSharedHome) {
+                // Plex creates a custom managed hub with POST; PUT is only for
+                // visibility changes after that hub already exists.
+                await this.http.post(`/hubs/sections/${params.sectionId}/manage`, null, {
+                    params: { metadataItemId: params.collectionId, ...visibility },
+                });
+            }
         } catch (err) {
             this.handleError(`setCollectionRecommendation(${params.collectionId})`, err);
         }

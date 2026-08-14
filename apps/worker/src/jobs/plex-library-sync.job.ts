@@ -34,8 +34,17 @@ export async function plexLibrarySyncJob(): Promise<void> {
         throw err;
     }
 
-    const movieSections = sections.filter((s) => s.type === "movie");
-    const showSections = sections.filter((s) => s.type === "show");
+    // Collections cannot contain items from a different Plex library section.
+    // Scan only sections that WatchWarden is configured to publish into (e.g.
+    // the main Movies/TV libraries, excluding separately managed Kids sections).
+    const configured = await prisma.plexCollection.findMany({
+        where: { enabled: true },
+        select: { sectionId: true, mediaType: true },
+    });
+    const movieSectionIds = new Set(configured.filter((c) => c.mediaType === "MOVIE").map((c) => c.sectionId));
+    const showSectionIds = new Set(configured.filter((c) => c.mediaType === "SHOW").map((c) => c.sectionId));
+    const movieSections = sections.filter((s) => s.type === "movie" && movieSectionIds.has(s.key));
+    const showSections = sections.filter((s) => s.type === "show" && showSectionIds.has(s.key));
 
     logger.info("Found Plex library sections", {
         movies: movieSections.length,

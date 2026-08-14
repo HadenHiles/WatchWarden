@@ -376,4 +376,7 @@ export async function plexSyncJob(): Promise<void> {
     }
 
     logger.info("Plex sync complete", { synced: syncedCount, errors: errorCount });
+    if (errorCount > 0) {
+        throw new Error(`Failed to sync ${errorCount} of ${collections.length} Plex collections`);
+    }
 }
