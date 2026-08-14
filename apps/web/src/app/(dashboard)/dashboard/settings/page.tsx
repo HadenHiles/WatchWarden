@@ -33,6 +33,8 @@ const KNOWN_SETTINGS: SettingSection[] = [
         keys: [
             { key: "automation.roster", subKey: "enabled", label: "Auto-request shelf roster", type: "boolean" },
             { key: "automation.roster", subKey: "maxNewRequestsPerRun", label: "Maximum new requests per run", type: "number", hint: "Recommended: 5", placeholder: "5" },
+            { key: "automation.roster", subKey: "deleteUnwatched", label: "Delete unwatched titles after they leave rotation", type: "boolean", hint: "Only bot-requested titles with zero watch activity" },
+            { key: "automation.roster", subKey: "maxDeletesPerRun", label: "Maximum deletions per run", type: "number", hint: "Safety cap; recommended: 3", placeholder: "3" },
         ],
     },
     {

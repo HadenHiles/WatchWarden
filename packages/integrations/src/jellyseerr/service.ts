@@ -136,6 +136,18 @@ export class JellyseerrService {
         }
     }
 
+    /** Delete a title's file via Radarr/Sonarr, then remove its Jellyseerr record. */
+    async deleteMedia(tmdbId: number, mediaType: "movie" | "tv"): Promise<number> {
+        const media = mediaType === "movie"
+            ? await this.client.getMovie(tmdbId)
+            : await this.client.getTv(tmdbId);
+        const mediaId = media.mediaInfo?.id;
+        if (!mediaId) throw new Error(`No Jellyseerr media record found for TMDB ${tmdbId}`);
+        await this.client.deleteMediaFile(mediaId);
+        await this.client.deleteMediaRecord(mediaId);
+        return mediaId;
+    }
+
     /**
      * Creates or updates a WatchWarden discover slider in Jellyseerr for a streaming platform.
      * Returns the Jellyseerr slider ID so it can be persisted in the DB.

@@ -128,6 +128,24 @@ export class JellyseerrClient {
         }
     }
 
+    /** Delete the physical file through the configured Radarr/Sonarr service. */
+    async deleteMediaFile(mediaId: number): Promise<void> {
+        try {
+            await this.http.delete(`/media/${mediaId}/file`, { params: { is4k: false } });
+        } catch (err) {
+            this.handleError(`deleteMediaFile(${mediaId})`, err);
+        }
+    }
+
+    /** Remove the media record from Jellyseerr after its file is deleted. */
+    async deleteMediaRecord(mediaId: number): Promise<void> {
+        try {
+            await this.http.delete(`/media/${mediaId}`);
+        } catch (err) {
+            this.handleError(`deleteMediaRecord(${mediaId})`, err);
+        }
+    }
+
     /** Fetch all pending requests (paginated) */
     async getPendingRequests(
         take = 20,

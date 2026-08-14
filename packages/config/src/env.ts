@@ -51,6 +51,7 @@ export const workerEnvSchema = baseEnvSchema.extend({
     LIFECYCLE_EVAL_CRON: z.string().default("0 4 * * *"),
     EXPORT_CRON: z.string().default("15 */6 * * *"),
     PLEX_SYNC_CRON: z.string().default("45 */6 * * *"),
+    ROTATION_CLEANUP_CRON: z.string().default("30 4 * * *"),
 });
 
 export const webEnvSchema = z.object({

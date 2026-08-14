@@ -15,6 +15,7 @@ const JOB_NAMES = [
     "lifecycle-eval",
     "export",
     "plex-sync",
+    "rotation-cleanup",
 ] as const;
 
 // GET /stats — summary counts for the overview dashboard

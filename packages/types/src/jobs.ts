@@ -26,7 +26,8 @@ export type JobName =
     | "plex-library-sync"
     | "lifecycle-eval"
     | "export"
-    | "plex-sync";
+    | "plex-sync"
+    | "rotation-cleanup";
 
 export interface JobStatusSummary {
     jobName: JobName;
