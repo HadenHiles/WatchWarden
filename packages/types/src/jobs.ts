@@ -21,9 +21,12 @@ export type JobName =
     | "tautulli-sync"
     | "scoring"
     | "jellyseerr-status-sync"
+    | "jellyseerr-discover-sync"
     | "library-sync"
+    | "plex-library-sync"
     | "lifecycle-eval"
-    | "export";
+    | "export"
+    | "plex-sync";
 
 export interface JobStatusSummary {
     jobName: JobName;

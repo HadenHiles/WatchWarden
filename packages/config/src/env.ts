@@ -47,6 +47,7 @@ export const workerEnvSchema = baseEnvSchema.extend({
     JELLYSEERR_STATUS_SYNC_CRON: z.string().default("0 * * * *"),
     JELLYSEERR_DISCOVER_SYNC_CRON: z.string().default("0 */6 * * *"),
     LIBRARY_SYNC_CRON: z.string().default("0 */3 * * *"),
+    PLEX_LIBRARY_SYNC_CRON: z.string().default("15 */3 * * *"),
     LIFECYCLE_EVAL_CRON: z.string().default("0 4 * * *"),
     EXPORT_CRON: z.string().default("15 */6 * * *"),
     PLEX_SYNC_CRON: z.string().default("45 */6 * * *"),

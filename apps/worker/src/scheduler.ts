@@ -11,6 +11,7 @@ import { librarySyncJob } from "./jobs/library-sync.job";
 import { lifecycleEvalJob } from "./jobs/lifecycle-eval.job";
 import { exportJob } from "./jobs/export.job";
 import { plexSyncJob } from "./jobs/plex-sync.job";
+import { plexLibrarySyncJob } from "./jobs/plex-library-sync.job";
 
 const logger = createLogger("scheduler");
 
@@ -24,6 +25,7 @@ export function buildScheduler(env: WorkerEnv) {
         { name: "jellyseerr-status-sync", cron: env.JELLYSEERR_STATUS_SYNC_CRON, fn: jellyseerrStatusSyncJob },
         { name: "jellyseerr-discover-sync", cron: env.JELLYSEERR_DISCOVER_SYNC_CRON, fn: jellyseerrDiscoverSyncJob },
         { name: "library-sync", cron: env.LIBRARY_SYNC_CRON, fn: librarySyncJob },
+        { name: "plex-library-sync", cron: env.PLEX_LIBRARY_SYNC_CRON, fn: plexLibrarySyncJob },
         { name: "lifecycle-eval", cron: env.LIFECYCLE_EVAL_CRON, fn: lifecycleEvalJob },
         { name: "export", cron: env.EXPORT_CRON, fn: exportJob },
         { name: "plex-sync", cron: env.PLEX_SYNC_CRON, fn: plexSyncJob },

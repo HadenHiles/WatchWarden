@@ -11,6 +11,7 @@ const JOB_NAMES = [
     "jellyseerr-status-sync",
     "jellyseerr-discover-sync",
     "library-sync",
+    "plex-library-sync",
     "lifecycle-eval",
     "export",
     "plex-sync",

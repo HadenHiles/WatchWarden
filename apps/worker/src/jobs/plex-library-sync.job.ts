@@ -31,7 +31,7 @@ export async function plexLibrarySyncJob(): Promise<void> {
         sections = await client.getSections();
     } catch (err) {
         logger.error("Failed to fetch Plex sections", { error: err });
-        return;
+        throw err;
     }
 
     const movieSections = sections.filter((s) => s.type === "movie");
@@ -45,6 +45,7 @@ export async function plexLibrarySyncJob(): Promise<void> {
     // ── Build tmdbId → ratingKey map from Plex ────────────────────────────────
     const movieMap = new Map<number, string>(); // tmdbId → ratingKey
     const showMap = new Map<number, string>();
+    let failedSections = 0;
 
     for (const section of movieSections) {
         try {
@@ -60,6 +61,7 @@ export async function plexLibrarySyncJob(): Promise<void> {
             });
         } catch (err) {
             logger.error("Failed to scan movie section", { section: section.title, error: err });
+            failedSections++;
         }
     }
 
@@ -77,7 +79,12 @@ export async function plexLibrarySyncJob(): Promise<void> {
             });
         } catch (err) {
             logger.error("Failed to scan show section", { section: section.title, error: err });
+            failedSections++;
         }
+    }
+
+    if (failedSections > 0) {
+        throw new Error(`Failed to scan ${failedSections} Plex library section(s); reconciliation aborted`);
     }
 
     // ── Reconcile with DB ─────────────────────────────────────────────────────
