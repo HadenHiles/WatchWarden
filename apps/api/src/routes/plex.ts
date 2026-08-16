@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@watchwarden/db";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { asyncHandler } from "../middleware/error";
 import { validateBody } from "../middleware/validation";
 import { DecisionService } from "../services/decision.service";
@@ -10,6 +10,22 @@ export const plexRouter = Router();
 const decisionService = new DecisionService();
 
 const DEFAULT_HOME_SETTINGS = { primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, backfillRecentReleases: true, recentlyReleasedBackfillDays: 365, defaultMaxItems: 20 };
+
+const shelfConfigSchema = z.object({
+    genres: z.array(z.string().trim().min(1).max(50)).min(1).max(5).optional(),
+    startYear: z.number().int().min(1888).max(2100).optional(),
+    endYear: z.number().int().min(1888).max(2100).optional(),
+}).refine((config) => !config.startYear || !config.endYear || config.startYear <= config.endYear, { message: "Start year must not exceed end year" });
+
+function readShelfConfig(value: unknown): z.infer<typeof shelfConfigSchema> {
+    return shelfConfigSchema.catch({}).parse(value);
+}
+
+function addShelfCriteria(where: Prisma.TitleWhereInput, config: z.infer<typeof shelfConfigSchema>): Prisma.TitleWhereInput {
+    if (config.genres?.length) where.genres = { hasSome: config.genres };
+    if (config.startYear || config.endYear) where.year = { gte: config.startYear, lte: config.endYear };
+    return where;
+}
 
 plexRouter.get("/home", asyncHandler(async (_req, res) => {
     const setting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
@@ -42,6 +58,11 @@ plexRouter.post("/home/setup", validateBody(setupShelvesSchema), asyncHandler(as
     const base = [
         { name: "Popular Movies Right Now", sectionId: body.movieSectionId, mediaType: "MOVIE" as const, shelfType: "CULTURAL_TRENDING" as const, streamingProviders: body.providers },
         { name: "Popular Shows Right Now", sectionId: body.showSectionId, mediaType: "SHOW" as const, shelfType: "CULTURAL_TRENDING" as const, streamingProviders: body.providers },
+        { name: "FamFlix Favorites - Movies", sectionId: body.movieSectionId, mediaType: "MOVIE" as const, shelfType: "FAMILY_POPULAR" as const },
+        { name: "FamFlix Favorites - Shows", sectionId: body.showSectionId, mediaType: "SHOW" as const, shelfType: "FAMILY_POPULAR" as const },
+        { name: "90s Movie Night", sectionId: body.movieSectionId, mediaType: "MOVIE" as const, shelfType: "DECADE" as const, shelfConfig: { startYear: 1990, endYear: 1999 } },
+        { name: "2000s TV Time", sectionId: body.showSectionId, mediaType: "SHOW" as const, shelfType: "DECADE" as const, shelfConfig: { startYear: 2000, endYear: 2009 } },
+        { name: "Action & Adventure", sectionId: body.movieSectionId, mediaType: "MOVIE" as const, shelfType: "GENRE" as const, shelfConfig: { genres: ["Action", "Adventure"] } },
         { name: "Recently Released Movies", sectionId: body.movieSectionId, mediaType: "MOVIE" as const, shelfType: "RECENTLY_RELEASED" as const },
         ...body.providers.flatMap((provider) => (["MOVIE", "SHOW"] as const).map((mediaType) => ({ name: `Popular on ${provider}${mediaType === "SHOW" ? " — Shows" : ""}`, sectionId: mediaType === "MOVIE" ? body.movieSectionId : body.showSectionId, mediaType, shelfType: "PROVIDER_TRENDING" as const, provider }))),
     ];
@@ -51,12 +72,14 @@ plexRouter.post("/home/setup", validateBody(setupShelvesSchema), asyncHandler(as
     for (const [index, shelf] of base.entries()) {
         if (keys.has(`${shelf.mediaType}:${shelf.name}`)) continue;
         const provider = "provider" in shelf ? shelf.provider : null;
-        created.push(await prisma.plexCollection.create({ data: {
-            ...shelf, collectionType: shelf.shelfType === "PROVIDER_TRENDING" ? "TOP_TRENDING" : "SMART",
-            provider, streamingProviders: "streamingProviders" in shelf ? shelf.streamingProviders : provider ? [provider] : [], enabled: false, publishToHome: false,
-            homePriority: (index + 1) * 10, maxItems: home.defaultMaxItems, maxItemsPerProvider: home.defaultMaxItems,
-            releaseWindowDays: home.recentlyReleasedDays,
-        } }));
+        created.push(await prisma.plexCollection.create({
+            data: {
+                ...shelf, collectionType: shelf.shelfType === "PROVIDER_TRENDING" ? "TOP_TRENDING" : "SMART",
+                provider, streamingProviders: "streamingProviders" in shelf ? shelf.streamingProviders : provider ? [provider] : [], enabled: false, publishToHome: false,
+                homePriority: (index + 1) * 10, maxItems: home.defaultMaxItems, maxItemsPerProvider: home.defaultMaxItems,
+                releaseWindowDays: home.recentlyReleasedDays,
+            }
+        }));
     }
     res.status(201).json({ success: true, data: created });
 }));
@@ -64,7 +87,7 @@ plexRouter.post("/home/setup", validateBody(setupShelvesSchema), asyncHandler(as
 const VALID_FILTERS = ["ACTIVE_TRENDING", "PINNED", "APPROVED"] as const;
 const VALID_MEDIA_TYPES = ["MOVIE", "SHOW"] as const;
 const VALID_COLLECTION_TYPES = ["SMART", "TOP_TRENDING"] as const;
-const VALID_SHELF_TYPES = ["CULTURAL_TRENDING", "PROVIDER_TRENDING", "RECENTLY_RELEASED", "SMART", "CUSTOM"] as const;
+const VALID_SHELF_TYPES = ["CULTURAL_TRENDING", "PROVIDER_TRENDING", "RECENTLY_RELEASED", "FAMILY_POPULAR", "GENRE", "DECADE", "SMART", "CUSTOM"] as const;
 
 // GET /plex/collections — list all PlexCollection rows
 plexRouter.get("/collections", asyncHandler(async (_req, res) => {
@@ -84,6 +107,7 @@ const createCollectionSchema = z.object({
     // TOP_TRENDING fields
     streamingProviders: z.array(z.string().min(1).max(100)).default([]),
     maxItemsPerProvider: z.number().int().min(1).max(50).default(10),
+    shelfConfig: shelfConfigSchema.optional(),
     enabled: z.boolean().default(true),
     shelfType: z.enum(VALID_SHELF_TYPES).default("CUSTOM"),
     provider: z.string().min(1).max(100).nullable().optional(),
@@ -128,6 +152,7 @@ const updateCollectionSchema = z.object({
     filter: z.enum(VALID_FILTERS).optional(),
     streamingProviders: z.array(z.string().min(1).max(100)).optional(),
     maxItemsPerProvider: z.number().int().min(1).max(50).optional(),
+    shelfConfig: shelfConfigSchema.nullable().optional(),
     enabled: z.boolean().optional(),
     shelfType: z.enum(VALID_SHELF_TYPES).optional(),
     provider: z.string().min(1).max(100).nullable().optional(),
@@ -158,9 +183,14 @@ plexRouter.patch("/collections/:id", validateBody(updateCollectionSchema), async
         });
     }
 
+    const { shelfConfig, ...collectionData } = body;
+    const data: Prisma.PlexCollectionUpdateInput = {
+        ...collectionData,
+        ...(shelfConfig === undefined ? {} : { shelfConfig: shelfConfig === null ? Prisma.JsonNull : shelfConfig as Prisma.InputJsonValue }),
+    };
     const updated = await prisma.plexCollection.update({
         where: { id: req.params.id },
-        data: body,
+        data,
     });
     return res.json({ success: true, data: updated });
 }));
@@ -212,6 +242,14 @@ plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
             orderBy: [{ releaseDate: "desc" }, { id: "asc" }], take: 30, select: { id: true },
         });
         titleIds = titles.map((title) => title.id);
+    } else if (collection.shelfType === "GENRE" || collection.shelfType === "DECADE") {
+        const suggestions = await prisma.suggestion.findMany({
+            where: { status: "PENDING", title: addShelfCriteria(titleWhere, readShelfConfig(collection.shelfConfig)) },
+            orderBy: { finalScore: "desc" }, take: 30, select: { titleId: true },
+        });
+        titleIds = suggestions.map((suggestion) => suggestion.titleId);
+    } else if (collection.shelfType === "FAMILY_POPULAR") {
+        titleIds = [];
     } else {
         const suggestions = await prisma.suggestion.findMany({
             where: { status: "PENDING", title: titleWhere },
@@ -325,13 +363,40 @@ plexRouter.get("/collections/:id/items", asyncHandler(async (req, res) => {
                 .filter((s) => s.source.startsWith("tmdb_"))
                 .map((s) => [s.source, s])).values()];
             const newest = latestBySource[0];
-            return { id: title.id, heat: newest ? culturalHeat({
-                tmdbTrends: latestBySource.map((s) => s.trendScore),
-                rank: Math.min(...latestBySource.map((s) => s.rank ?? 100)),
-                snapshotAt: newest.snapshotAt,
-                region: newest.region,
-            }, now) : 0 };
+            return {
+                id: title.id, heat: newest ? culturalHeat({
+                    tmdbTrends: latestBySource.map((s) => s.trendScore),
+                    rank: Math.min(...latestBySource.map((s) => s.rank ?? 100)),
+                    snapshotAt: newest.snapshotAt,
+                    region: newest.region,
+                }, now) : 0
+            };
         }).sort((a, b) => b.heat - a.heat || a.id.localeCompare(b.id)).slice(0, collection.maxItems).map((t) => t.id);
+    } else if (collection.shelfType === "FAMILY_POPULAR") {
+        const titles = await prisma.title.findMany({
+            where: { mediaType: collection.mediaType, inLibrary: true, plexRatingKey: { not: null }, watchSignals: { some: { recentWatchCount: { gt: 0 } } } },
+            select: { id: true, watchSignals: { select: { localInterestScore: true, uniqueViewerCount: true, recentWatchCount: true } } },
+        });
+        orderedTitleIds = titles.sort((a, b) => {
+            const left = a.watchSignals[0];
+            const right = b.watchSignals[0];
+            return (right?.localInterestScore ?? 0) - (left?.localInterestScore ?? 0)
+                || (right?.uniqueViewerCount ?? 0) - (left?.uniqueViewerCount ?? 0)
+                || (right?.recentWatchCount ?? 0) - (left?.recentWatchCount ?? 0)
+                || a.id.localeCompare(b.id);
+        }).map((title) => title.id);
+    } else if (collection.shelfType === "GENRE" || collection.shelfType === "DECADE") {
+        const titles = await prisma.title.findMany({
+            where: addShelfCriteria({ mediaType: collection.mediaType, inLibrary: true, plexRatingKey: { not: null } }, readShelfConfig(collection.shelfConfig)),
+            select: { id: true, trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 1 }, watchSignals: { select: { localInterestScore: true, recencyScore: true, multiUserBoost: true } } },
+        });
+        orderedTitleIds = titles.sort((a, b) => {
+            const score = (title: typeof a) => (title.trendSnapshots[0]?.trendScore ?? 0) * 0.7
+                + (title.watchSignals[0]?.localInterestScore ?? 0) * 0.2
+                + (title.watchSignals[0]?.recencyScore ?? 0) * 0.07
+                + (title.watchSignals[0]?.multiUserBoost ?? 0) * 0.03;
+            return score(b) - score(a) || a.id.localeCompare(b.id);
+        }).map((title) => title.id);
     } else if (collection.collectionType === "TOP_TRENDING") {
         if (!collection.streamingProviders.length) {
             return res.json({ success: true, data: [] });

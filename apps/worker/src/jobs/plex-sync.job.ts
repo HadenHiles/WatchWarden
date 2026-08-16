@@ -271,12 +271,14 @@ async function resolveCulturalKeys(
             .filter((s) => s.source.startsWith("tmdb_"))
             .map((s) => [s.source, s])).values()];
         const newest = latestBySource[0];
-        return { title, score: newest ? culturalHeat({
-            tmdbTrends: latestBySource.map((s) => s.trendScore),
-            rank: Math.min(...latestBySource.map((s) => s.rank ?? 100)),
-            snapshotAt: newest.snapshotAt,
-            region: newest.region,
-        }, now) : 0 };
+        return {
+            title, score: newest ? culturalHeat({
+                tmdbTrends: latestBySource.map((s) => s.trendScore),
+                rank: Math.min(...latestBySource.map((s) => s.rank ?? 100)),
+                snapshotAt: newest.snapshotAt,
+                region: newest.region,
+            }, now) : 0
+        };
     }).sort((a, b) => b.score - a.score || a.title.id.localeCompare(b.title.id))
         .map((x) => x.title.id);
 
@@ -325,6 +327,58 @@ async function resolveRecentlyReleasedKeys(
     const all = await prisma.title.findMany({ where: { id: { in: ids }, plexRatingKey: { not: null } }, select: { id: true, plexRatingKey: true } });
     const map = new Map(all.map((t) => [t.id, t.plexRatingKey!]));
     return ids.map((id) => map.get(id)).filter(Boolean) as string[];
+}
+
+type ShelfConfig = { genres?: string[]; startYear?: number; endYear?: number };
+
+function readShelfConfig(value: unknown): ShelfConfig {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const config = value as Record<string, unknown>;
+    return {
+        genres: Array.isArray(config.genres) ? config.genres.filter((genre): genre is string => typeof genre === "string") : undefined,
+        startYear: typeof config.startYear === "number" ? config.startYear : undefined,
+        endYear: typeof config.endYear === "number" ? config.endYear : undefined,
+    };
+}
+
+function scoreTitleForShelf(title: {
+    trendSnapshots: Array<{ trendScore: number }>;
+    watchSignals: Array<{ localInterestScore: number; recencyScore: number; multiUserBoost: number }>;
+}): number {
+    const trendScore = Math.max(0, ...title.trendSnapshots.map((snapshot) => snapshot.trendScore));
+    const signal = title.watchSignals[0];
+    return trendScore * 0.7 + (signal?.localInterestScore ?? 0) * 0.2 + (signal?.recencyScore ?? 0) * 0.07 + (signal?.multiUserBoost ?? 0) * 0.03;
+}
+
+async function resolveFamilyPopularKeys(collection: { id: string; mediaType: string }): Promise<string[]> {
+    const titles = await prisma.title.findMany({
+        where: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null }, watchSignals: { some: { recentWatchCount: { gt: 0 } } } },
+        select: { id: true, plexRatingKey: true, watchSignals: { select: { localInterestScore: true, recentWatchCount: true, uniqueViewerCount: true } } },
+    });
+    const ids = await applyManualOverrides(titles.sort((a, b) => {
+        const left = a.watchSignals[0];
+        const right = b.watchSignals[0];
+        return (right?.localInterestScore ?? 0) - (left?.localInterestScore ?? 0)
+            || (right?.uniqueViewerCount ?? 0) - (left?.uniqueViewerCount ?? 0)
+            || (right?.recentWatchCount ?? 0) - (left?.recentWatchCount ?? 0)
+            || a.id.localeCompare(b.id);
+    }).map((title) => title.id), collection.id);
+    const keyMap = new Map(titles.map((title) => [title.id, title.plexRatingKey!]));
+    return ids.map((id) => keyMap.get(id)).filter(Boolean) as string[];
+}
+
+async function resolveConfiguredKeys(collection: { id: string; mediaType: string; shelfConfig: unknown }): Promise<string[]> {
+    const config = readShelfConfig(collection.shelfConfig);
+    const where: Prisma.TitleWhereInput = { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } };
+    if (config.genres?.length) where.genres = { hasSome: config.genres };
+    if (config.startYear || config.endYear) where.year = { gte: config.startYear, lte: config.endYear };
+    const titles = await prisma.title.findMany({
+        where,
+        select: { id: true, plexRatingKey: true, trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 1, select: { trendScore: true } }, watchSignals: { select: { localInterestScore: true, recencyScore: true, multiUserBoost: true } } },
+    });
+    const ids = await applyManualOverrides(titles.sort((a, b) => scoreTitleForShelf(b) - scoreTitleForShelf(a) || a.id.localeCompare(b.id)).map((title) => title.id), collection.id);
+    const keyMap = new Map(titles.map((title) => [title.id, title.plexRatingKey!]));
+    return ids.map((id) => keyMap.get(id)).filter(Boolean) as string[];
 }
 
 async function resolveAutoRequestIds(collection: {
@@ -433,6 +487,7 @@ export async function plexSyncJob(): Promise<void> {
     const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
     const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string; manageRecommendations?: boolean; backfillRecentReleases?: boolean; recentlyReleasedBackfillDays?: number };
     const publishedIds = new Set(selectPublishedShelfIds(collections, homeConfig.shelfLimit ?? 6));
+    const publishedKeysByMedia = new Map<string, string[]>();
     const configuredProviders = [...new Set(collections.map((item) => item.provider).filter((provider): provider is string => Boolean(provider)))];
     // Netflix is the more specific editorial promise, so it gets first claim on titles.
     const netflixKeysByMedia = new Map<string, string[]>();
@@ -486,12 +541,21 @@ export async function plexSyncJob(): Promise<void> {
                     enabled: homeConfig.backfillRecentReleases !== false,
                     maxDays: homeConfig.recentlyReleasedBackfillDays ?? 365,
                 });
+            } else if (collection.shelfType === "FAMILY_POPULAR") {
+                targetKeys = await resolveFamilyPopularKeys(collection);
+            } else if (collection.shelfType === "GENRE" || collection.shelfType === "DECADE") {
+                targetKeys = await resolveConfiguredKeys(collection);
             } else if (collection.shelfType === "PROVIDER_TRENDING" || collection.collectionType === "TOP_TRENDING") {
                 targetKeys = collection.provider === "Netflix" && netflixKeysByMedia.has(collection.mediaType)
                     ? netflixKeysByMedia.get(collection.mediaType)!
                     : await resolveTopTrendingKeys(collection, { primaryRegion: homeConfig.primaryRegion ?? "CA", fallbackRegion: homeConfig.fallbackRegion ?? "US" });
             } else {
                 targetKeys = await resolveSmartKeys(collection);
+            }
+
+            if (publishedIds.has(collection.id)) {
+                targetKeys = diversifyShelf(targetKeys, publishedKeysByMedia.get(collection.mediaType) ?? [], collection.maxItems, 0.2);
+                publishedKeysByMedia.set(collection.mediaType, [...(publishedKeysByMedia.get(collection.mediaType) ?? []), ...targetKeys]);
             }
 
             logger.info("Syncing Plex collection", {

@@ -18,8 +18,9 @@ const INPUT = "w-full rounded-lg bg-gray-950/70 border border-gray-700/70 px-3 p
 interface PlexSection { key: string; title: string; type: string }
 interface Shelf {
     id: string; name: string; plexKey: string | null; sectionId: string; mediaType: "MOVIE" | "SHOW";
-    shelfType: "CULTURAL_TRENDING" | "PROVIDER_TRENDING" | "RECENTLY_RELEASED" | "SMART" | "CUSTOM";
+    shelfType: "CULTURAL_TRENDING" | "PROVIDER_TRENDING" | "RECENTLY_RELEASED" | "FAMILY_POPULAR" | "GENRE" | "DECADE" | "SMART" | "CUSTOM";
     provider: string | null; collectionType: "SMART" | "TOP_TRENDING"; streamingProviders: string[];
+    shelfConfig: { genres?: string[]; startYear?: number; endYear?: number } | null;
     enabled: boolean; publishToHome: boolean; publishToSharedHome: boolean; homePriority: number;
     maxItems: number; releaseWindowDays: number; itemCount: number; lastSyncAt: string | null;
 }
@@ -38,6 +39,9 @@ const SHELF_LABELS: Record<Shelf["shelfType"], string> = {
     CULTURAL_TRENDING: "Cultural",
     PROVIDER_TRENDING: "Platform",
     RECENTLY_RELEASED: "Recent releases",
+    FAMILY_POPULAR: "FamFlix",
+    GENRE: "Genre",
+    DECADE: "Decade",
     SMART: "Smart",
     CUSTOM: "Custom",
 };

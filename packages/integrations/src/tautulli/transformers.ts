@@ -76,6 +76,7 @@ export function transformHistoryToSignal(
         tmdbId: guids.tmdbId,
         tvdbId: guids.tvdbId,
         imdbId: guids.imdbId,
+        plexRatingKey: mediaType === "SHOW" ? rows[0]?.grandparent_rating_key ?? null : rows[0]?.rating_key ?? null,
         title:
             mediaType === "SHOW"
                 ? (rows[0]?.grandparent_title ?? rows[0]?.title ?? "")

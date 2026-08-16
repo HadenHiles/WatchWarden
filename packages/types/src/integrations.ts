@@ -53,6 +53,7 @@ export interface NormalizedWatchSignal {
     tmdbId: number | null;
     tvdbId: number | null;
     imdbId: string | null;
+    plexRatingKey: string | null;
     title: string;
     year: number | null;
     mediaType: "MOVIE" | "SHOW";

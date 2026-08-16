@@ -32,8 +32,8 @@ export async function tautulliSyncJob(): Promise<void> {
     let updated = 0;
 
     for (const signal of signals) {
-        if (!signal.tmdbId && !signal.imdbId && !signal.tvdbId) {
-            logger.debug("Skipping signal with no canonical ID", { title: signal.title });
+        if (!signal.tmdbId && !signal.imdbId && !signal.tvdbId && !signal.plexRatingKey) {
+            logger.debug("Skipping signal with no canonical or Plex ID", { title: signal.title });
             continue;
         }
 
@@ -42,10 +42,12 @@ export async function tautulliSyncJob(): Promise<void> {
             ? await prisma.title.findFirst({ where: { tmdbId: signal.tmdbId } })
             : signal.imdbId
                 ? await prisma.title.findFirst({ where: { imdbId: signal.imdbId } })
-                : null;
+                : signal.plexRatingKey
+                    ? await prisma.title.findFirst({ where: { plexRatingKey: signal.plexRatingKey, mediaType: signal.mediaType } })
+                    : null;
 
         if (!title) {
-            logger.debug("No matching title for watch signal", { title: signal.title, tmdbId: signal.tmdbId });
+            logger.debug("No matching title for watch signal", { title: signal.title, tmdbId: signal.tmdbId, plexRatingKey: signal.plexRatingKey });
             continue;
         }
 

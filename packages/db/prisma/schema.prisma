@@ -22,6 +22,9 @@ enum PlexShelfType {
   CULTURAL_TRENDING
   PROVIDER_TRENDING
   RECENTLY_RELEASED
+  FAMILY_POPULAR
+  GENRE
+  DECADE
   SMART
   CUSTOM
 }
@@ -283,6 +286,7 @@ model PlexCollection {
   maxItemsPerProvider Int     @default(10)
   autoRequest        Boolean  @default(false)
   shelfType         PlexShelfType @default(CUSTOM)
+  shelfConfig       Json?
   provider          String?
   publishToHome     Boolean   @default(false)
   publishToSharedHome Boolean @default(false)
