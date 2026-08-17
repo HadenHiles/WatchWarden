@@ -46,6 +46,11 @@ export async function plexLibrarySyncJob(): Promise<void> {
     const movieSections = sections.filter((s) => s.type === "movie" && movieSectionIds.has(s.key));
     const showSections = sections.filter((s) => s.type === "show" && showSectionIds.has(s.key));
 
+    // Do not depend on Radarr/Sonarr/Jellyseerr having successfully notified
+    // Plex. A refresh is asynchronous; this run sees already-imported items and
+    // the next frequent run picks up anything Plex is still scanning.
+    await Promise.all([...movieSections, ...showSections].map((section) => client.refreshSection(section.key)));
+
     logger.info("Found Plex library sections", {
         movies: movieSections.length,
         shows: showSections.length,

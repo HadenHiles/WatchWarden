@@ -199,6 +199,16 @@ export class PlexClient {
         return allItems;
     }
 
+    /** Ask Plex to discover/import new files in a library section. */
+    async refreshSection(sectionId: string): Promise<void> {
+        try {
+            await this.http.get(`/library/sections/${sectionId}/refresh`);
+            logger.info("Requested Plex library refresh", { sectionId });
+        } catch (err) {
+            this.handleError(`refreshSection(${sectionId})`, err);
+        }
+    }
+
     // ── Collections ───────────────────────────────────────────────────────────
 
     async getCollections(sectionId: string): Promise<PlexCollection[]> {

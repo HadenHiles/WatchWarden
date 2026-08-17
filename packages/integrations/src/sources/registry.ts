@@ -2,6 +2,7 @@ import { createLogger } from "@watchwarden/config";
 import type { SourceAdapter } from "./adapter";
 import { TmdbTrendingAdapter } from "./tmdb.adapter";
 import { TmdbProviderDiscoveryAdapter, PROVIDER_TMDB_ID_MAP } from "./tmdb-provider.adapter";
+import { NetflixTop10Adapter } from "./netflix-top10.adapter";
 
 const logger = createLogger("source-registry");
 
@@ -45,6 +46,13 @@ export function buildSourceAdapters(env: {
         }
         logger.info("TMDB discovery adapters registered", { count: 8 });
 
+        for (const region of ["CA", "US"] as const) {
+            for (const mediaType of ["movie", "tv"] as const) {
+                adapters.push(new NetflixTop10Adapter({ region, mediaType, apiKey: env.TMDB_API_KEY }));
+            }
+        }
+        logger.info("Official Netflix Top 10 adapters registered", { count: 4 });
+
         // Per-provider discovery — platform-specific popularity rankings
         let providerAdapterCount = 0;
         for (const { name, regions } of PROVIDER_DISCOVERY_SOURCES) {
@@ -60,7 +68,9 @@ export function buildSourceAdapters(env: {
                             mediaType,
                             region,
                             apiKey: env.TMDB_API_KEY!,
-                            maxResults: 20,
+                            // Keep a deep provider catalog so Plex can publish
+                            // useful long shelves after filtering to local media.
+                            maxResults: 50,
                         })
                     );
                     providerAdapterCount++;

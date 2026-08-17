@@ -139,7 +139,7 @@ async function resolveTopTrendingKeys(
         streamingProviders: string[];
         mediaType: string;
         maxItemsPerProvider: number;
-    }, regionConfig = { primaryRegion: "CA", fallbackRegion: "US" },
+    }, regionConfig = { primaryRegion: "CA", fallbackRegion: "US" }, officialNetflixOnly = false,
 ): Promise<string[]> {
     if (!collection.streamingProviders.length) {
         logger.warn("TOP_TRENDING collection has no streamingProviders — skipping");
@@ -172,6 +172,7 @@ async function resolveTopTrendingKeys(
                 },
                 select: {
                     titleId: true,
+                    source: true,
                     providerRank: true,
                     region: true,
                     snapshotAt: true,
@@ -179,15 +180,24 @@ async function resolveTopTrendingKeys(
                     title: { select: { plexRatingKey: true, releaseDate: true, streamingOn: true } },
                 },
             });
+            const officialNetflixSnapshots = editorialNetflix
+                ? snapshots.filter((snapshot) => snapshot.source.startsWith("netflix_top10_"))
+                : [];
+            const providerDiscoverySnapshots = editorialNetflix
+                ? snapshots.filter((snapshot) => !snapshot.source.startsWith("netflix_top10_"))
+                : snapshots;
+            const rankingSnapshots = officialNetflixOnly && officialNetflixSnapshots.length > 0
+                ? officialNetflixSnapshots
+                : providerDiscoverySnapshots;
             const recentCutoff = Date.now() - 8 * 24 * 60 * 60 * 1000;
-            const currentSnapshots = snapshots.filter((snapshot) => snapshot.snapshotAt.getTime() >= recentCutoff);
+            const currentSnapshots = rankingSnapshots.filter((snapshot) => snapshot.snapshotAt.getTime() >= recentCutoff);
             const resolved = resolvePlatformSnapshots(currentSnapshots.map((s) => ({
                 titleId: s.titleId,
                 providerRank: s.providerRank!,
                 region: s.region,
                 snapshotAt: s.snapshotAt,
             })), { freshnessHalfLifeHours: 72, maxRank: 100, ...regionConfig });
-            if (editorialNetflix) {
+            if (editorialNetflix && !officialNetflixOnly) {
                 const candidates = resolved.map((item) => {
                     const history = snapshots.filter((snapshot) => snapshot.titleId === item.titleId)
                         .sort((a, b) => b.snapshotAt.getTime() - a.snapshotAt.getTime());
@@ -206,8 +216,43 @@ async function resolveTopTrendingKeys(
                     };
                 });
                 titleIds = selectStreamingEditorialTitles(candidates, cap).map((item) => item.id);
+                // Netflix's official country chart is a guaranteed lane inside
+                // the longer Popular shelf; fill remaining slots from broader
+                // provider discovery without creating a separate collection.
+                const official = resolvePlatformSnapshots(officialNetflixSnapshots
+                    .filter((snapshot) => snapshot.snapshotAt.getTime() >= recentCutoff)
+                    .map((snapshot) => ({
+                        titleId: snapshot.titleId,
+                        providerRank: snapshot.providerRank!,
+                        region: snapshot.region,
+                        snapshotAt: snapshot.snapshotAt,
+                    })), { freshnessHalfLifeHours: 72, maxRank: 10, ...regionConfig })
+                    .map((item) => item.titleId);
+                titleIds = [...new Set([...official, ...titleIds])].slice(0, cap);
             } else {
                 titleIds = resolved.slice(0, cap).map((item) => item.titleId);
+                if (!editorialNetflix && titleIds.length > 0) {
+                    const currentSignals = await prisma.externalTrendSnapshot.findMany({
+                        where: {
+                            titleId: { in: resolved.map((item) => item.titleId) },
+                            providerId: null,
+                            source: { in: [
+                                `tmdb_trending_day_${collection.mediaType === "MOVIE" ? "movie" : "tv"}`,
+                                `tmdb_trending_week_${collection.mediaType === "MOVIE" ? "movie" : "tv"}`,
+                            ] },
+                            snapshotAt: { gte: new Date(recentCutoff) },
+                        },
+                        orderBy: [{ rank: "asc" }, { snapshotAt: "desc" }],
+                        select: { titleId: true },
+                    });
+                    // Titles with both a current global trend signal and verified
+                    // provider availability are guaranteed first; deeper provider
+                    // popularity fills the remainder of the same shelf.
+                    titleIds = [...new Set([
+                        ...currentSignals.map((signal) => signal.titleId),
+                        ...titleIds,
+                    ])].slice(0, cap);
+                }
             }
         } else {
             // Fall back: filter by streamingOn provider name, sort by overall trend score
