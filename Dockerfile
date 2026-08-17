@@ -22,7 +22,8 @@
 # ─── Builder ─────────────────────────────────────────────────────────────────
 FROM node:20-slim AS builder
 
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+# The workspace dependencies ship prebuilt binaries; a full compiler toolchain
+# only adds thousands of tiny files to unpack (especially painful on NAS RAID).
 RUN npm install -g pnpm@8.15.1
 
 WORKDIR /app
@@ -68,10 +69,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install PostgreSQL, supervisord, and curl (for healthchecks)
-RUN apt-get update && apt-get install -y \
-    postgresql \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-15 \
     supervisor \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

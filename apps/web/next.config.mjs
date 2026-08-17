@@ -35,6 +35,9 @@ const nextConfig = {
         ],
     },
     experimental: {
+        // Keep production builds within the memory envelope of the NAS. Next's
+        // default worker fan-out competes with the media stack and gets killed.
+        cpus: 1,
         typedRoutes: false,
         optimizePackageImports: [
             "lucide-react",

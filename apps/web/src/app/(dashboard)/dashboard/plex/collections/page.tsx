@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { AlertCircle, Check, ChevronDown, ChevronUp, Clapperboard, Film, GripVertical, Loader2, Plus, RefreshCw, Search, Settings2, Trash2, Tv2, X } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, Check, ChevronDown, ChevronUp, Clapperboard, Film, GripVertical, Library, Loader2, Plus, RefreshCw, Search, Settings2, Sparkles, Trash2, Tv2, X } from "lucide-react";
 import { apiUrl } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,11 @@ interface ShelfItem {
 }
 interface ShelfCandidate {
     id: string; title: string; year: number | null; posterPath: string | null; mediaType: "MOVIE" | "SHOW"; streamingOn: string[];
+}
+interface DashboardStats {
+    suggestions: { pendingMovies: number; pendingShows: number };
+    titles: { approved: number; requested: number; available: number; trending: number; cleanupEligible: number; pinned: number; inLibrary: number };
+    jobs: Array<{ jobName: string; last: { status: string; startedAt: string; completedAt: string | null } | null }>;
 }
 
 const SHELF_LABELS: Record<Shelf["shelfType"], string> = {
@@ -116,7 +122,7 @@ function ShelfPreview({ shelf, onChanged, onRename }: { shelf: Shelf; onChanged:
 
     const items = data?.data ?? [];
     return (
-        <div className="border-t border-gray-800/80 bg-gray-950/35 p-4 space-y-4">
+        <div className="space-y-5 rounded-xl border border-gray-800 bg-gray-950/35 p-5">
             <div className="max-w-md">
                 <label className="text-xs text-gray-400">Shelf title</label>
                 <div className="mt-1 flex gap-2">
@@ -134,44 +140,47 @@ function ShelfPreview({ shelf, onChanged, onRename }: { shelf: Shelf; onChanged:
                     </button>)}
                 </div>}
             </div>
+            <div className="grid gap-5 xl:grid-cols-2">
+            <section><div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-white">Now playing</h3><p className="text-[11px] text-gray-500">Titles already available in Plex.</p></div><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-400">{items.length} / {shelf.maxItems}</span></div>
             {isLoading ? <div className="flex h-32 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-500" /></div> : items.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-gray-800 py-10 text-center text-sm text-gray-500">No local matches yet. Run a trend and Plex sync to populate this shelf.</div>
-            ) : <div className="flex gap-3 overflow-x-auto pb-2">
+            ) : <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4">
                 {items.map((item) => {
                     const rank = item.trendSnapshots.find((snapshot) => snapshot.providerRank)?.providerRank;
                     const heat = Math.round(Math.max(0, ...item.trendSnapshots.map((snapshot) => snapshot.trendScore)) * 100);
-                    return <div key={item.id} className="group relative w-24 flex-none">
+                    return <div key={item.id} className="group relative min-w-0">
                         {item.posterPath ? <img src={`https://image.tmdb.org/t/p/w185${item.posterPath}`} alt="" className="aspect-[2/3] w-full rounded-lg bg-gray-800 object-cover" /> : <div className="flex aspect-[2/3] items-center justify-center rounded-lg bg-gray-800"><Film className="h-5 w-5 text-gray-600" /></div>}
                         <button onClick={() => override(item.id, "exclude")} title="Exclude from this shelf" className="absolute right-1 top-1 rounded-full bg-gray-950/90 p-1 text-gray-400 opacity-0 group-hover:opacity-100 hover:text-red-400"><X className="h-3 w-3" /></button>
                         <p className="mt-1 truncate text-xs font-medium text-gray-200">{item.title}</p>
                         <p className="text-[11px] text-gray-500">{rank ? `Platform #${rank}` : `Heat ${heat}`}{item.manuallyAdded ? " · Added" : ""}</p>
                     </div>;
                 })}
-            </div>}
-            <div className="border-t border-gray-800/80 pt-4">
+            </div>}</section>
+            <section className="border-t border-gray-800/80 pt-5 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
                 <div className="mb-3 flex items-end justify-between gap-3">
-                    <div><h3 className="text-sm font-semibold text-white">Fill this shelf</h3><p className="mt-0.5 text-[11px] text-gray-500">Missing titles ranked for this row. Global genre, anime, and popularity filters apply.</p></div>
-                    <span className="text-[11px] text-gray-600">Manual requests</span>
+                    <div><h3 className="text-sm font-semibold text-white">Up next</h3><p className="mt-0.5 text-[11px] text-gray-500">Best missing matches. Recruit one and Watch Warden tracks it through download to this shelf.</p></div>
+                    <span className="text-[11px] text-brand-400">Acquisition queue</span>
                 </div>
-                {candidatesLoading ? <div className="flex h-24 items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-gray-600" /></div> : (candidateData?.data.length ?? 0) === 0 ? <div className="rounded-lg border border-dashed border-gray-800 py-6 text-center text-xs text-gray-600">No unrequested candidates for this shelf.</div> : <div className="flex gap-3 overflow-x-auto pb-2">
-                    {candidateData!.data.map((candidate) => <div key={candidate.id} className="w-28 flex-none overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
+                {candidatesLoading ? <div className="flex h-24 items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-gray-600" /></div> : (candidateData?.data.length ?? 0) === 0 ? <div className="rounded-lg border border-dashed border-gray-800 py-6 text-center text-xs text-gray-600">Queue cleared — this shelf has no missing recommendations.</div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
+                    {candidateData!.data.map((candidate) => <div key={candidate.id} className="min-w-0 overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
                         {candidate.posterPath ? <img src={`https://image.tmdb.org/t/p/w185${candidate.posterPath}`} alt="" className="aspect-[2/3] w-full bg-gray-800 object-cover" /> : <div className="flex aspect-[2/3] items-center justify-center bg-gray-800"><Film className="h-5 w-5 text-gray-600" /></div>}
                         <div className="p-2"><p className="truncate text-xs font-medium text-gray-200" title={candidate.title}>{candidate.title}</p><p className="mt-0.5 text-[10px] text-gray-600">{candidate.year ?? "Year unknown"}</p><div className="mt-2 grid grid-cols-2 gap-1"><button onClick={() => approveRequest(candidate.id)} disabled={requestingId === candidate.id || rejectingId === candidate.id} className="flex items-center justify-center gap-1 rounded-md bg-brand-500 px-1 py-1.5 text-[10px] font-semibold text-gray-950 hover:bg-brand-400 disabled:opacity-50">{requestingId === candidate.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}Approve</button><button onClick={() => rejectCandidate(candidate.id)} disabled={requestingId === candidate.id || rejectingId === candidate.id} title="Reject globally" className="flex items-center justify-center gap-1 rounded-md border border-gray-700 px-1 py-1.5 text-[10px] font-semibold text-gray-400 hover:border-red-500/60 hover:text-red-400 disabled:opacity-50">{rejectingId === candidate.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}Reject</button></div></div>
                     </div>)}
                 </div>}
-            </div>
+            </section></div>
         </div>
     );
 }
 
 export default function PlexHomePage() {
     const { data, error, mutate, isLoading } = useSWR<{ data: HomeResponse }>(apiUrl("/plex/home"), fetcher);
+    const { data: statsData } = useSWR<{ data: DashboardStats }>(apiUrl("/stats"), fetcher, { refreshInterval: 30000 });
     const { data: sectionData } = useSWR<{ data: PlexSection[] }>(apiUrl("/plex/sections"), fetcher);
     const shelves = useMemo(() => [...(data?.data.shelves ?? [])].sort((a, b) => a.homePriority - b.homePriority || a.id.localeCompare(b.id)), [data]);
     const sections = sectionData?.data ?? [];
     const movieSections = sections.filter((section) => section.type === "movie");
     const showSections = sections.filter((section) => section.type === "show");
-    const [expanded, setExpanded] = useState<string | null>(null);
+    const [selected, setSelected] = useState<string | null>(null);
     const [setupOpen, setSetupOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
@@ -180,6 +189,7 @@ export default function PlexHomePage() {
     const [setup, setSetup] = useState({ movieSectionId: "", showSectionId: "", providers: ["Netflix", "Disney+", "Prime Video", "Apple TV+"] });
 
     useEffect(() => { if (data?.data.settings) setSettings(data.data.settings); }, [data]);
+    useEffect(() => { if (shelves.length && !shelves.some((shelf) => shelf.id === selected)) setSelected(shelves[0].id); }, [shelves, selected]);
     useEffect(() => { setSetup((current) => ({ ...current, movieSectionId: current.movieSectionId || movieSections[0]?.key || "", showSectionId: current.showSectionId || showSections[0]?.key || "" })); }, [sectionData]);
 
     function flash(tone: "success" | "error", text: string) { setNotice({ tone, text }); window.setTimeout(() => setNotice(null), 3500); }
@@ -231,6 +241,10 @@ export default function PlexHomePage() {
     }
 
     const published = shelves.filter((shelf) => shelf.enabled && shelf.publishToHome).length;
+    const stats = statsData?.data;
+    const plexJobs = stats?.jobs.filter((job) => job.jobName === "plex-library-sync" || job.jobName === "plex-sync") ?? [];
+    const automationHealthy = plexJobs.length === 2 && plexJobs.every((job) => job.last?.status === "COMPLETED");
+    const selectedShelf = shelves.find((shelf) => shelf.id === selected) ?? shelves[0];
     return <div className="mx-auto w-full max-w-6xl space-y-5">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div><h1 className="text-xl font-bold tracking-tight text-white">Plex Home</h1><p className="mt-1 text-sm text-gray-400">Shape the streaming experience your household sees when Plex opens.</p></div>
@@ -243,6 +257,14 @@ export default function PlexHomePage() {
 
         {notice && <div className={cn("rounded-lg border px-4 py-3 text-sm", notice.tone === "success" ? "border-green-800/60 bg-green-950/30 text-green-300" : "border-red-800/60 bg-red-950/30 text-red-300")}>{notice.text}</div>}
         {error && <div className="flex gap-2 rounded-lg border border-red-800/60 bg-red-950/30 px-4 py-3 text-sm text-red-300"><AlertCircle className="h-4 w-4" />{error.message}</div>}
+
+        <section className="rounded-xl border border-brand-500/20 bg-gradient-to-r from-brand-950/35 to-gray-900 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand-400"/><h2 className="text-sm font-semibold text-white">Your curation loop</h2></div><p className="mt-1 text-xs text-gray-400">Discover → recruit → download → shelve. Automations carry each title forward.</p></div><Link href="/dashboard/library" className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2 text-xs text-gray-300 hover:text-white"><Library className="h-3.5 w-3.5"/>Open title library</Link></div>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[{ label: "Candidates", value: (stats?.suggestions.pendingMovies ?? 0) + (stats?.suggestions.pendingShows ?? 0), tone: "text-brand-400" }, { label: "Requested", value: stats?.titles.requested ?? 0, tone: "text-purple-400" }, { label: "Available", value: stats?.titles.available ?? 0, tone: "text-emerald-400" }, { label: "In Plex", value: stats?.titles.inLibrary ?? 0, tone: "text-cyan-400" }].map((step, index) => <div key={step.label} className="relative rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-3"><p className="text-[10px] uppercase tracking-wider text-gray-600">Step {index + 1}</p><div className="mt-1 flex items-end justify-between"><span className="text-xs text-gray-400">{step.label}</span><span className={cn("text-xl font-bold tabular-nums", step.tone)}>{step.value}</span></div></div>)}
+            </div>
+            <div className="mt-3 flex items-center justify-between text-xs"><span className={automationHealthy ? "text-emerald-400" : "text-amber-400"}>{automationHealthy ? "● Plex automations healthy" : "● Automation needs attention"}</span><Link href="/dashboard/jobs" className="text-gray-500 hover:text-gray-200">View schedule & run history →</Link></div>
+        </section>
 
         {settingsOpen && <section className="rounded-xl border border-gray-700 bg-gray-900 p-5">
             <div className="mb-4"><h2 className="font-semibold text-white">Home behavior</h2><p className="text-xs text-gray-400">These settings apply to every managed shelf.</p></div>
@@ -266,25 +288,18 @@ export default function PlexHomePage() {
             <div className="mt-5 flex justify-end"><button onClick={createDefaults} disabled={busy === "setup"} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-gray-950 disabled:opacity-50">Create disabled shelves</button></div>
         </section>}
 
-        <section className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900/70">
+        <section className="rounded-xl border border-gray-800 bg-gray-900/70 p-4">
             <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4"><div><h2 className="font-semibold text-white">Your shelf lineup</h2><p className="mt-0.5 text-xs text-gray-400">{published} of {settings.shelfLimit} Home slots selected · rows beyond the limit stay unpublished</p></div></div>
-            {isLoading ? <div className="flex h-52 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-500" /></div> : shelves.length === 0 ? <div className="py-16 text-center"><Clapperboard className="mx-auto h-8 w-8 text-gray-700" /><p className="mt-3 text-sm text-gray-400">No shelves configured yet.</p><button onClick={() => setSetupOpen(true)} className="mt-3 text-sm text-brand-400 hover:text-brand-300">Add the recommended lineup →</button></div> : shelves.map((shelf, index) => {
+            {isLoading ? <div className="flex h-52 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-500" /></div> : shelves.length === 0 ? <div className="py-16 text-center"><Clapperboard className="mx-auto h-8 w-8 text-gray-700" /><p className="mt-3 text-sm text-gray-400">No shelves configured yet.</p><button onClick={() => setSetupOpen(true)} className="mt-3 text-sm text-brand-400 hover:text-brand-300">Add the recommended lineup →</button></div> : <div className="mt-4 grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]"><div className="space-y-2">{shelves.map((shelf, index) => {
                 const overBudget = shelf.enabled && shelf.publishToHome && shelves.filter((candidate) => candidate.enabled && candidate.publishToHome && (candidate.homePriority < shelf.homePriority || candidate.homePriority === shelf.homePriority && candidate.id <= shelf.id)).length > settings.shelfLimit;
-                return <div key={shelf.id} className={cn("border-b border-gray-800/80 last:border-b-0", !shelf.enabled && "opacity-65")}>
-                    <div className="grid gap-4 p-4 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
+                return <div key={shelf.id} className={cn("rounded-lg border transition-colors", selected === shelf.id ? "border-brand-500/40 bg-brand-500/5" : "border-gray-800 bg-gray-950/30", !shelf.enabled && "opacity-65")}>
+                    <div className="flex items-center gap-2 p-3">
                         <div className="flex items-center gap-1"><GripVertical className="mr-1 h-4 w-4 text-gray-700" /><div className="flex flex-col"><button onClick={() => moveShelf(index, -1)} disabled={index === 0 || busy === shelf.id} className="text-gray-500 hover:text-white disabled:opacity-20"><ChevronUp className="h-4 w-4" /></button><button onClick={() => moveShelf(index, 1)} disabled={index === shelves.length - 1 || busy === shelf.id} className="text-gray-500 hover:text-white disabled:opacity-20"><ChevronDown className="h-4 w-4" /></button></div></div>
-                        <button onClick={() => setExpanded(expanded === shelf.id ? null : shelf.id)} className="min-w-0 text-left"><div className="flex items-center gap-2"><span className="text-xs tabular-nums text-gray-500">{index + 1}</span>{shelf.mediaType === "MOVIE" ? <Film className="h-4 w-4 text-brand-400" /> : <Tv2 className="h-4 w-4 text-brand-400" />}<h3 className="truncate text-sm font-semibold text-white">{shelf.name}</h3><span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-400">{SHELF_LABELS[shelf.shelfType]}</span>{overBudget && <span className="rounded-full bg-amber-950/50 px-2 py-0.5 text-[11px] text-amber-400">Beyond Home limit</span>}</div><p className="mt-1 text-xs text-gray-400">{shelf.itemCount} local titles · {shelf.lastSyncAt ? `synced ${new Date(shelf.lastSyncAt).toLocaleString()}` : "not synced yet"}</p></button>
-                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 md:justify-end">
-                            <Toggle checked={shelf.enabled} label="Maintain shelf" onChange={(checked) => patchShelf(shelf, { enabled: checked }, checked ? "Shelf enabled" : "Shelf disabled")} />
-                            <Toggle checked={shelf.publishToHome} disabled={!shelf.enabled} label="Show on Home" onChange={(checked) => patchShelf(shelf, { publishToHome: checked, ...(!checked ? { publishToSharedHome: false } : {}) })} />
-                            <Toggle checked={shelf.publishToSharedHome} disabled={!shelf.enabled || !shelf.publishToHome} label="Share with users" onChange={(checked) => patchShelf(shelf, { publishToSharedHome: checked })} />
-                            <label className="flex items-center gap-2 text-xs text-gray-400">Items<input type="number" min={1} max={100} defaultValue={shelf.maxItems} onBlur={(e) => patchShelf(shelf, { maxItems: Number(e.target.value), maxItemsPerProvider: Number(e.target.value) })} className="w-16 rounded-md border border-gray-700 bg-gray-950 px-2 py-1 text-white" /></label>
-                            <button onClick={() => removeShelf(shelf)} title="Stop managing shelf" className="rounded-md p-1.5 text-gray-600 hover:bg-red-950/30 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
-                            <button onClick={() => setExpanded(expanded === shelf.id ? null : shelf.id)} className="text-gray-500 hover:text-white">{expanded === shelf.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
-                        </div>
-                    </div>{expanded === shelf.id && <ShelfPreview shelf={shelf} onChanged={() => mutate()} onRename={async (name) => { await patchShelf(shelf, { name }, "Shelf title saved"); }} />}
+                        <button onClick={() => setSelected(shelf.id)} className="min-w-0 flex-1 text-left"><div className="flex items-center gap-2">{shelf.mediaType === "MOVIE" ? <Film className="h-4 w-4 text-brand-400" /> : <Tv2 className="h-4 w-4 text-brand-400" />}<h3 className="truncate text-sm font-semibold text-white">{shelf.name}</h3></div><p className="mt-1 truncate text-[11px] text-gray-500">{shelf.itemCount}/{shelf.maxItems} titles · {SHELF_LABELS[shelf.shelfType]}{overBudget ? " · beyond Home limit" : ""}</p></button>
+                        <Toggle checked={shelf.publishToHome} disabled={!shelf.enabled} label="" onChange={(checked) => patchShelf(shelf, { publishToHome: checked, ...(!checked ? { publishToSharedHome: false } : {}) })} />
+                    </div>
                 </div>;
-            })}
+            })}</div><div className="min-w-0">{selectedShelf && <><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="flex gap-4"><Toggle checked={selectedShelf.enabled} label="Maintain" onChange={(checked) => patchShelf(selectedShelf, { enabled: checked })}/><Toggle checked={selectedShelf.publishToSharedHome} disabled={!selectedShelf.enabled || !selectedShelf.publishToHome} label="Share" onChange={(checked) => patchShelf(selectedShelf, { publishToSharedHome: checked })}/></div><div className="flex items-center gap-2"><label className="text-xs text-gray-500">Target <input type="number" min={1} max={100} defaultValue={selectedShelf.maxItems} onBlur={(e) => patchShelf(selectedShelf, { maxItems: Number(e.target.value), maxItemsPerProvider: Number(e.target.value) })} className="ml-1 w-14 rounded-md border border-gray-700 bg-gray-950 px-2 py-1 text-white"/></label><button onClick={() => removeShelf(selectedShelf)} className="p-1.5 text-gray-600 hover:text-red-400"><Trash2 className="h-4 w-4"/></button></div></div><ShelfPreview shelf={selectedShelf} onChanged={() => mutate()} onRename={async (name) => { await patchShelf(selectedShelf, { name }, "Shelf title saved"); }}/></>}</div></div>}
         </section>
         <p className="px-1 text-xs leading-relaxed text-gray-500">Watch Warden only changes collections it created and tracks. Plex decides where these rows sit relative to its own Home sections.</p>
     </div>;
