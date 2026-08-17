@@ -1,10 +1,14 @@
 import type { Config } from "tailwindcss";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const webRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const config: Config = {
     content: [
-        "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-        "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-        "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+        path.join(webRoot, "src/pages/**/*.{js,ts,jsx,tsx,mdx}"),
+        path.join(webRoot, "src/components/**/*.{js,ts,jsx,tsx,mdx}"),
+        path.join(webRoot, "src/app/**/*.{js,ts,jsx,tsx,mdx}"),
     ],
     theme: {
         extend: {
