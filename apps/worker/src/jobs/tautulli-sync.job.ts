@@ -10,7 +10,7 @@ async function buildClient(): Promise<TautulliClient | null> {
         logger.warn("Tautulli not configured — skipping sync");
         return null;
     }
-    return new TautulliClient({ baseUrl: tautulli.baseUrl, apiKey: tautulli.apiKey });
+    return new TautulliClient({ baseUrl: tautulli.baseUrl, apiKey: tautulli.apiKey, timeout: 30_000 });
 }
 
 export async function tautulliSyncJob(): Promise<void> {
@@ -43,7 +43,7 @@ export async function tautulliSyncJob(): Promise<void> {
             : signal.imdbId
                 ? await prisma.title.findFirst({ where: { imdbId: signal.imdbId } })
                 : signal.plexRatingKey
-                    ? await prisma.title.findFirst({ where: { plexRatingKey: signal.plexRatingKey, mediaType: signal.mediaType } })
+                    ? await prisma.title.findFirst({ where: { plexRatingKey: String(signal.plexRatingKey), mediaType: signal.mediaType } })
                     : null;
 
         if (!title) {

@@ -10,11 +10,11 @@ export class RequestService {
     async submitRequest(titleId: string) {
         // Always load credentials from DB so values saved via the setup wizard are used.
         const { jellyseerr: jellyseerrConfig } = await getIntegrationConfig();
-        const { baseUrl, apiKey, botUserId } = jellyseerrConfig;
+        const { baseUrl, apiKey, botUserId, botEmail, botPassword } = jellyseerrConfig;
 
         const jellyseerr =
             baseUrl && apiKey
-                ? new JellyseerrService({ baseUrl, apiKey })
+                ? new JellyseerrService({ baseUrl, apiKey, botEmail: botEmail ?? undefined, botPassword: botPassword ?? undefined })
                 : null;
 
         if (!jellyseerr) {
@@ -71,16 +71,19 @@ export class RequestService {
         });
 
         if (result.success && result.request) {
+            const isPendingApproval = result.request.status === 1;
             record = await prisma.requestRecord.update({
                 where: { titleId },
                 data: {
                     jellyseerrRequestId: result.request.id,
-                    requestStatus: "PROCESSING",
+                    requestStatus: isPendingApproval ? "PENDING" : "PROCESSING",
                     overseerrMedia: result.request as object,
                 },
             });
 
-            await prisma.title.update({ where: { id: titleId }, data: { isRequested: true, status: "REQUESTED" } });
+            if (!isPendingApproval) {
+                await prisma.title.update({ where: { id: titleId }, data: { isRequested: true, status: "REQUESTED" } });
+            }
 
             await auditService.log({
                 action: "JELLYSEERR_REQUEST_SUBMITTED",

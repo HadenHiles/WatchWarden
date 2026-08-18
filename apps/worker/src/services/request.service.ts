@@ -35,7 +35,12 @@ export async function submitRequest(titleId: string): Promise<void> {
         return;
     }
 
-    const service = new JellyseerrService({ baseUrl: jellyseerr.baseUrl, apiKey: jellyseerr.apiKey });
+    const service = new JellyseerrService({
+        baseUrl: jellyseerr.baseUrl,
+        apiKey: jellyseerr.apiKey,
+        botEmail: jellyseerr.botEmail ?? undefined,
+        botPassword: jellyseerr.botPassword ?? undefined,
+    });
     const botUserId = jellyseerr.botUserId ?? 0;
 
     await prisma.requestRecord.upsert({
@@ -52,15 +57,18 @@ export async function submitRequest(titleId: string): Promise<void> {
     });
 
     if (result.success && result.request) {
+        const isPendingApproval = result.request.status === 1;
         await prisma.requestRecord.update({
             where: { titleId },
             data: {
                 jellyseerrRequestId: result.request.id,
-                requestStatus: "PROCESSING",
+                requestStatus: isPendingApproval ? "PENDING" : "PROCESSING",
                 overseerrMedia: result.request as object,
             },
         });
-        await prisma.title.update({ where: { id: titleId }, data: { isRequested: true, status: "REQUESTED" } });
+        if (!isPendingApproval) {
+            await prisma.title.update({ where: { id: titleId }, data: { isRequested: true, status: "REQUESTED" } });
+        }
         logger.info("Auto-requested via Jellyseerr", { titleId, requestId: result.request.id });
     } else if (!result.success) {
         logger.warn("Auto-request failed", { titleId, error: result.error });

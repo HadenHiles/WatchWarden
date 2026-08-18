@@ -30,6 +30,8 @@ export const apiEnvSchema = baseEnvSchema.extend({
     JELLYSEERR_BASE_URL: z.string().url().optional(),
     JELLYSEERR_API_KEY: z.string().optional(),
     JELLYSEERR_BOT_USER_ID: z.coerce.number().int().positive().optional(),
+    JELLYSEERR_BOT_EMAIL: z.string().email().optional(),
+    JELLYSEERR_BOT_PASSWORD: z.string().optional(),
 });
 
 export const workerEnvSchema = baseEnvSchema.extend({
@@ -38,6 +40,8 @@ export const workerEnvSchema = baseEnvSchema.extend({
     JELLYSEERR_BASE_URL: z.string().url().optional(),
     JELLYSEERR_API_KEY: z.string().optional(),
     JELLYSEERR_BOT_USER_ID: z.coerce.number().int().positive().optional(),
+    JELLYSEERR_BOT_EMAIL: z.string().email().optional(),
+    JELLYSEERR_BOT_PASSWORD: z.string().optional(),
     PLEX_BASE_URL: z.string().url().optional(),
     PLEX_TOKEN: z.string().optional(),
     TMDB_API_KEY: z.string().optional(),

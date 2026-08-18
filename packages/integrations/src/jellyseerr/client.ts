@@ -14,17 +14,28 @@ const logger = createLogger("jellyseerr-client");
 export interface JellyseerrClientConfig {
     baseUrl: string;
     apiKey: string;
+    /** Local bot credentials make created requests honor the bot's permissions. */
+    botEmail?: string;
+    botPassword?: string;
     /** Timeout in milliseconds (default: 15000) */
     timeout?: number;
 }
 
 export class JellyseerrClient {
     private readonly http: AxiosInstance;
+    private readonly baseUrl: string;
+    private readonly timeout: number;
+    private readonly botEmail?: string;
+    private readonly botPassword?: string;
 
     constructor(config: JellyseerrClientConfig) {
+        this.baseUrl = `${config.baseUrl.replace(/\/$/, "")}/api/v1`;
+        this.timeout = config.timeout ?? 15_000;
+        this.botEmail = config.botEmail;
+        this.botPassword = config.botPassword;
         this.http = axios.create({
-            baseURL: `${config.baseUrl.replace(/\/$/, "")}/api/v1`,
-            timeout: config.timeout ?? 15_000,
+            baseURL: this.baseUrl,
+            timeout: this.timeout,
             headers: {
                 "Content-Type": "application/json",
                 "X-Api-Key": config.apiKey,
@@ -97,7 +108,22 @@ export class JellyseerrClient {
     /** Submit a media request via the automation bot user */
     async createRequest(payload: JellyseerrRequestPayload): Promise<JellyseerrRequest> {
         try {
-            const res = await this.http.post<JellyseerrRequest>("/request", payload);
+            let requestClient = this.http;
+            if (this.botEmail && this.botPassword) {
+                const login = await axios.post(
+                    `${this.baseUrl}/auth/local`,
+                    { email: this.botEmail, password: this.botPassword },
+                    { timeout: this.timeout, headers: { "Content-Type": "application/json" } }
+                );
+                const cookies = login.headers["set-cookie"];
+                if (!cookies?.length) throw new Error("Jellyseerr bot login did not return a session cookie");
+                requestClient = axios.create({
+                    baseURL: this.baseUrl,
+                    timeout: this.timeout,
+                    headers: { "Content-Type": "application/json", Cookie: cookies.map((cookie) => cookie.split(";", 1)[0]).join("; ") },
+                });
+            }
+            const res = await requestClient.post<JellyseerrRequest>("/request", payload);
             logger.info("Jellyseerr request submitted", {
                 mediaType: payload.mediaType,
                 mediaId: payload.mediaId,
