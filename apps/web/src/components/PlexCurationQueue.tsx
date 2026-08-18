@@ -15,6 +15,7 @@ interface RawCandidate {
     posterPath: string | null; backdropPath: string | null; overview: string | null;
     genres: string[]; streamingOn: string[];
     suggestion: { id: string; finalScore: number; scoreExplanation: string | null; suggestedReasons: string[] } | null;
+    trendSignals: Array<{ source: string; region: string | null; trendScore: number; providerId: string | null; providerRank: number | null; snapshotAt: string }>;
 }
 interface Candidate extends RawCandidate { shelves: Shelf[] }
 type Decision = { title: string; titleId: string; action: "APPROVE" | "REJECT"; shelfIds: string[] };
@@ -25,6 +26,29 @@ const fetcher = async (urls: string[]) => Promise.all(urls.map(async (url) => {
     if (!response.ok) throw new Error(body.error ?? "Could not load review queue");
     return body.data as RawCandidate[];
 }));
+
+function candidateStrength(candidate: Candidate) {
+    const scored = (candidate.suggestion?.finalScore ?? 0) * 100;
+    const bestProviderRank = Math.min(...candidate.trendSignals.map((signal) => signal.providerRank ?? 999));
+    const platformStrength = bestProviderRank < 999 ? Math.max(55, 100 - (bestProviderRank - 1) * 3) : 0;
+    const trendStrength = Math.max(0, ...candidate.trendSignals.map((signal) => signal.trendScore * 100));
+    return Math.round(Math.max(scored, platformStrength, trendStrength));
+}
+
+function candidateReason(candidate: Candidate) {
+    const ranked = candidate.trendSignals
+        .filter((signal) => signal.providerRank != null)
+        .sort((a, b) => a.providerRank! - b.providerRank!)[0];
+    const rankedShelf = candidate.shelves.find((shelf) => shelf.name.toLocaleLowerCase().includes("popular on"));
+    const score = candidate.suggestion?.finalScore ?? 0;
+    if (ranked && rankedShelf) {
+        const region = ranked.region ? ` in ${ranked.region}` : "";
+        return `Currently #${ranked.providerRank} for ${rankedShelf.name}${region}. Watch Warden matched that live platform signal to ${candidate.shelves.length === 1 ? "this shelf" : `${candidate.shelves.length} shelves`}.`;
+    }
+    if (score > 0.005 && candidate.suggestion?.scoreExplanation) return candidate.suggestion.scoreExplanation;
+    if (candidate.suggestion?.suggestedReasons.length) return candidate.suggestion.suggestedReasons.join(" · ");
+    return `Matched to ${candidate.shelves.map((shelf) => shelf.name).join(" and ")} from current discovery signals.`;
+}
 
 export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; onChanged: () => void }) {
     const activeShelves = useMemo(() => shelves.filter((shelf) => shelf.enabled), [shelves]);
@@ -49,7 +73,7 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
             else merged.set(candidate.id, { ...candidate, shelves: [activeShelves[shelfIndex]] });
         }));
         return [...merged.values()].sort((a, b) =>
-            b.shelves.length - a.shelves.length || (b.suggestion?.finalScore ?? 0) - (a.suggestion?.finalScore ?? 0) || a.title.localeCompare(b.title));
+            candidateStrength(b) - candidateStrength(a) || b.shelves.length - a.shelves.length || a.title.localeCompare(b.title));
     }, [data, activeShelves]);
 
     const genres = useMemo(() => {
@@ -156,9 +180,9 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
                         {current.backdropPath && <div className="absolute inset-x-0 top-0 h-56 bg-cover bg-center opacity-25 [mask-image:linear-gradient(to_bottom,black,transparent)]" style={{ backgroundImage: `url(https://image.tmdb.org/t/p/w780${current.backdropPath})` }}/>} 
                         <div className="relative grid gap-5 p-5 sm:grid-cols-[180px_minmax(0,1fr)] sm:p-6">
                             <div>{current.posterPath ? <img src={`https://image.tmdb.org/t/p/w342${current.posterPath}`} alt="" className="aspect-[2/3] w-full rounded-xl bg-gray-800 object-cover shadow-xl"/> : <div className="flex aspect-[2/3] items-center justify-center rounded-xl bg-gray-800"><Film className="h-8 w-8 text-gray-600"/></div>}<div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-gray-600"><ArrowLeft className="h-3 w-3"/>drag to decide<ArrowRight className="h-3 w-3"/></div></div>
-                            <div className="min-w-0"><div className="flex flex-wrap gap-2"><span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-300">{current.mediaType === "MOVIE" ? "Movie" : "Series"}</span>{current.streamingOn.slice(0, 3).map((provider) => <span key={provider} className="rounded-full bg-purple-500/10 px-2.5 py-1 text-[10px] text-purple-300">{provider}</span>)}</div><h3 className="mt-3 text-2xl font-bold tracking-tight text-white">{current.title}</h3><p className="mt-1 text-sm text-gray-500">{current.year ?? "Year unknown"}{current.suggestion ? ` · ${Math.round(current.suggestion.finalScore)} match score` : ""}</p><p className="mt-4 line-clamp-4 text-sm leading-6 text-gray-300">{current.overview || "No synopsis is available yet."}</p>
+                            <div className="min-w-0"><div className="flex flex-wrap gap-2"><span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-300">{current.mediaType === "MOVIE" ? "Movie" : "Series"}</span>{current.streamingOn.slice(0, 3).map((provider) => <span key={provider} className="rounded-full bg-purple-500/10 px-2.5 py-1 text-[10px] text-purple-300">{provider}</span>)}</div><h3 className="mt-3 text-2xl font-bold tracking-tight text-white">{current.title}</h3><p className="mt-1 text-sm text-gray-500">{current.year ?? "Year unknown"} · {candidateStrength(current)}/100 signal strength</p><p className="mt-4 line-clamp-4 text-sm leading-6 text-gray-300">{current.overview || "No synopsis is available yet."}</p>
                                 <div className="mt-4 flex flex-wrap gap-1.5">{current.genres.map((item) => <button key={item} onClick={() => setGenre(item)} className="rounded-full border border-gray-700/80 px-2.5 py-1 text-[10px] text-gray-400 hover:border-brand-500/50 hover:text-brand-300">{item}</button>)}</div>
-                                <div className="mt-5 rounded-xl border border-brand-500/15 bg-brand-950/15 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-brand-400">Why Watch Warden picked it</p><p className="mt-1.5 text-xs leading-relaxed text-gray-400">{current.suggestion?.scoreExplanation || current.suggestion?.suggestedReasons.join(" · ") || "Strong current fit for the selected Plex Home lineup."}</p></div>
+                                <div className="mt-5 rounded-xl border border-brand-500/15 bg-brand-950/15 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-brand-400">Why Watch Warden picked it</p><p className="mt-1.5 text-xs leading-relaxed text-gray-400">{candidateReason(current)}</p></div>
                                 <div className="mt-5"><div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold text-white">Suggested shelves</p><span className="text-[10px] text-gray-500">Choose where it belongs</span></div><div className="space-y-2">{current.shelves.map((shelf) => { const checked = selectedShelves.includes(shelf.id); return <button key={shelf.id} onClick={() => setSelectedShelves(checked ? selectedShelves.filter((id) => id !== shelf.id) : [...selectedShelves, shelf.id])} className={cn("flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left", checked ? "border-brand-500/35 bg-brand-500/8" : "border-gray-800 bg-gray-950/30 opacity-60")}><span className={cn("flex h-5 w-5 items-center justify-center rounded-md border", checked ? "border-brand-400 bg-brand-500 text-gray-950" : "border-gray-600")} >{checked && <Check className="h-3.5 w-3.5"/>}</span><span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-200">{shelf.name}</span>{shelf.mediaType === "MOVIE" ? <Film className="h-3.5 w-3.5 text-gray-600"/> : <Tv2 className="h-3.5 w-3.5 text-gray-600"/>}</button>; })}</div></div>
                             </div>
                         </div>

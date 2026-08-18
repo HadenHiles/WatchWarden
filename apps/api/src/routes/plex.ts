@@ -276,7 +276,9 @@ plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
             id: true, title: true, year: true, mediaType: true, posterPath: true, backdropPath: true,
             overview: true, streamingOn: true, genres: true,
             suggestion: { select: { id: true, finalScore: true, scoreExplanation: true, suggestedReasons: true } },
-            trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 20, select: { rawMetadata: true } },
+            trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 20, select: {
+                source: true, region: true, trendScore: true, providerId: true, providerRank: true, snapshotAt: true, rawMetadata: true,
+            } },
         },
     });
     const allowedTitles = titles.filter((title) => {
@@ -290,7 +292,10 @@ plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
         if (excludeAnime && title.genres.includes("Animation") && japanese) return false;
         return !(typeof metadata.popularity === "number" && metadata.popularity < minimumPopularity);
     });
-    const titleMap = new Map(allowedTitles.map(({ trendSnapshots: _trendSnapshots, ...title }) => [title.id, title]));
+    const titleMap = new Map(allowedTitles.map(({ trendSnapshots, ...title }) => [title.id, {
+        ...title,
+        trendSignals: trendSnapshots.map(({ rawMetadata: _rawMetadata, ...signal }) => signal),
+    }]));
     return res.json({ success: true, data: titleIds.map((id) => titleMap.get(id)).filter(Boolean).slice(0, 50) });
 }));
 
