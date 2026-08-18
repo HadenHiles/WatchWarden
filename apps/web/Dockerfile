@@ -13,6 +13,7 @@ RUN pnpm install --frozen-lockfile
 # ─── Build ────────────────────────────────────────────────────────────────────
 FROM deps AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS=--max-old-space-size=1536
 COPY . .
 RUN pnpm --filter @watchwarden/types build
 RUN pnpm --filter @watchwarden/web build

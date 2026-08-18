@@ -22,6 +22,7 @@
 # ─── Builder ─────────────────────────────────────────────────────────────────
 FROM node:20-slim AS builder
 
+ENV NODE_OPTIONS=--max-old-space-size=1536
 # The workspace dependencies ship prebuilt binaries; a full compiler toolchain
 # only adds thousands of tiny files to unpack (especially painful on NAS RAID).
 RUN npm install -g pnpm@8.15.1
