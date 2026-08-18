@@ -59,6 +59,8 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
     const [index, setIndex] = useState(0);
     const [selectedShelves, setSelectedShelves] = useState<string[]>([]);
     const [busy, setBusy] = useState(false);
+    const [actionError, setActionError] = useState<string | null>(null);
+    const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
     const [bulkAction, setBulkAction] = useState<"APPROVE" | "REJECT" | null>(null);
     const [lastDecision, setLastDecision] = useState<Decision | null>(null);
     const [reviewedCount, setReviewedCount] = useState(0);
@@ -72,9 +74,9 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
             if (existing) existing.shelves.push(activeShelves[shelfIndex]);
             else merged.set(candidate.id, { ...candidate, shelves: [activeShelves[shelfIndex]] });
         }));
-        return [...merged.values()].sort((a, b) =>
+        return [...merged.values()].filter((candidate) => !dismissedIds.has(candidate.id)).sort((a, b) =>
             candidateStrength(b) - candidateStrength(a) || b.shelves.length - a.shelves.length || a.title.localeCompare(b.title));
-    }, [data, activeShelves]);
+    }, [data, activeShelves, dismissedIds]);
 
     const genres = useMemo(() => {
         const counts = new Map<string, number>();
@@ -90,7 +92,7 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
 
     const decide = useCallback(async (candidate: Candidate, action: "APPROVE" | "REJECT", shelfIds = selectedShelves) => {
         if (busy || (action === "APPROVE" && shelfIds.length === 0)) return;
-        setBusy(true);
+        setBusy(true); setActionError(null);
         try {
             const response = await fetch(apiUrl(`/plex/home/review/${candidate.id}`), {
                 method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
@@ -100,28 +102,35 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
             if (!response.ok) throw new Error(body.error ?? "Could not save decision");
             setLastDecision({ title: candidate.title, titleId: candidate.id, action, shelfIds: candidate.shelves.map((shelf) => shelf.id) });
             setReviewedCount((count) => count + 1);
+            setDismissedIds((ids) => new Set(ids).add(candidate.id));
             setDragX(action === "APPROVE" ? 600 : -600);
             window.setTimeout(() => setDragX(0), 180);
-            await mutate(); onChanged();
+            void mutate(); onChanged();
+        } catch (reason) {
+            setDragX(0);
+            setActionError(reason instanceof Error ? reason.message : "Could not save this decision");
         } finally { setBusy(false); }
     }, [busy, selectedShelves, mutate, onChanged]);
 
     async function undo() {
         if (!lastDecision || busy) return;
-        setBusy(true);
+        setBusy(true); setActionError(null);
         try {
             const response = await fetch(apiUrl(`/plex/home/review/${lastDecision.titleId}`), {
                 method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "UNDO", proposedShelfIds: lastDecision.shelfIds, selectedShelfIds: [] }),
             });
             if (!response.ok) throw new Error("Could not undo decision");
-            setLastDecision(null); setReviewedCount((count) => Math.max(0, count - 1)); await mutate(); onChanged();
-        } finally { setBusy(false); }
+            setLastDecision(null); setReviewedCount((count) => Math.max(0, count - 1));
+            setDismissedIds((ids) => { const next = new Set(ids); next.delete(lastDecision.titleId); return next; });
+            await mutate(); onChanged();
+        } catch (reason) { setActionError(reason instanceof Error ? reason.message : "Could not undo decision"); }
+        finally { setBusy(false); }
     }
 
     async function runBulk(action: "APPROVE" | "REJECT") {
         const batch = filtered.filter((candidate) => genre !== "All" && candidate.genres.includes(genre));
-        setBulkAction(null); setBusy(true);
+        setBulkAction(null); setBusy(true); setActionError(null);
         try {
             for (const candidate of batch) {
                 const response = await fetch(apiUrl(`/plex/home/review/${candidate.id}`), {
@@ -131,8 +140,10 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
                 if (!response.ok) throw new Error(`Stopped at ${candidate.title}`);
             }
             setReviewedCount((count) => count + batch.length);
+            setDismissedIds((ids) => new Set([...ids, ...batch.map((candidate) => candidate.id)]));
             await mutate(); onChanged();
-        } finally { setBusy(false); }
+        } catch (reason) { setActionError(reason instanceof Error ? reason.message : "Bulk decision failed"); }
+        finally { setBusy(false); }
     }
 
     useEffect(() => {
@@ -153,6 +164,7 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
                 <div className="flex items-center gap-3"><div className="text-right"><p className="text-2xl font-bold tabular-nums text-white">{filtered.length}</p><p className="text-[10px] uppercase tracking-wider text-gray-500">left to review</p></div><div className="h-10 w-px bg-gray-800"/><button onClick={undo} disabled={!lastDecision || busy} className="flex items-center gap-2 rounded-xl border border-gray-700/80 px-3 py-2 text-xs text-gray-400 hover:border-gray-500 hover:text-white disabled:opacity-30"><RotateCcw className="h-3.5 w-3.5"/>Undo</button></div>
             </div>
             <div className="mt-4 h-1 overflow-hidden rounded-full bg-gray-800"><div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-cyan-400 transition-all" style={{ width: `${Math.max(4, progress)}%` }}/></div>
+            {actionError && <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-300"><span>{actionError}</span><button onClick={() => setActionError(null)} className="text-red-400 hover:text-white"><X className="h-4 w-4"/></button></div>}
         </div>
 
         <div className="grid lg:grid-cols-[230px_minmax(0,1fr)]">

@@ -218,7 +218,9 @@ plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
         inLibrary: false,
         isRequested: false,
         tmdbId: { not: null },
-        status: { notIn: ["REJECTED", "EXPIRED"] },
+        // The review deck contains undecided titles only. Provider feeds bypass
+        // Suggestion queries, so filtering lifecycle state here is essential.
+        status: { in: ["CANDIDATE", "SUGGESTED", "ACTIVE_TRENDING"] },
     };
     let titleIds: string[] = [];
 
