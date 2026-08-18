@@ -184,9 +184,14 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
             <div className="relative flex min-h-[590px] items-center justify-center overflow-hidden p-4 sm:p-7">
                 {isLoading ? <div className="text-center"><Loader2 className="mx-auto h-7 w-7 animate-spin text-brand-400"/><p className="mt-3 text-xs text-gray-500">Building your review deck…</p></div> : error ? <p className="text-sm text-red-400">{error.message}</p> : !current ? <div className="max-w-sm text-center"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10"><CheckCheck className="h-7 w-7 text-emerald-400"/></div><h3 className="mt-4 text-xl font-semibold text-white">Queue cleared</h3><p className="mt-2 text-sm leading-relaxed text-gray-500">Nothing else matches these filters. Automations will keep discovering fresh candidates.</p></div> : <div className="w-full max-w-3xl">
                     <div
-                        onPointerDown={(event) => { dragStart.current = event.clientX; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); }}
+                        onPointerDown={(event) => {
+                            if ((event.target as HTMLElement).closest("button, a, input, select, textarea, [role='button']")) return;
+                            dragStart.current = event.clientX;
+                            (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+                        }}
                         onPointerMove={(event) => { if (dragStart.current != null) setDragX(event.clientX - dragStart.current); }}
                         onPointerUp={() => { const amount = dragX; dragStart.current = null; if (Math.abs(amount) > 110) void decide(current, amount > 0 ? "APPROVE" : "REJECT"); else setDragX(0); }}
+                        onPointerCancel={() => { dragStart.current = null; setDragX(0); }}
                         style={{ transform: `translateX(${dragX}px) rotate(${dragX / 35}deg)`, opacity: Math.max(.35, 1 - Math.abs(dragX) / 700) }}
                         className="relative touch-pan-y overflow-hidden rounded-2xl border border-white/10 bg-gray-900 shadow-2xl transition-[transform,opacity] duration-150">
                         {current.backdropPath && <div className="absolute inset-x-0 top-0 h-56 bg-cover bg-center opacity-25 [mask-image:linear-gradient(to_bottom,black,transparent)]" style={{ backgroundImage: `url(https://image.tmdb.org/t/p/w780${current.backdropPath})` }}/>} 
