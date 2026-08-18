@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AlertCircle, Check, ChevronDown, ChevronUp, Clapperboard, Film, GripVertical, Library, Loader2, Plus, RefreshCw, Search, Settings2, Sparkles, Trash2, Tv2, X } from "lucide-react";
 import { apiUrl } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { PlexCurationQueue } from "@/components/PlexCurationQueue";
 
 const fetcher = (url: string) => fetch(url, { credentials: "include" }).then(async (response) => {
     const body = await response.json();
@@ -266,6 +267,8 @@ export default function PlexHomePage() {
             <div className="mt-3 flex items-center justify-between text-xs"><span className={automationHealthy ? "text-emerald-400" : "text-amber-400"}>{automationHealthy ? "● Plex automations healthy" : "● Automation needs attention"}</span><Link href="/dashboard/jobs" className="text-gray-500 hover:text-gray-200">View schedule & run history →</Link></div>
         </section>
 
+        <PlexCurationQueue shelves={shelves} onChanged={() => { void mutate(); }} />
+
         {settingsOpen && <section className="rounded-xl border border-gray-700 bg-gray-900 p-5">
             <div className="mb-4"><h2 className="font-semibold text-white">Home behavior</h2><p className="text-xs text-gray-400">These settings apply to every managed shelf.</p></div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -289,7 +292,7 @@ export default function PlexHomePage() {
         </section>}
 
         <section className="rounded-xl border border-gray-800 bg-gray-900/70 p-4">
-            <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4"><div><h2 className="font-semibold text-white">Your shelf lineup</h2><p className="mt-0.5 text-xs text-gray-400">{published} of {settings.shelfLimit} Home slots selected · rows beyond the limit stay unpublished</p></div></div>
+            <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-gray-600">Secondary workspace</p><h2 className="mt-1 font-semibold text-white">Shelf management</h2><p className="mt-0.5 text-xs text-gray-400">Audit membership, ordering, names, and publishing · {published} of {settings.shelfLimit} Home slots selected</p></div></div>
             {isLoading ? <div className="flex h-52 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-500" /></div> : shelves.length === 0 ? <div className="py-16 text-center"><Clapperboard className="mx-auto h-8 w-8 text-gray-700" /><p className="mt-3 text-sm text-gray-400">No shelves configured yet.</p><button onClick={() => setSetupOpen(true)} className="mt-3 text-sm text-brand-400 hover:text-brand-300">Add the recommended lineup →</button></div> : <div className="mt-4 grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]"><div className="space-y-2">{shelves.map((shelf, index) => {
                 const overBudget = shelf.enabled && shelf.publishToHome && shelves.filter((candidate) => candidate.enabled && candidate.publishToHome && (candidate.homePriority < shelf.homePriority || candidate.homePriority === shelf.homePriority && candidate.id <= shelf.id)).length > settings.shelfLimit;
                 return <div key={shelf.id} className={cn("rounded-lg border transition-colors", selected === shelf.id ? "border-brand-500/40 bg-brand-500/5" : "border-gray-800 bg-gray-950/30", !shelf.enabled && "opacity-65")}>

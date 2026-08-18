@@ -5,9 +5,11 @@ import { Prisma } from "@prisma/client";
 import { asyncHandler } from "../middleware/error";
 import { validateBody } from "../middleware/validation";
 import { DecisionService } from "../services/decision.service";
+import { RequestService } from "../services/request.service";
 
 export const plexRouter = Router();
 const decisionService = new DecisionService();
+const requestService = new RequestService();
 
 const DEFAULT_HOME_SETTINGS = { primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, backfillRecentReleases: true, recentlyReleasedBackfillDays: 365, defaultMaxItems: 20 };
 
@@ -271,7 +273,9 @@ plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
     const titles = await prisma.title.findMany({
         where: { id: { in: titleIds } },
         select: {
-            id: true, title: true, year: true, mediaType: true, posterPath: true, streamingOn: true, genres: true,
+            id: true, title: true, year: true, mediaType: true, posterPath: true, backdropPath: true,
+            overview: true, streamingOn: true, genres: true,
+            suggestion: { select: { id: true, finalScore: true, scoreExplanation: true, suggestedReasons: true } },
             trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 20, select: { rawMetadata: true } },
         },
     });
@@ -286,8 +290,65 @@ plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
         if (excludeAnime && title.genres.includes("Animation") && japanese) return false;
         return !(typeof metadata.popularity === "number" && metadata.popularity < minimumPopularity);
     });
-    const titleMap = new Map(allowedTitles.map(({ trendSnapshots: _trendSnapshots, genres: _genres, ...title }) => [title.id, title]));
-    return res.json({ success: true, data: titleIds.map((id) => titleMap.get(id)).filter(Boolean).slice(0, 12) });
+    const titleMap = new Map(allowedTitles.map(({ trendSnapshots: _trendSnapshots, ...title }) => [title.id, title]));
+    return res.json({ success: true, data: titleIds.map((id) => titleMap.get(id)).filter(Boolean).slice(0, 50) });
+}));
+
+const reviewDecisionSchema = z.object({
+    action: z.enum(["APPROVE", "REJECT", "UNDO"]),
+    selectedShelfIds: z.array(z.string()).max(30).default([]),
+    proposedShelfIds: z.array(z.string()).max(30).default([]),
+});
+
+// POST /plex/home/review/:titleId — one atomic curation action across every suggested shelf.
+plexRouter.post("/home/review/:titleId", validateBody(reviewDecisionSchema), asyncHandler(async (req, res) => {
+    const { action, selectedShelfIds, proposedShelfIds } = req.body as z.infer<typeof reviewDecisionSchema>;
+    const title = await prisma.title.findUnique({ where: { id: req.params.titleId }, select: { id: true, mediaType: true } });
+    if (!title) return res.status(404).json({ success: false, error: "Candidate not found" });
+
+    const shelfIds = [...new Set([...selectedShelfIds, ...proposedShelfIds])];
+    const shelves = await prisma.plexCollection.findMany({
+        where: { id: { in: shelfIds }, mediaType: title.mediaType },
+        select: { id: true },
+    });
+    const validShelfIds = new Set(shelves.map((shelf) => shelf.id));
+    const selected = selectedShelfIds.filter((id) => validShelfIds.has(id));
+    const proposed = proposedShelfIds.filter((id) => validShelfIds.has(id));
+
+    const suggestion = await prisma.suggestion.upsert({
+        where: { titleId: title.id },
+        update: {},
+        create: { titleId: title.id, suggestedReasons: ["Reviewed from Plex Home curation queue"] },
+        select: { id: true },
+    });
+
+    if (action === "UNDO") {
+        await decisionService.applyDecision({ suggestionId: suggestion.id, action: "UNDO", reason: "Undid Plex Home curation decision" });
+        if (proposed.length) await prisma.plexCollectionTitle.deleteMany({ where: { titleId: title.id, collectionId: { in: proposed } } });
+        return res.json({ success: true, data: { action, requestRetained: true } });
+    }
+
+    if (action === "REJECT") {
+        const decision = await decisionService.applyDecision({ suggestionId: suggestion.id, action: "REJECT", reason: "Rejected from Plex Home curation queue" });
+        return res.json({ success: true, data: decision });
+    }
+
+    if (!selected.length) return res.status(400).json({ success: false, error: "Choose at least one shelf" });
+    await decisionService.applyDecision({ suggestionId: suggestion.id, action: "APPROVE", reason: "Approved from Plex Home curation queue" });
+    await prisma.$transaction([
+        ...selected.map((collectionId) => prisma.plexCollectionTitle.upsert({
+            where: { collectionId_titleId: { collectionId, titleId: title.id } },
+            update: { manuallyAdded: true, manuallyExcluded: false },
+            create: { collectionId, titleId: title.id, manuallyAdded: true },
+        })),
+        ...proposed.filter((id) => !selected.includes(id)).map((collectionId) => prisma.plexCollectionTitle.upsert({
+            where: { collectionId_titleId: { collectionId, titleId: title.id } },
+            update: { manuallyAdded: false, manuallyExcluded: true },
+            create: { collectionId, titleId: title.id, manuallyExcluded: true },
+        })),
+    ]);
+    const request = await requestService.submitRequest(title.id);
+    return res.json({ success: true, data: { action, selectedShelfIds: selected, requestStatus: request.requestStatus } });
 }));
 
 // POST /plex/collections/:id/candidates/:titleId/reject — permanently reject a shelf candidate
