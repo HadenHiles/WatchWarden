@@ -35,6 +35,7 @@ Watch Warden only mutates collections whose Plex rating key it persistently trac
 External integrations:
   ├── Tautulli      — local watch history (family engagement signals)
   ├── Jellyseerr    — media request automation
+  ├── Radarr        — movie quality and availability signals
   └── TMDB API      — trends, popular/current titles, metadata, and streaming availability
 
 Export targets:
@@ -141,6 +142,8 @@ Key variables:
 | `TAUTULLI_API_KEY` | Tautulli API key |
 | `JELLYSEERR_URL` | Jellyseerr base URL |
 | `JELLYSEERR_API_KEY` | Jellyseerr API key |
+| `RADARR_BASE_URL` | Radarr base URL |
+| `RADARR_API_KEY` | Radarr API key |
 | `TMDB_API_KEY` | TMDB API v3 key (free at themoviedb.org) |
 | `EXPORT_OUTPUT_DIR` | Filesystem path for Kometa exports |
 

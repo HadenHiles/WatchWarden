@@ -45,9 +45,15 @@ export interface TautulliSettings {
     apiKey: string;
 }
 
+export interface RadarrSettings {
+    baseUrl: string;
+    apiKey: string;
+}
+
 export interface AppSettings {
     tautulli: TautulliSettings;
     jellyseerr: JellyseerrSettings;
+    radarr: RadarrSettings;
     exportOutputDir: string;
     scoreWeights: ScoreWeightSettings;
     enabledRegions: Array<"US" | "CA">;
@@ -61,6 +67,9 @@ export interface AppSettings {
         librarySyncCron: string;
         lifecycleEvalCron: string;
         exportCron: string;
+        plexLibrarySyncCron: string;
+        plexSyncCron: string;
+        radarrSyncCron: string;
     };
 }
 

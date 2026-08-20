@@ -126,6 +126,99 @@ export interface JellyseerrHealthStatus {
     error?: string;
 }
 
+// ─── Radarr types ────────────────────────────────────────────────────────────
+
+export interface RadarrQuality {
+    quality?: {
+        id?: number;
+        name?: string;
+        source?: string;
+        resolution?: number;
+    };
+    revision?: {
+        version?: number;
+        real?: number;
+        isRepack?: boolean;
+    };
+}
+
+export interface RadarrMovieFile {
+    id: number;
+    movieId: number;
+    relativePath?: string;
+    path?: string;
+    quality?: RadarrQuality;
+}
+
+export interface RadarrMovie {
+    id: number;
+    tmdbId: number;
+    imdbId?: string;
+    title: string;
+    year?: number;
+    monitored: boolean;
+    hasFile: boolean;
+    isAvailable?: boolean;
+    inCinemas?: string;
+    digitalRelease?: string;
+    physicalRelease?: string;
+    minimumAvailability?: string;
+    qualityProfileId: number;
+    rootFolderPath: string;
+    movieFile?: RadarrMovieFile;
+}
+
+export interface RadarrQueueRecord {
+    id: number;
+    movieId?: number;
+    movie?: RadarrMovie;
+    title?: string;
+    status?: string;
+    trackedDownloadStatus?: string;
+    quality?: RadarrQuality;
+    outputPath?: string;
+}
+
+export interface RadarrQueueResponse {
+    page: number;
+    pageSize: number;
+    totalRecords: number;
+    records: RadarrQueueRecord[];
+}
+
+export interface RadarrHistoryRecord {
+    id: number;
+    movieId: number;
+    sourceTitle?: string;
+    eventType?: string;
+    date?: string;
+    quality?: RadarrQuality;
+}
+
+export interface RadarrHistoryResponse {
+    page: number;
+    pageSize: number;
+    totalRecords: number;
+    records: RadarrHistoryRecord[];
+}
+
+export interface RadarrQualityProfile {
+    id: number;
+    name: string;
+}
+
+export interface RadarrRootFolder {
+    id: number;
+    path: string;
+    freeSpace?: number;
+}
+
+export interface RadarrHealthStatus {
+    healthy: boolean;
+    version?: string;
+    error?: string;
+}
+
 // Discover slider types supported by Jellyseerr.
 // See https://github.com/Fallenbagel/jellyseerr for the full enum.
 export enum JellyseerrDiscoverSliderType {

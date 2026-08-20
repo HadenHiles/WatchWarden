@@ -14,6 +14,10 @@ export type { JellyseerrClientConfig } from "./jellyseerr/client";
 export { JellyseerrService } from "./jellyseerr/service";
 export type { RequestMediaInput, RequestMediaResult } from "./jellyseerr/service";
 
+// Radarr
+export { RadarrClient } from "./radarr/client";
+export type { RadarrClientConfig } from "./radarr/client";
+
 // Plex
 export { PlexClient } from "./plex/client";
 export type { PlexClientConfig, PlexSection, PlexMediaItem, PlexCollection, PlexIdentity } from "./plex/client";

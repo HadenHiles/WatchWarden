@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "@watchwarden/db";
-import { TautulliClient, JellyseerrClient, PlexClient } from "@watchwarden/integrations";
+import { TautulliClient, JellyseerrClient, PlexClient, RadarrClient } from "@watchwarden/integrations";
 import { asyncHandler } from "../middleware/error";
 import { validateBody } from "../middleware/validation";
 
@@ -53,6 +53,21 @@ settingsRouter.post("/test-connection", asyncHandler(async (req, res) => {
                 success: health.healthy,
                 message: health.healthy
                     ? `Connected — Plex Media Server v${health.version}`
+                    : (health.error ?? "Connection failed"),
+            });
+        } catch (e) {
+            return res.json({ success: false, message: String(e) });
+        }
+    }
+
+    if (type === "radarr") {
+        try {
+            const client = new RadarrClient({ baseUrl, apiKey, timeout: 8_000 });
+            const health = await client.healthCheck();
+            return res.json({
+                success: health.healthy,
+                message: health.healthy
+                    ? `Connected — Radarr v${health.version}`
                     : (health.error ?? "Connection failed"),
             });
         } catch (e) {

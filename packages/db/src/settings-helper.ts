@@ -3,6 +3,7 @@ import { prisma } from "./client";
 export interface IntegrationConfig {
     tautulli: { baseUrl: string | null; apiKey: string | null };
     jellyseerr: { baseUrl: string | null; apiKey: string | null; botUserId: number | null; botEmail: string | null; botPassword: string | null };
+    radarr: { baseUrl: string | null; apiKey: string | null };
     sources: { tmdbApiKey: string | null };
     plex: { baseUrl: string | null; token: string | null };
 }
@@ -14,12 +15,13 @@ export interface IntegrationConfig {
  */
 export async function getIntegrationConfig(): Promise<IntegrationConfig> {
     const rows = await prisma.appSetting.findMany({
-        where: { key: { in: ["tautulli", "jellyseerr", "sources", "plex"] } },
+        where: { key: { in: ["tautulli", "jellyseerr", "radarr", "sources", "plex"] } },
     });
     const db = Object.fromEntries(rows.map((r) => [r.key, r.value as Record<string, unknown>]));
 
     const t = db.tautulli as { baseUrl?: string; apiKey?: string } | undefined;
     const j = db.jellyseerr as { baseUrl?: string; apiKey?: string; botUserId?: number; botEmail?: string; botPassword?: string } | undefined;
+    const r = db.radarr as { baseUrl?: string; apiKey?: string } | undefined;
     const s = db.sources as { tmdbApiKey?: string } | undefined;
     const p = db.plex as { baseUrl?: string; token?: string } | undefined;
 
@@ -38,6 +40,10 @@ export async function getIntegrationConfig(): Promise<IntegrationConfig> {
                     : null),
             botEmail: j?.botEmail || process.env.JELLYSEERR_BOT_EMAIL || null,
             botPassword: j?.botPassword || process.env.JELLYSEERR_BOT_PASSWORD || null,
+        },
+        radarr: {
+            baseUrl: r?.baseUrl || process.env.RADARR_BASE_URL || null,
+            apiKey: r?.apiKey || process.env.RADARR_API_KEY || null,
         },
         sources: {
             tmdbApiKey: s?.tmdbApiKey || process.env.TMDB_API_KEY || null,

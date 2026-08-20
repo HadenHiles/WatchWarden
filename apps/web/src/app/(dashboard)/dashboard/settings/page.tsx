@@ -88,6 +88,14 @@ const KNOWN_SETTINGS: SettingSection[] = [
         ],
     },
     {
+        section: "Radarr",
+        note: "Used to classify downloaded movie quality and flag CAM/TS theatrical releases for Plex shelves.",
+        keys: [
+            { key: "radarr", subKey: "baseUrl", label: "Base URL", type: "url", placeholder: "http://192.168.8.3:7878" },
+            { key: "radarr", subKey: "apiKey", label: "API Key", type: "password", placeholder: "your_radarr_api_key" },
+        ],
+    },
+    {
         section: "Trend Sources",
         keys: [
             { key: "sources", subKey: "tmdbApiKey", label: "TMDB API Key", type: "password", hint: "Powers trends, popular/current titles, metadata, and provider discovery", placeholder: "your_tmdb_api_key" },
@@ -106,6 +114,7 @@ const KNOWN_SETTINGS: SettingSection[] = [
             { key: "refreshIntervals", subKey: "exportCron", label: "Export", type: "text", placeholder: "15 */6 * * *" },
             { key: "refreshIntervals", subKey: "plexLibrarySyncCron", label: "Plex Library Scan", type: "text", placeholder: "0 */4 * * *" },
             { key: "refreshIntervals", subKey: "plexSyncCron", label: "Plex Home Sync", type: "text", placeholder: "45 */6 * * *" },
+            { key: "refreshIntervals", subKey: "radarrSyncCron", label: "Radarr Quality Sync", type: "text", placeholder: "15,45 * * * *" },
         ],
     },
 ];

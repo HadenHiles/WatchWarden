@@ -31,6 +31,12 @@ const SMART_FILTER_QUERIES: Record<
         inLibrary: true,
         plexRatingKey: { not: null },
     }),
+    IN_THEATERS: (mediaType) => ({
+        mediaType,
+        inLibrary: true,
+        plexRatingKey: { not: null },
+        radarrIsLowQualityTheatrical: true,
+    }),
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

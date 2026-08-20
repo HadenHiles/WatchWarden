@@ -129,6 +129,13 @@ model Title {
   // Plex direct integration
   plexRatingKey    String?   // Plex internal ratingKey; set by plex-library-sync job
 
+  // Radarr direct integration
+  radarrMovieId                 Int?
+  radarrQuality                 String?
+  radarrQualitySource           String?
+  radarrIsLowQualityTheatrical  Boolean   @default(false)
+  radarrQualityCheckedAt        DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -143,6 +150,8 @@ model Title {
   @@index([status])
   @@index([mediaType])
   @@index([tmdbId])
+  @@index([radarrMovieId])
+  @@index([radarrIsLowQualityTheatrical])
 }
 
 // ─── ExternalTrendSnapshot ───────────────────────────────────────────────────

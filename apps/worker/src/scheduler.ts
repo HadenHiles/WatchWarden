@@ -12,6 +12,7 @@ import { lifecycleEvalJob } from "./jobs/lifecycle-eval.job";
 import { exportJob } from "./jobs/export.job";
 import { plexSyncJob } from "./jobs/plex-sync.job";
 import { plexLibrarySyncJob } from "./jobs/plex-library-sync.job";
+import { radarrSyncJob } from "./jobs/radarr-sync.job";
 import { rotationCleanupJob } from "./jobs/rotation-cleanup.job";
 
 const logger = createLogger("scheduler");
@@ -30,6 +31,7 @@ export function buildScheduler(env: WorkerEnv) {
         { name: "lifecycle-eval", cron: env.LIFECYCLE_EVAL_CRON, fn: lifecycleEvalJob },
         { name: "export", cron: env.EXPORT_CRON, fn: exportJob },
         { name: "plex-sync", cron: env.PLEX_SYNC_CRON, fn: plexSyncJob },
+        { name: "radarr-sync", cron: env.RADARR_SYNC_CRON, fn: radarrSyncJob },
         { name: "rotation-cleanup", cron: env.ROTATION_CLEANUP_CRON, fn: rotationCleanupJob },
     ];
 

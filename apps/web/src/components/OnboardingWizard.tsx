@@ -28,6 +28,11 @@ interface JellyseerrForm {
     botUserId: string;
 }
 
+interface RadarrForm {
+    baseUrl: string;
+    apiKey: string;
+}
+
 interface SourcesForm {
     tmdbApiKey: string;
 }
@@ -42,6 +47,7 @@ interface SchedulesForm {
     exportCron: string;
     plexLibrarySyncCron: string;
     plexSyncCron: string;
+    radarrSyncCron: string;
 }
 
 type TestState = null | "testing" | "ok" | "fail";
@@ -53,7 +59,7 @@ interface TestStatus {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const STEPS = ["welcome", "admin", "plex", "tautulli", "jellyseerr", "sources", "schedules", "done"] as const;
+const STEPS = ["welcome", "admin", "plex", "tautulli", "jellyseerr", "radarr", "sources", "schedules", "done"] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
@@ -62,6 +68,7 @@ const STEP_LABELS: Record<Step, string> = {
     plex: "Plex",
     tautulli: "Tautulli",
     jellyseerr: "Jellyseerr",
+    radarr: "Radarr",
     sources: "Trend Sources",
     schedules: "Schedules",
     done: "Done",
@@ -77,6 +84,7 @@ const DEFAULT_SCHEDULES: SchedulesForm = {
     exportCron: "15 */6 * * *",
     plexLibrarySyncCron: "0 */4 * * *",
     plexSyncCron: "45 */6 * * *",
+    radarrSyncCron: "15,45 * * * *",
 };
 
 const CRON_LABELS: [keyof SchedulesForm, string][] = [
@@ -89,6 +97,7 @@ const CRON_LABELS: [keyof SchedulesForm, string][] = [
     ["exportCron", "Export"],
     ["plexLibrarySyncCron", "Plex Library Scan"],
     ["plexSyncCron", "Plex Collection Sync"],
+    ["radarrSyncCron", "Radarr Quality Sync"],
 ];
 
 const INPUT_CLS =
@@ -189,6 +198,9 @@ export function OnboardingWizard() {
     const [jellyseerr, setJellyseerr] = useState<JellyseerrForm>({ baseUrl: "", apiKey: "", botUserId: "2" });
     const [jellyseerrTest, setJellyseerrTest] = useState<TestStatus>({ state: null, message: "" });
 
+    const [radarr, setRadarr] = useState<RadarrForm>({ baseUrl: "", apiKey: "" });
+    const [radarrTest, setRadarrTest] = useState<TestStatus>({ state: null, message: "" });
+
     const [sources, setSources] = useState<SourcesForm>({ tmdbApiKey: "" });
     const [schedules, setSchedules] = useState<SchedulesForm>(DEFAULT_SCHEDULES);
 
@@ -229,6 +241,7 @@ export function OnboardingWizard() {
                             },
                         }
                         : {}),
+                    ...(radarr.baseUrl || radarr.apiKey ? { radarr } : {}),
                     ...(sources.tmdbApiKey ? { sources } : {}),
                     refreshIntervals: schedules,
                 };
@@ -278,7 +291,13 @@ export function OnboardingWizard() {
         setJellyseerrTest({ state: result.success ? "ok" : "fail", message: result.message ?? "" });
     }
 
-    const configSteps = (["admin", "plex", "tautulli", "jellyseerr", "sources", "schedules"] as const).map(
+    async function handleTestRadarr() {
+        setRadarrTest({ state: "testing", message: "" });
+        const result = await testConnection("radarr", radarr.baseUrl, radarr.apiKey);
+        setRadarrTest({ state: result.success ? "ok" : "fail", message: result.message ?? "" });
+    }
+
+    const configSteps = (["admin", "plex", "tautulli", "jellyseerr", "radarr", "sources", "schedules"] as const).map(
         (s) => STEP_LABELS[s],
     );
     const currentConfigIdx = configSteps.indexOf(STEP_LABELS[currentStep]);
@@ -336,6 +355,7 @@ export function OnboardingWizard() {
                                     { label: "Plex", desc: "Direct connection to manage collections on your server", highlight: true },
                                     { label: "Tautulli", desc: "Local watch history & engagement signals" },
                                     { label: "Jellyseerr", desc: "Automated media requests for approved titles" },
+                                    { label: "Radarr", desc: "Movie quality signals for CAM/TS theater releases" },
                                     { label: "Discovery", desc: "TMDB trends, popularity, current releases, and streaming availability" },
                                     { label: "Schedules", desc: "Background job cron schedules" },
                                 ].map(({ label, desc, highlight }) => (
@@ -563,6 +583,48 @@ export function OnboardingWizard() {
                                     message={jellyseerrTest.message}
                                     disabled={!jellyseerr.baseUrl || !jellyseerr.apiKey}
                                     onTest={handleTestJellyseerr}
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    {/* ── Radarr ──────────────────────────────────────────── */}
+                    {currentStep === "radarr" && (
+                        <>
+                            <h2 className="text-xl font-bold text-white mb-1">Radarr</h2>
+                            <p className="text-gray-400 text-sm mb-5 leading-relaxed">
+                                Used to read movie quality and flag theatrical CAM/TS downloads so Plex can surface them separately.
+                            </p>
+                            <div className="space-y-4">
+                                <Field label="Base URL" hint="e.g. http://192.168.8.3:7878">
+                                    <input
+                                        type="url"
+                                        value={radarr.baseUrl}
+                                        onChange={(e) => {
+                                            setRadarr((f) => ({ ...f, baseUrl: e.target.value }));
+                                            setRadarrTest({ state: null, message: "" });
+                                        }}
+                                        placeholder="http://192.168.8.3:7878"
+                                        className={INPUT_CLS}
+                                    />
+                                </Field>
+                                <Field label="API Key">
+                                    <input
+                                        type="password"
+                                        value={radarr.apiKey}
+                                        onChange={(e) => {
+                                            setRadarr((f) => ({ ...f, apiKey: e.target.value }));
+                                            setRadarrTest({ state: null, message: "" });
+                                        }}
+                                        placeholder="your_radarr_api_key"
+                                        className={INPUT_CLS}
+                                    />
+                                </Field>
+                                <TestButton
+                                    state={radarrTest.state}
+                                    message={radarrTest.message}
+                                    disabled={!radarr.baseUrl || !radarr.apiKey}
+                                    onTest={handleTestRadarr}
                                 />
                             </div>
                         </>

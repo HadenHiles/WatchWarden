@@ -32,6 +32,8 @@ export const apiEnvSchema = baseEnvSchema.extend({
     JELLYSEERR_BOT_USER_ID: z.coerce.number().int().positive().optional(),
     JELLYSEERR_BOT_EMAIL: z.string().email().optional(),
     JELLYSEERR_BOT_PASSWORD: z.string().optional(),
+    RADARR_BASE_URL: z.string().url().optional(),
+    RADARR_API_KEY: z.string().optional(),
 });
 
 export const workerEnvSchema = baseEnvSchema.extend({
@@ -42,6 +44,8 @@ export const workerEnvSchema = baseEnvSchema.extend({
     JELLYSEERR_BOT_USER_ID: z.coerce.number().int().positive().optional(),
     JELLYSEERR_BOT_EMAIL: z.string().email().optional(),
     JELLYSEERR_BOT_PASSWORD: z.string().optional(),
+    RADARR_BASE_URL: z.string().url().optional(),
+    RADARR_API_KEY: z.string().optional(),
     PLEX_BASE_URL: z.string().url().optional(),
     PLEX_TOKEN: z.string().optional(),
     TMDB_API_KEY: z.string().optional(),
@@ -52,6 +56,7 @@ export const workerEnvSchema = baseEnvSchema.extend({
     JELLYSEERR_DISCOVER_SYNC_CRON: z.string().default("0 */6 * * *"),
     LIBRARY_SYNC_CRON: z.string().default("0 */3 * * *"),
     PLEX_LIBRARY_SYNC_CRON: z.string().default("5,35 * * * *"),
+    RADARR_SYNC_CRON: z.string().default("15,45 * * * *"),
     LIFECYCLE_EVAL_CRON: z.string().default("0 4 * * *"),
     EXPORT_CRON: z.string().default("15 */6 * * *"),
     PLEX_SYNC_CRON: z.string().default("10,40 * * * *"),

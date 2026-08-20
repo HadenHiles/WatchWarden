@@ -27,6 +27,7 @@ export type JobName =
     | "lifecycle-eval"
     | "export"
     | "plex-sync"
+    | "radarr-sync"
     | "rotation-cleanup";
 
 export interface JobStatusSummary {

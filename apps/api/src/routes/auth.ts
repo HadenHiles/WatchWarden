@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
 import type { ApiEnv } from "@watchwarden/config";
 import { prisma } from "@watchwarden/db";
-import { TautulliClient, JellyseerrClient, PlexClient } from "@watchwarden/integrations";
+import { TautulliClient, JellyseerrClient, PlexClient, RadarrClient } from "@watchwarden/integrations";
 import { AppError, asyncHandler } from "../middleware/error";
 import { z } from "zod";
 
@@ -22,6 +22,7 @@ const setupSchema = z.object({
         apiKey: z.string().optional(),
         botUserId: z.number().int().positive().optional(),
     }).optional(),
+    radarr: z.object({ baseUrl: z.string().optional(), apiKey: z.string().optional() }).optional(),
     sources: z.object({ tmdbApiKey: z.string().optional() }).optional(),
     plex: z.object({ baseUrl: z.string().optional(), token: z.string().optional() }).optional(),
     refreshIntervals: z.record(z.string()).optional(),
@@ -79,7 +80,7 @@ export function authRouter(env: ApiEnv) {
             });
         }
 
-        const { admin, tautulli, jellyseerr, sources, plex, refreshIntervals } = parsed.data;
+        const { admin, tautulli, jellyseerr, radarr, sources, plex, refreshIntervals } = parsed.data;
 
         type UpsertArg = Parameters<typeof prisma.appSetting.upsert>[0];
         const writes: UpsertArg[] = [];
@@ -113,6 +114,14 @@ export function authRouter(env: ApiEnv) {
                 where: { key: "jellyseerr" },
                 update: { value: jellyseerr as object },
                 create: { key: "jellyseerr", value: jellyseerr as object, category: "integrations" },
+            });
+        }
+
+        if (radarr?.baseUrl || radarr?.apiKey) {
+            writes.push({
+                where: { key: "radarr" },
+                update: { value: radarr as object },
+                create: { key: "radarr", value: radarr as object, category: "integrations" },
             });
         }
 
@@ -199,6 +208,21 @@ export function authRouter(env: ApiEnv) {
                     success: health.healthy,
                     message: health.healthy
                         ? `Connected — Plex Media Server v${health.version}`
+                        : (health.error ?? "Connection failed"),
+                });
+            } catch (e) {
+                return res.json({ success: false, message: String(e) });
+            }
+        }
+
+        if (type === "radarr") {
+            try {
+                const client = new RadarrClient({ baseUrl, apiKey, timeout: 8_000 });
+                const health = await client.healthCheck();
+                return res.json({
+                    success: health.healthy,
+                    message: health.healthy
+                        ? `Connected — Radarr v${health.version}`
                         : (health.error ?? "Connection failed"),
                 });
             } catch (e) {
