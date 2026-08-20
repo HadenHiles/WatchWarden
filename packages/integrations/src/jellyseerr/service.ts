@@ -142,6 +142,11 @@ export class JellyseerrService {
         }
     }
 
+    /** Retracts a previously submitted request. */
+    async deleteRequest(requestId: number): Promise<void> {
+        await this.client.deleteRequest(requestId);
+    }
+
     /** Delete a title's file via Radarr/Sonarr, then remove its Jellyseerr record. */
     async deleteMedia(tmdbId: number, mediaType: "movie" | "tv"): Promise<number> {
         const media = mediaType === "movie"

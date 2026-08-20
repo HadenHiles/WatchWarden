@@ -1,4 +1,5 @@
-import { prisma } from "@watchwarden/db";
+import { getIntegrationConfig, prisma } from "@watchwarden/db";
+import { JellyseerrService } from "@watchwarden/integrations";
 import type { DecisionAction, SuggestionStatus, TitleStatus } from "@watchwarden/types";
 import { AuditService } from "./audit.service";
 
@@ -20,7 +21,7 @@ export class DecisionService {
     async applyDecision(input: DecisionInput) {
         const suggestion = await prisma.suggestion.findUnique({
             where: { id: input.suggestionId },
-            include: { title: true },
+            include: { title: { include: { requestRecord: true } } },
         });
         if (!suggestion) throw new Error(`Suggestion ${input.suggestionId} not found`);
 
@@ -40,6 +41,33 @@ export class DecisionService {
         const titleUpdates: Record<string, unknown> = { status: newTitleStatus };
 
         switch (input.action) {
+            case "REJECT": {
+                const requestRecord = suggestion.title.requestRecord;
+                if (requestRecord?.jellyseerrRequestId) {
+                    const { jellyseerr: config } = await getIntegrationConfig();
+                    if (config.baseUrl && config.apiKey) {
+                        try {
+                            await new JellyseerrService({
+                                baseUrl: config.baseUrl,
+                                apiKey: config.apiKey,
+                            }).deleteRequest(requestRecord.jellyseerrRequestId);
+                        } catch (error) {
+                            await auditService.log({
+                                action: "JELLYSEERR_REQUEST_RETRACTION_FAILED",
+                                entityType: "RequestRecord",
+                                entityId: requestRecord.id,
+                                titleId: suggestion.titleId,
+                                details: { error: error instanceof Error ? error.message : String(error) },
+                            });
+                        }
+                    }
+                    await prisma.requestRecord.update({
+                        where: { id: requestRecord.id },
+                        data: { requestStatus: "DECLINED" },
+                    });
+                }
+                break;
+            }
             case "PIN":
                 titleUpdates.isPinned = true;
                 break;

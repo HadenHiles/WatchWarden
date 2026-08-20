@@ -26,6 +26,7 @@ export class RequestService {
         const title = await prisma.title.findUnique({ where: { id: titleId } });
         if (!title) throw new Error(`Title ${titleId} not found`);
         if (!title.tmdbId) throw new Error("Title has no TMDB ID — cannot submit to Jellyseerr");
+        if (title.status === "REJECTED") throw new Error("Cannot request a rejected title");
 
         // If the title is already in the Plex library there is nothing to request.
         if (title.inLibrary) {

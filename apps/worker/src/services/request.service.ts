@@ -21,7 +21,7 @@ export async function submitRequest(titleId: string): Promise<void> {
         logger.warn("Title not found for auto-request", { titleId });
         return;
     }
-    if (title.inLibrary || title.isRequested) {
+    if (title.inLibrary || title.isRequested || title.status === "REJECTED") {
         return; // Already handled
     }
     if (!title.tmdbId) {
