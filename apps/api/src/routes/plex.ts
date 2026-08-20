@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
-import { prisma } from "@watchwarden/db";
+import { getIntegrationConfig, prisma } from "@watchwarden/db";
 import { Prisma } from "@prisma/client";
+import { JellyseerrService } from "@watchwarden/integrations";
 import { asyncHandler } from "../middleware/error";
 import { validateBody } from "../middleware/validation";
 import { DecisionService } from "../services/decision.service";
@@ -10,6 +11,17 @@ import { RequestService } from "../services/request.service";
 export const plexRouter = Router();
 const decisionService = new DecisionService();
 const requestService = new RequestService();
+
+plexRouter.get("/titles/:titleId/seasons", asyncHandler(async (req, res) => {
+    const title = await prisma.title.findUnique({ where: { id: req.params.titleId }, select: { tmdbId: true, mediaType: true } });
+    if (!title) return res.status(404).json({ success: false, error: "Title not found" });
+    if (title.mediaType !== "SHOW" || !title.tmdbId) return res.json({ success: true, data: [] });
+
+    const { jellyseerr } = await getIntegrationConfig();
+    if (!jellyseerr.baseUrl || !jellyseerr.apiKey) return res.json({ success: true, data: [] });
+    const seasons = await new JellyseerrService({ baseUrl: jellyseerr.baseUrl, apiKey: jellyseerr.apiKey }).getSeasons(title.tmdbId);
+    return res.json({ success: true, data: seasons });
+}));
 
 const DEFAULT_HOME_SETTINGS = { primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, backfillRecentReleases: true, recentlyReleasedBackfillDays: 365, defaultMaxItems: 20 };
 
@@ -305,11 +317,12 @@ const reviewDecisionSchema = z.object({
     action: z.enum(["APPROVE", "REJECT", "UNDO"]),
     selectedShelfIds: z.array(z.string()).max(30).default([]),
     proposedShelfIds: z.array(z.string()).max(30).default([]),
+    seasons: z.array(z.number().int().positive()).max(100).optional(),
 });
 
 // POST /plex/home/review/:titleId — one atomic curation action across every suggested shelf.
 plexRouter.post("/home/review/:titleId", validateBody(reviewDecisionSchema), asyncHandler(async (req, res) => {
-    const { action, selectedShelfIds, proposedShelfIds } = req.body as z.infer<typeof reviewDecisionSchema>;
+    const { action, selectedShelfIds, proposedShelfIds, seasons } = req.body as z.infer<typeof reviewDecisionSchema>;
     const title = await prisma.title.findUnique({ where: { id: req.params.titleId }, select: { id: true, mediaType: true } });
     if (!title) return res.status(404).json({ success: false, error: "Candidate not found" });
 
@@ -354,7 +367,7 @@ plexRouter.post("/home/review/:titleId", validateBody(reviewDecisionSchema), asy
             create: { collectionId, titleId: title.id, manuallyExcluded: true },
         })),
     ]);
-    const request = await requestService.submitRequest(title.id);
+    const request = await requestService.submitRequest(title.id, seasons);
     return res.json({ success: true, data: { action, selectedShelfIds: selected, requestStatus: request.requestStatus } });
 }));
 

@@ -30,6 +30,12 @@ export interface RequestMediaResult {
     error?: string;
 }
 
+export interface JellyseerrSeason {
+    seasonNumber: number;
+    episodeCount?: number;
+    airDate?: string | null;
+}
+
 /**
  * High-level service layer over JellyseerrClient.
  * All Jellyseerr interactions in the app should go through this service —
@@ -64,6 +70,11 @@ export class JellyseerrService {
             logger.warn("Could not resolve Jellyseerr ID", { tmdbId, mediaType });
             return null;
         }
+    }
+
+    async getSeasons(tmdbId: number): Promise<JellyseerrSeason[]> {
+        const media = await this.client.getTv(tmdbId);
+        return (media.seasons ?? []).filter((season) => season.seasonNumber > 0);
     }
 
     /**

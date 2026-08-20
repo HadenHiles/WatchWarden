@@ -7,7 +7,7 @@ const logger = createLogger("request-service");
 const auditService = new AuditService();
 
 export class RequestService {
-    async submitRequest(titleId: string) {
+    async submitRequest(titleId: string, seasons?: number[]) {
         // Always load credentials from DB so values saved via the setup wizard are used.
         const { jellyseerr: jellyseerrConfig } = await getIntegrationConfig();
         const { baseUrl, apiKey, botUserId, botEmail, botPassword } = jellyseerrConfig;
@@ -69,6 +69,7 @@ export class RequestService {
             tvdbId: title.tvdbId ?? undefined,
             mediaType,
             botUserId: resolvedBotUserId,
+            seasons: seasons?.length ? seasons : undefined,
         });
 
         if (result.success && result.request) {

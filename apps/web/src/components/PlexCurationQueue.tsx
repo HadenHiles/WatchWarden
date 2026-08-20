@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import {
     ArrowLeft, ArrowRight, Check, CheckCheck, Film, Layers3, Loader2,
-    RotateCcw, SlidersHorizontal, Sparkles, Tag, Tv2, X, XCircle,
+    RotateCcw, SlidersHorizontal, Sparkles, Tag, Tv2, X, XCircle, ListChecks,
 } from "lucide-react";
 import { apiUrl } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ interface RawCandidate {
 }
 interface Candidate extends RawCandidate { shelves: Shelf[] }
 type Decision = { title: string; titleId: string; action: "APPROVE" | "REJECT"; shelfIds: string[] };
+type Season = { seasonNumber: number; episodeCount?: number; airDate?: string | null };
 
 const fetcher = async (urls: string[]) => Promise.all(urls.map(async (url) => {
     const response = await fetch(url, { credentials: "include" });
@@ -26,6 +27,13 @@ const fetcher = async (urls: string[]) => Promise.all(urls.map(async (url) => {
     if (!response.ok) throw new Error(body.error ?? "Could not load review queue");
     return body.data as RawCandidate[];
 }));
+
+const seasonFetcher = async (url: string) => {
+    const response = await fetch(url, { credentials: "include" });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "Could not load seasons");
+    return body.data as Season[];
+};
 
 function bestProviderSignal(candidate: Candidate) {
     return candidate.trendSignals
@@ -80,6 +88,9 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
     const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
     const [bulkAction, setBulkAction] = useState<"APPROVE" | "REJECT" | null>(null);
     const [lastDecision, setLastDecision] = useState<Decision | null>(null);
+    const [seasonPrompt, setSeasonPrompt] = useState<Candidate | null>(null);
+    const [seasonMode, setSeasonMode] = useState<"LATEST" | "FIRST" | "ALL" | "CUSTOM">("LATEST");
+    const [customSeasons, setCustomSeasons] = useState<number[]>([]);
     const [reviewedCount, setReviewedCount] = useState(0);
     const [dragX, setDragX] = useState(0);
     const dragStart = useRef<number | null>(null);
@@ -103,17 +114,27 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
     const filtered = useMemo(() => candidates.filter((candidate) =>
         (genre === "All" || candidate.genres.includes(genre)) && (media === "ALL" || candidate.mediaType === media)), [candidates, genre, media]);
     const current = filtered[Math.min(index, Math.max(0, filtered.length - 1))];
+    const { data: seasons = [], isLoading: seasonsLoading, error: seasonsError } = useSWR<Season[]>(
+        seasonPrompt?.mediaType === "SHOW" ? apiUrl(`/plex/titles/${seasonPrompt.id}/seasons`) : null,
+        seasonFetcher,
+    );
 
     useEffect(() => { setIndex(0); }, [genre, media]);
     useEffect(() => { if (current) setSelectedShelves(current.shelves.map((shelf) => shelf.id)); }, [current?.id]);
 
-    const decide = useCallback(async (candidate: Candidate, action: "APPROVE" | "REJECT", shelfIds = selectedShelves) => {
+    const decide = useCallback(async (candidate: Candidate, action: "APPROVE" | "REJECT", shelfIds = selectedShelves, selectedSeasons?: number[]) => {
         if (busy || (action === "APPROVE" && shelfIds.length === 0)) return;
+        if (action === "APPROVE" && candidate.mediaType === "SHOW" && selectedSeasons === undefined) {
+            setSeasonPrompt(candidate);
+            setSeasonMode("LATEST");
+            setCustomSeasons([]);
+            return;
+        }
         setBusy(true); setActionError(null);
         try {
             const response = await fetch(apiUrl(`/plex/home/review/${candidate.id}`), {
                 method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action, selectedShelfIds: action === "APPROVE" ? shelfIds : [], proposedShelfIds: candidate.shelves.map((shelf) => shelf.id) }),
+                body: JSON.stringify({ action, selectedShelfIds: action === "APPROVE" ? shelfIds : [], proposedShelfIds: candidate.shelves.map((shelf) => shelf.id), ...(selectedSeasons !== undefined ? { seasons: selectedSeasons } : {}) }),
             });
             const body = await response.json();
             if (!response.ok) throw new Error(body.error ?? "Could not save decision");
@@ -128,6 +149,24 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
             setActionError(reason instanceof Error ? reason.message : "Could not save this decision");
         } finally { setBusy(false); }
     }, [busy, selectedShelves, mutate, onChanged]);
+
+    function confirmSeasonSelection() {
+        if (!seasonPrompt || seasonsLoading) return;
+        const seasonNumbers = seasons.map((season) => season.seasonNumber);
+        const selected = seasonMode === "ALL"
+            ? seasonNumbers
+            : seasonMode === "FIRST"
+                ? seasonNumbers.slice(0, 1)
+                : seasonMode === "CUSTOM"
+                    ? customSeasons
+                    : seasonNumbers.slice(-1);
+        if (!selected.length && seasonNumbers.length) {
+            setActionError("Select at least one season to request.");
+            return;
+        }
+        setSeasonPrompt(null);
+        void decide(seasonPrompt, "APPROVE", selectedShelves, selected);
+    }
 
     async function undo() {
         if (!lastDecision || busy) return;
@@ -226,6 +265,7 @@ export function PlexCurationQueue({ shelves, onChanged }: { shelves: Shelf[]; on
                 </div>}
             </div>
         </div>
+        {seasonPrompt && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-2xl border border-gray-700 bg-gray-900 p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-500/10 text-brand-300"><ListChecks className="h-5 w-5"/></div><h3 className="mt-4 text-lg font-semibold text-white">Choose seasons for {seasonPrompt.title}</h3><p className="mt-2 text-sm leading-relaxed text-gray-400">Select what Watch Warden should request in Jellyseerr. You can request more seasons later.</p></div><button onClick={() => setSeasonPrompt(null)} className="text-gray-500 hover:text-white" title="Close"><X className="h-5 w-5"/></button></div>{seasonsLoading ? <div className="flex items-center justify-center py-10 text-sm text-gray-500"><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Loading seasons…</div> : seasonsError ? <p className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">{seasonsError.message}</p> : <><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{([['LATEST', 'Latest'], ['FIRST', 'First'], ['ALL', 'All'], ['CUSTOM', 'Custom']] as const).map(([value, label]) => <button key={value} onClick={() => setSeasonMode(value)} className={cn("rounded-lg border px-3 py-2 text-xs font-semibold", seasonMode === value ? "border-brand-400 bg-brand-500/15 text-brand-300" : "border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white")}>{label}</button>)}</div>{seasonMode === "CUSTOM" && <div className="mt-4 grid max-h-48 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">{seasons.map((season) => { const checked = customSeasons.includes(season.seasonNumber); return <button key={season.seasonNumber} onClick={() => setCustomSeasons((selected) => checked ? selected.filter((number) => number !== season.seasonNumber) : [...selected, season.seasonNumber].sort((a, b) => a - b))} className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs", checked ? "border-brand-400 bg-brand-500/10 text-brand-200" : "border-gray-700 text-gray-400 hover:border-gray-500")}><span className={cn("flex h-4 w-4 items-center justify-center rounded border", checked ? "border-brand-400 bg-brand-500 text-gray-950" : "border-gray-600")}>{checked && <Check className="h-3 w-3"/>}</span><span>Season {season.seasonNumber}</span>{season.episodeCount ? <span className="ml-auto text-[10px] text-gray-600">{season.episodeCount} eps</span> : null}</button>; })}</div>}{!seasons.length && <p className="mt-4 text-xs text-gray-500">No season details were returned. Jellyseerr will use its default season selection.</p>}<div className="mt-6 flex justify-end gap-2"><button onClick={() => setSeasonPrompt(null)} className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300">Cancel</button><button onClick={confirmSeasonSelection} disabled={seasonsLoading || (seasonMode === "CUSTOM" && customSeasons.length === 0)} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-gray-950 disabled:opacity-40">Request selected seasons</button></div></>}</div></div>}
         {bulkAction && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-900 p-6 shadow-2xl"><div className={cn("flex h-11 w-11 items-center justify-center rounded-full", bulkAction === "APPROVE" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400")}>{bulkAction === "APPROVE" ? <CheckCheck className="h-5 w-5"/> : <XCircle className="h-5 w-5"/>}</div><h3 className="mt-4 text-lg font-semibold text-white">{bulkAction === "APPROVE" ? "Approve" : "Reject"} all {genre} titles?</h3><p className="mt-2 text-sm leading-relaxed text-gray-400">This will apply to <strong className="text-white">{filtered.length} titles</strong>{bulkAction === "APPROVE" ? " and all of their suggested shelves. Each missing title will still wait for your final approval in Jellyseerr." : ". They will leave every curation queue."}</p><div className="mt-5 max-h-32 overflow-y-auto rounded-lg bg-gray-950/60 p-3 text-xs text-gray-500">{filtered.map((item) => item.title).join(" · ")}</div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setBulkAction(null)} className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300">Cancel</button><button onClick={() => void runBulk(bulkAction)} className={cn("rounded-lg px-4 py-2 text-sm font-semibold", bulkAction === "APPROVE" ? "bg-emerald-500 text-gray-950" : "bg-red-500 text-white")}>Confirm {filtered.length}</button></div></div></div>}
     </section>;
 }
