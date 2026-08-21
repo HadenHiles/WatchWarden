@@ -290,9 +290,11 @@ plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
             id: true, title: true, year: true, mediaType: true, posterPath: true, backdropPath: true,
             overview: true, streamingOn: true, genres: true,
             suggestion: { select: { id: true, finalScore: true, scoreExplanation: true, suggestedReasons: true } },
-            trendSnapshots: { orderBy: { snapshotAt: "desc" }, take: 20, select: {
-                source: true, region: true, trendScore: true, providerId: true, providerRank: true, snapshotAt: true, rawMetadata: true,
-            } },
+            trendSnapshots: {
+                orderBy: { snapshotAt: "desc" }, take: 20, select: {
+                    source: true, region: true, trendScore: true, providerId: true, providerRank: true, snapshotAt: true, rawMetadata: true,
+                }
+            },
         },
     });
     const allowedTitles = titles.filter((title) => {
