@@ -55,12 +55,18 @@ export async function lifecycleEvalJob(): Promise<void> {
             : result;
 
         if (guardedResult.changed) {
+            // Start the grace-period clock the moment a title first becomes
+            // cleanup eligible; clear it if the title earns its way back out.
+            const enteringCleanup = guardedResult.cleanupEligible && !title.cleanupEligible;
+            const leavingCleanup = !guardedResult.cleanupEligible && title.cleanupEligible;
             await prisma.title.update({
                 where: { id: title.id },
                 data: {
                     status: guardedResult.newStatus,
                     cleanupEligible: guardedResult.cleanupEligible,
                     cleanupReason: guardedResult.cleanupReason,
+                    ...(enteringCleanup && { cleanupEligibleSince: new Date() }),
+                    ...(leavingCleanup && { cleanupEligibleSince: null }),
                 },
             });
             transitioned++;

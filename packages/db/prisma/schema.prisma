@@ -119,6 +119,9 @@ model Title {
   keepUntil       DateTime?
   cleanupEligible Boolean         @default(false)
   cleanupReason   String?
+  // Set when cleanupEligible first flips true; cleared when it flips back.
+  // Drives the rotation-cleanup grace period countdown.
+  cleanupEligibleSince DateTime?
 
   // Library / request state
   inLibrary        Boolean   @default(false)
