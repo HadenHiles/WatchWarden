@@ -206,6 +206,16 @@ export interface AutoRequestDiscoveryFilters {
     excludeAnime?: boolean;
     excludedGenres?: string[];
     minimumPopularity?: number;
+    allowedOriginCountries?: string[];
+}
+
+export function passesOriginCountryFilter(
+    originCountries: string[] | null | undefined,
+    allowedOriginCountries: string[] | undefined,
+): boolean {
+    if (!allowedOriginCountries?.length) return true;
+    const allowed = new Set(allowedOriginCountries.map((country) => country.toLocaleUpperCase()));
+    return Boolean(originCountries?.some((country) => allowed.has(country.toLocaleUpperCase())));
 }
 
 /** Enforces the saved discovery exclusions at the final auto-request boundary. */
@@ -227,6 +237,8 @@ export function passesAutoRequestDiscoveryFilters(
         || (candidate.originCountries ?? []).some((country) => country.toLocaleUpperCase() === "JP");
     const animated = candidate.genres.some((genre) => genre.toLocaleLowerCase() === "animation");
     if (filters.excludeAnime === true && japanese && animated) return false;
+
+    if (!passesOriginCountryFilter(candidate.originCountries, filters.allowedOriginCountries)) return false;
 
     return true;
 }

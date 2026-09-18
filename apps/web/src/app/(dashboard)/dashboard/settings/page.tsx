@@ -40,8 +40,9 @@ const KNOWN_SETTINGS: SettingSection[] = [
     },
     {
         section: "Discovery Filters",
-        note: "Applied globally when trend and provider feeds sync. Anime uses Japanese-language/origin animation detection; minimum popularity suppresses niche titles.",
+        note: "Applied globally to trend feeds, suggestions, automatic requests, and managed Plex shelves.",
         keys: [
+            { key: "discovery.filters", subKey: "allowedOriginCountries", label: "Allowed origin countries", type: "csv", hint: "ISO country codes; use US, CA for North American family preferences", placeholder: "US, CA" },
             { key: "discovery.filters", subKey: "excludeAnime", label: "Exclude anime", type: "boolean" },
             { key: "discovery.filters", subKey: "excludedGenres", label: "Excluded genres", type: "csv", hint: "Comma-separated TMDB genres, e.g. Horror, Fantasy, Animation", placeholder: "Horror, Fantasy" },
             { key: "discovery.filters", subKey: "minimumPopularity", label: "Minimum TMDB popularity", type: "number", hint: "0 disables this filter; 20 is a gentle mainstream cutoff", placeholder: "20" },

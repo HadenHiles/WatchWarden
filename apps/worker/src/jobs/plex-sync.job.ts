@@ -2,7 +2,7 @@ import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
-import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, passesAutoRequestDiscoveryFilters, rankProviderHistory, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
+import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, passesAutoRequestDiscoveryFilters, passesOriginCountryFilter, rankProviderHistory, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
 import { submitRequest } from "../services/request.service";
 
 const logger = createLogger("plex-sync-job");
@@ -55,6 +55,15 @@ function interleave<T>(lists: T[][]): T[] {
         }
     }
     return result;
+}
+
+function isAllowedOrigin(rawMetadata: unknown, allowedOriginCountries: string[]): boolean {
+    const raw = (rawMetadata ?? {}) as Record<string, unknown>;
+    const countries = raw.origin_country ?? raw.originCountry ?? raw.originCountries;
+    return passesOriginCountryFilter(
+        Array.isArray(countries) ? countries.filter((country): country is string => typeof country === "string") : [],
+        allowedOriginCountries,
+    );
 }
 
 /**
@@ -146,6 +155,7 @@ async function resolveTopTrendingKeys(
         mediaType: string;
         maxItemsPerProvider: number;
     }, regionConfig = { primaryRegion: "CA", fallbackRegion: "US" }, officialNetflixOnly = false,
+    allowedOriginCountries: string[] = [],
 ): Promise<string[]> {
     if (!collection.streamingProviders.length) {
         logger.warn("TOP_TRENDING collection has no streamingProviders — skipping");
@@ -165,7 +175,7 @@ async function resolveTopTrendingKeys(
             // Use provider-specific snapshots (from TmdbProviderDiscoveryAdapter)
             // Try CA region first, fall back to US
             const editorialNetflix = providerName === "Netflix";
-            const snapshots = await prisma.externalTrendSnapshot.findMany({
+            const fetchedSnapshots = await prisma.externalTrendSnapshot.findMany({
                 where: {
                     providerId: String(tmdbProviderId),
                     providerRank: { not: null },
@@ -186,6 +196,7 @@ async function resolveTopTrendingKeys(
                     title: { select: { plexRatingKey: true, releaseDate: true, streamingOn: true } },
                 },
             });
+            const snapshots = fetchedSnapshots.filter((snapshot) => isAllowedOrigin(snapshot.rawMetadata, allowedOriginCountries));
             const officialNetflixSnapshots = editorialNetflix
                 ? snapshots.filter((snapshot) => snapshot.source.startsWith("netflix_top10_"))
                 : [];
@@ -242,10 +253,12 @@ async function resolveTopTrendingKeys(
                         where: {
                             titleId: { in: resolved.map((item) => item.titleId) },
                             providerId: null,
-                            source: { in: [
-                                `tmdb_trending_day_${collection.mediaType === "MOVIE" ? "movie" : "tv"}`,
-                                `tmdb_trending_week_${collection.mediaType === "MOVIE" ? "movie" : "tv"}`,
-                            ] },
+                            source: {
+                                in: [
+                                    `tmdb_trending_day_${collection.mediaType === "MOVIE" ? "movie" : "tv"}`,
+                                    `tmdb_trending_week_${collection.mediaType === "MOVIE" ? "movie" : "tv"}`,
+                                ]
+                            },
                             snapshotAt: { gte: new Date(recentCutoff) },
                         },
                         orderBy: [{ rank: "asc" }, { snapshotAt: "desc" }],
@@ -311,25 +324,29 @@ async function resolveCulturalKeys(
     collection: { id: string; mediaType: string; maxItems: number; streamingProviders: string[] },
     providerNames: string[],
     candidateLimit = collection.maxItems,
+    allowedOriginCountries: string[] = [],
 ): Promise<string[]> {
+    const now = new Date();
+    const since = new Date(now.getTime() - 8 * 86_400_000);
     const titles = await prisma.title.findMany({
         where: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
-        select: { id: true, plexRatingKey: true, trendSnapshots: { where: { providerId: null }, orderBy: { snapshotAt: "desc" }, take: 20 } },
+        select: { id: true, plexRatingKey: true, trendSnapshots: { where: { providerId: null, snapshotAt: { gte: since } }, orderBy: { snapshotAt: "desc" }, take: 20 } },
     });
-    const now = new Date();
-    const globalLane = titles.map((title) => {
+    const globalLane = titles.flatMap((title) => {
         const latestBySource = [...new Map(title.trendSnapshots
+            .filter((snapshot) => isAllowedOrigin(snapshot.rawMetadata, allowedOriginCountries))
             .filter((s) => s.source.startsWith("tmdb_"))
             .map((s) => [s.source, s])).values()];
+        if (latestBySource.length === 0) return [];
         const newest = latestBySource[0];
-        return {
+        return [{
             title, score: newest ? culturalHeat({
                 tmdbTrends: latestBySource.map((s) => s.trendScore),
                 rank: Math.min(...latestBySource.map((s) => s.rank ?? 100)),
                 snapshotAt: newest.snapshotAt,
                 region: newest.region,
             }, now) : 0
-        };
+        }];
     }).sort((a, b) => b.score - a.score || a.title.id.localeCompare(b.title.id))
         .map((x) => x.title.id);
 
@@ -337,17 +354,18 @@ async function resolveCulturalKeys(
     // mirror TMDB's global chart. Aggregate each service's daily rankings over
     // three weeks, then round-robin the provider lanes with the global lane.
     const providerLanes: string[][] = [];
-    const since = new Date(Date.now() - 21 * 86_400_000);
+    const providerSince = new Date(now.getTime() - 21 * 86_400_000);
     for (const providerName of providerNames) {
         const providerId = PROVIDER_TMDB_ID_MAP[providerName];
         if (!providerId) continue;
-        const snapshots = await prisma.externalTrendSnapshot.findMany({
+        const fetchedSnapshots = await prisma.externalTrendSnapshot.findMany({
             where: {
-                providerId: String(providerId), providerRank: { not: null }, snapshotAt: { gte: since },
+                providerId: String(providerId), providerRank: { not: null }, snapshotAt: { gte: providerSince },
                 title: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
             },
-            select: { titleId: true, providerRank: true, snapshotAt: true },
+            select: { titleId: true, providerRank: true, snapshotAt: true, rawMetadata: true },
         });
+        const snapshots = fetchedSnapshots.filter((snapshot) => isAllowedOrigin(snapshot.rawMetadata, allowedOriginCountries));
         const lane = rankProviderHistory(snapshots.map((snapshot) => ({
             titleId: snapshot.titleId, providerRank: snapshot.providerRank!, snapshotAt: snapshot.snapshotAt,
         })), now);
@@ -489,7 +507,7 @@ async function resolveAutoRequestIds(collection: {
 async function filterAutoRequestCandidates(candidateIds: string[]): Promise<string[]> {
     const uniqueIds = [...new Set(candidateIds)];
     const filterSetting = await prisma.appSetting.findUnique({ where: { key: "discovery.filters" } });
-    const filters = (filterSetting?.value ?? {}) as { excludeAnime?: boolean; excludedGenres?: string[]; minimumPopularity?: number };
+    const filters = (filterSetting?.value ?? {}) as { excludeAnime?: boolean; excludedGenres?: string[]; minimumPopularity?: number; allowedOriginCountries?: string[] };
     const titles = await prisma.title.findMany({
         where: { id: { in: uniqueIds } },
         select: {
@@ -537,6 +555,9 @@ export async function plexSyncJob(): Promise<void> {
     const service = new PlexService(client);
     const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
     const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string; manageRecommendations?: boolean; backfillRecentReleases?: boolean; recentlyReleasedBackfillDays?: number };
+    const discoverySetting = await prisma.appSetting.findUnique({ where: { key: "discovery.filters" } });
+    const discoveryFilters = (discoverySetting?.value ?? {}) as { allowedOriginCountries?: string[] };
+    const allowedOriginCountries = discoveryFilters.allowedOriginCountries ?? [];
     const publishedIds = new Set(selectPublishedShelfIds(collections, homeConfig.shelfLimit ?? 6));
     const publishedKeysByMedia = new Map<string, string[]>();
     const configuredProviders = [...new Set(collections.map((item) => item.provider).filter((provider): provider is string => Boolean(provider)))];
@@ -548,7 +569,7 @@ export async function plexSyncJob(): Promise<void> {
         netflixKeysByMedia.set(collection.mediaType, await resolveTopTrendingKeys(collection, {
             primaryRegion: homeConfig.primaryRegion ?? "CA",
             fallbackRegion: homeConfig.fallbackRegion ?? "US",
-        }));
+        }, false, allowedOriginCountries));
     }
 
     if (homeConfig.manageRecommendations === true) {
@@ -585,7 +606,7 @@ export async function plexSyncJob(): Promise<void> {
             let targetKeys: string[];
             if (collection.shelfType === "CULTURAL_TRENDING") {
                 const providers = collection.streamingProviders.length ? collection.streamingProviders : configuredProviders;
-                const candidates = await resolveCulturalKeys(collection, providers, collection.maxItems * 4);
+                const candidates = await resolveCulturalKeys(collection, providers, collection.maxItems * 4, allowedOriginCountries);
                 targetKeys = diversifyShelf(candidates, netflixKeysByMedia.get(collection.mediaType) ?? [], collection.maxItems, 0);
             } else if (collection.shelfType === "RECENTLY_RELEASED") {
                 targetKeys = await resolveRecentlyReleasedKeys(collection, {
@@ -599,7 +620,7 @@ export async function plexSyncJob(): Promise<void> {
             } else if (collection.shelfType === "PROVIDER_TRENDING" || collection.collectionType === "TOP_TRENDING") {
                 targetKeys = collection.provider === "Netflix" && netflixKeysByMedia.has(collection.mediaType)
                     ? netflixKeysByMedia.get(collection.mediaType)!
-                    : await resolveTopTrendingKeys(collection, { primaryRegion: homeConfig.primaryRegion ?? "CA", fallbackRegion: homeConfig.fallbackRegion ?? "US" });
+                    : await resolveTopTrendingKeys(collection, { primaryRegion: homeConfig.primaryRegion ?? "CA", fallbackRegion: homeConfig.fallbackRegion ?? "US" }, false, allowedOriginCountries);
             } else {
                 targetKeys = await resolveSmartKeys(collection);
             }

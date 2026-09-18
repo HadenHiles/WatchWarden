@@ -1,5 +1,5 @@
 import { prisma } from "@watchwarden/db";
-import { scoreTitle } from "@watchwarden/scoring";
+import { passesOriginCountryFilter, scoreTitle } from "@watchwarden/scoring";
 import { createLogger } from "@watchwarden/config";
 import type { ScoreWeights } from "@watchwarden/types";
 
@@ -43,6 +43,7 @@ export async function scoringJob(): Promise<void> {
         excludedGenres?: string[];
         excludeAnime?: boolean;
         minimumPopularity?: number;
+        allowedOriginCountries?: string[];
     };
 
     // Process all titles that have at least one trend snapshot
@@ -84,8 +85,14 @@ export async function scoringJob(): Promise<void> {
             : undefined;
         const isBelowPopularity = typeof latestPopularity === "number"
             && latestPopularity < (discoveryFilters.minimumPopularity ?? 0);
+        const originCountries = latestBySource.flatMap((snapshot) => {
+            const raw = snapshot.rawMetadata as Record<string, unknown>;
+            const countries = raw.origin_country ?? raw.originCountry;
+            return Array.isArray(countries) ? countries.filter((country): country is string => typeof country === "string") : [];
+        });
+        const isOutsideAllowedOrigins = !passesOriginCountryFilter(originCountries, discoveryFilters.allowedOriginCountries);
 
-        if (isExcludedGenre || isAnime || isBelowPopularity) {
+        if (isExcludedGenre || isAnime || isBelowPopularity || isOutsideAllowedOrigins) {
             if (title.suggestion && !["FULFILLED", "REJECTED"].includes(title.suggestion.status)) {
                 await prisma.suggestion.update({
                     where: { id: title.suggestion.id },

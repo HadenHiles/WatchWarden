@@ -74,6 +74,16 @@ async function seedSettings() {
             value: ["US", "CA"],
             category: "sources",
         },
+        {
+            key: "discovery.filters",
+            value: {
+                allowedOriginCountries: ["US", "CA"],
+                excludeAnime: false,
+                excludedGenres: [],
+                minimumPopularity: 0,
+            },
+            category: "sources",
+        },
     ];
 
     for (const setting of defaults) {

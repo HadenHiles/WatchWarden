@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { passesOriginCountryFilter } from "@watchwarden/scoring";
 import { z } from "zod";
 import { getIntegrationConfig, prisma } from "@watchwarden/db";
 import { Prisma } from "@prisma/client";
@@ -283,6 +284,9 @@ plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
     );
     const excludeAnime = rawFilters.excludeAnime === true;
     const minimumPopularity = typeof rawFilters.minimumPopularity === "number" ? Math.max(0, rawFilters.minimumPopularity) : 0;
+    const allowedOriginCountries = Array.isArray(rawFilters.allowedOriginCountries)
+        ? rawFilters.allowedOriginCountries.filter((country): country is string => typeof country === "string")
+        : [];
 
     const titles = await prisma.title.findMany({
         where: { id: { in: titleIds } },
@@ -304,6 +308,10 @@ plexRouter.get("/collections/:id/candidates", asyncHandler(async (req, res) => {
             .find((raw) => typeof raw.popularity === "number" || raw.original_language != null || raw.origin_country != null) ?? {};
         const originalLanguage = metadata.original_language ?? metadata.originalLanguage;
         const originCountry = metadata.origin_country ?? metadata.originCountry;
+        const originCountries = Array.isArray(originCountry)
+            ? originCountry.filter((country): country is string => typeof country === "string")
+            : [];
+        if (!passesOriginCountryFilter(originCountries, allowedOriginCountries)) return false;
         const japanese = originalLanguage === "ja" || (Array.isArray(originCountry) && originCountry.includes("JP"));
         if (excludeAnime && title.genres.includes("Animation") && japanese) return false;
         return !(typeof metadata.popularity === "number" && metadata.popularity < minimumPopularity);

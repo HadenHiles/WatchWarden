@@ -1,5 +1,6 @@
 import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { buildSourceAdapters } from "@watchwarden/integrations";
+import { passesOriginCountryFilter } from "@watchwarden/scoring";
 import { createLogger } from "@watchwarden/config";
 import type { SourceTrendItem } from "@watchwarden/types";
 import axios from "axios";
@@ -14,6 +15,7 @@ interface DiscoveryFilters {
     excludedGenres: string[];
     excludeAnime: boolean;
     minimumPopularity: number;
+    allowedOriginCountries: string[];
 }
 
 async function getDiscoveryFilters(): Promise<DiscoveryFilters> {
@@ -25,6 +27,9 @@ async function getDiscoveryFilters(): Promise<DiscoveryFilters> {
             : [],
         excludeAnime: value.excludeAnime === true,
         minimumPopularity: typeof value.minimumPopularity === "number" ? Math.max(0, value.minimumPopularity) : 0,
+        allowedOriginCountries: Array.isArray(value.allowedOriginCountries)
+            ? value.allowedOriginCountries.filter((country): country is string => typeof country === "string")
+            : [],
     };
 }
 
@@ -33,6 +38,10 @@ function isExcluded(item: SourceTrendItem, filters: DiscoveryFilters): boolean {
     const raw = item.rawMetadata as Record<string, unknown>;
     const originalLanguage = raw.original_language ?? raw.originalLanguage;
     const originCountry = raw.origin_country ?? raw.originCountry;
+    const originCountries = Array.isArray(originCountry)
+        ? originCountry.filter((country): country is string => typeof country === "string")
+        : [];
+    if (!passesOriginCountryFilter(originCountries, filters.allowedOriginCountries)) return true;
     const isJapanese = originalLanguage === "ja" || (Array.isArray(originCountry) && originCountry.includes("JP"));
     if (filters.excludeAnime && item.genres.includes("Animation") && isJapanese) return true;
     const popularity = raw.popularity;
