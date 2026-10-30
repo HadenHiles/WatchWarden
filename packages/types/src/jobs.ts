@@ -29,6 +29,8 @@ export type JobName =
     | "plex-sync"
     | "radarr-sync"
     | "download-priority"
+    | "catalogue-observe"
+    | "curation-refresh"
     | "rotation-cleanup";
 
 export interface JobStatusSummary {

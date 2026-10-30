@@ -81,7 +81,12 @@ export class NetflixTop10Adapter implements SourceAdapter {
 
         const resolved = await Promise.all(chartTitles.map((title, index) => this.resolveTitle(title, index + 1)));
         const items = resolved.filter((item): item is SourceTrendItem => item !== null);
-        if (items.length !== chartTitles.length) throw new Error(`Netflix Top 10 title resolution is incomplete for ${this.region} ${this.mediaType}`);
+        if (items.length === 0) throw new Error(`Netflix Top 10 title resolution is incomplete for ${this.region} ${this.mediaType}`);
+        const unresolved = chartTitles.filter((_title, index) => resolved[index] === null);
+        for (const item of items) Object.assign(item.rawMetadata, {
+            chartExpectedCount: chartTitles.length, chartResolvedCount: items.length, unresolvedChartTitles: unresolved,
+        });
+        if (unresolved.length) logger.warn("Netflix chart has unresolved identities; publishing only verified matches", { region: this.region, mediaType: this.mediaType, unresolved: unresolved.length });
         logger.info("Fetched official Netflix Top 10", { region: this.region, mediaType: this.mediaType, chartItems: chartTitles.length, resolved: items.length });
         return items;
     }

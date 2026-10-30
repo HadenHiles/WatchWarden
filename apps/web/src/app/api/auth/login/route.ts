@@ -17,6 +17,10 @@ async function getAdminUsername(): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+    const protocol = request.headers.get("x-forwarded-proto")?.split(",")[0].trim() ?? request.nextUrl.protocol.replace(":", "");
+    if (process.env.NODE_ENV === "production" && protocol !== "https") {
+        return NextResponse.json({ message: "Secure sign-in is required. Open the configured HTTPS address; this HTTP connection cannot store the production session." }, { status: 426 });
+    }
     const body = await request.json();
 
     const username = await getAdminUsername();

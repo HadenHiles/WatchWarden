@@ -56,4 +56,19 @@ describe("Plex collection protocol", () => {
         http.get.mockResolvedValue({ data: { MediaContainer: { size: 0 } } });
         expect(await client.getCollectionItems("100")).toEqual([]);
     });
+
+    it("accounts for every Plex version and deduplicates shared part IDs", async () => {
+        http.get.mockResolvedValue({ data: { MediaContainer: { size: 1, Metadata: [{ ratingKey: "1", Media: [
+            { Part: [{ id: 11, size: 100 }, { id: 12, size: 200 }] },
+            { Part: [{ id: 11, size: 100 }, { id: 13, size: 300 }] },
+        ] }] } } });
+        expect(await client.getItemStorage("1", "MOVIE")).toBe(600);
+    });
+
+    it("refuses partial or unmeasurable catalogue storage", async () => {
+        http.get.mockResolvedValue({ data: { MediaContainer: { size: 1, totalSize: 2, Metadata: [{ ratingKey: "1", Media: [] }] } } });
+        await expect(client.getItemStorage("1", "SHOW")).rejects.toThrow("media-part");
+        http.get.mockResolvedValue({ data: { MediaContainer: { size: 1, Metadata: [{ ratingKey: "1", Media: [{ Part: [{ id: 1 }] }] }] } } });
+        await expect(client.getItemStorage("1", "MOVIE")).rejects.toThrow("part size");
+    });
 });

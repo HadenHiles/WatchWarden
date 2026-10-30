@@ -17,7 +17,14 @@ const JOB_NAMES = [
     "plex-sync",
     "rotation-cleanup",
     "download-priority",
+    "catalogue-observe",
+    "radarr-sync",
+    "curation-refresh",
 ] as const;
+
+const enabled = (name: string) => !["export", "jellyseerr-discover-sync"].includes(name)
+    ? name !== "download-priority" || process.env.DOWNLOAD_PRIORITY_ENABLED === "true"
+    : process.env.LEGACY_AUTOMATION_ENABLED === "true";
 
 // GET /jobs — summary status for all jobs
 jobsRouter.get("/", asyncHandler(async (_req, res) => {
@@ -35,6 +42,7 @@ jobsRouter.get("/", asyncHandler(async (_req, res) => {
 
             return {
                 jobName,
+                enabled: enabled(jobName),
                 lastRun: recentRuns[0] ?? null,
                 recentRuns,
                 successCount,
@@ -76,6 +84,7 @@ jobsRouter.post("/:jobName/trigger", asyncHandler(async (req, res) => {
     if (!JOB_NAMES.includes(jobName as (typeof JOB_NAMES)[number])) {
         throw new AppError(404, `Unknown job: ${jobName}`);
     }
+    if (!enabled(jobName)) throw new AppError(409, "This legacy or optional job is disabled");
 
     await prisma.appSetting.upsert({
         where: { key: `job.trigger.${jobName}` },

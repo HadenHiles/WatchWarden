@@ -15,6 +15,8 @@ import { plexLibrarySyncJob } from "./jobs/plex-library-sync.job";
 import { radarrSyncJob } from "./jobs/radarr-sync.job";
 import { rotationCleanupJob } from "./jobs/rotation-cleanup.job";
 import { downloadPriorityJob } from "./jobs/download-priority.job";
+import { catalogueObserveJob } from "./jobs/catalogue-observe.job";
+import { curationRefreshJob } from "./jobs/curation-refresh.job";
 
 const logger = createLogger("scheduler");
 
@@ -26,14 +28,17 @@ export function buildScheduler(env: WorkerEnv) {
         { name: "tautulli-sync", cron: env.TAUTULLI_SYNC_CRON, fn: tautulliSyncJob },
         { name: "scoring", cron: env.SCORING_CRON, fn: scoringJob },
         { name: "jellyseerr-status-sync", cron: env.JELLYSEERR_STATUS_SYNC_CRON, fn: jellyseerrStatusSyncJob },
-        { name: "jellyseerr-discover-sync", cron: env.JELLYSEERR_DISCOVER_SYNC_CRON, fn: jellyseerrDiscoverSyncJob },
         { name: "library-sync", cron: env.LIBRARY_SYNC_CRON, fn: librarySyncJob },
         { name: "plex-library-sync", cron: env.PLEX_LIBRARY_SYNC_CRON, fn: plexLibrarySyncJob },
         { name: "lifecycle-eval", cron: env.LIFECYCLE_EVAL_CRON, fn: lifecycleEvalJob },
-        { name: "export", cron: env.EXPORT_CRON, fn: exportJob },
         { name: "plex-sync", cron: env.PLEX_SYNC_CRON, fn: plexSyncJob },
         { name: "radarr-sync", cron: env.RADARR_SYNC_CRON, fn: radarrSyncJob },
         { name: "rotation-cleanup", cron: env.ROTATION_CLEANUP_CRON, fn: rotationCleanupJob },
+        { name: "catalogue-observe", cron: env.CATALOGUE_OBSERVE_CRON, fn: catalogueObserveJob },
+        ...(env.LEGACY_AUTOMATION_ENABLED ? [
+            { name: "export", cron: env.EXPORT_CRON, fn: exportJob },
+            { name: "jellyseerr-discover-sync", cron: env.JELLYSEERR_DISCOVER_SYNC_CRON, fn: jellyseerrDiscoverSyncJob },
+        ] : []),
         ...(env.DOWNLOAD_PRIORITY_ENABLED ? [{ name: "download-priority", cron: env.DOWNLOAD_PRIORITY_CRON, fn: () => downloadPriorityJob(env) }] : []),
     ];
 
@@ -52,7 +57,7 @@ export function buildScheduler(env: WorkerEnv) {
     // Trigger-polling: check for manual trigger signals every 30 seconds
     const triggerPoll = cron.schedule("*/30 * * * * *", async () => {
         try {
-            await runner.checkAndRunTriggers(tasks);
+            await runner.checkAndRunTriggers([...tasks, { name: "curation-refresh", fn: curationRefreshJob }]);
         } catch (err) {
             logger.warn("Trigger poll failed (DB unavailable?)", { error: err instanceof Error ? err.message : String(err) });
         }

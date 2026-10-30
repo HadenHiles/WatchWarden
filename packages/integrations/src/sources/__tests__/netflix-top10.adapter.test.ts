@@ -51,6 +51,17 @@ describe("complete Netflix country-chart resolution", () => {
         expect(axios.get).toHaveBeenCalledTimes(1);
     });
 
+    it("retains verified chart identities and explicitly reports unresolved entries", async () => {
+        vi.mocked(axios.get).mockImplementation(async (url, options) => {
+            if (String(url).includes("netflix.com")) return { data: html };
+            const query = options?.params?.query as string;
+            return { data: { results: query === "Title 1" ? [] : [{ id: Number(query.split(" ")[1]), name: query }] } };
+        });
+        const items = await adapter().fetchTrending();
+        expect(items).toHaveLength(9);
+        expect(items[0].rawMetadata).toMatchObject({ chartExpectedCount: 10, chartResolvedCount: 9, unresolvedChartTitles: ["Title 1"] });
+    });
+
     it.each(["unmatched", "ambiguous"])("does not silently guess an %s TMDB match", async (kind) => {
         vi.mocked(axios.get).mockImplementation(async (url, options) => {
             if (String(url).includes("netflix.com")) return { data: html };

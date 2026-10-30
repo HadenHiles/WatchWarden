@@ -20,24 +20,17 @@ export async function librarySyncJob(): Promise<void> {
     if (!client) return;
 
     // Fetch all requests (paginated)
-    let allRequests: Array<{ status: number; media: { tmdbId: number; mediaType: string } }> = [];
+    let allRequests: Awaited<ReturnType<JellyseerrClient["getAllRequests"]>>;
     try {
-        let skip = 0;
-        const take = 100;
-        while (true) {
-            const page = await client.getPendingRequests(take, skip);
-            allRequests = allRequests.concat(page.results);
-            if (page.results.length < take) break;
-            skip += take;
-        }
+        allRequests = await client.getAllRequests();
     } catch (err) {
         logger.error("Failed to fetch requests from Jellyseerr", { error: err });
-        return;
+        throw new Error("Complete request inventory unavailable; existing request state preserved");
     }
 
     const availableTmdbIds = new Set(
         allRequests
-            .filter((r) => r.status === JELLYSEERR_STATUS_AVAILABLE)
+            .filter((r) => r.media.status === JELLYSEERR_STATUS_AVAILABLE)
             .map((r) => r.media.tmdbId)
     );
     const knownTmdbIds = new Set(allRequests.map((r) => r.media.tmdbId));

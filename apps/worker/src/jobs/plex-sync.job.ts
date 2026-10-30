@@ -2,10 +2,16 @@ import { prisma, getIntegrationConfig } from "@watchwarden/db";
 import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
-import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, passesAutoRequestDiscoveryFilters, passesOriginCountryFilter, rankProviderHistory, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles } from "@watchwarden/scoring";
+import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, passesAutoRequestDiscoveryFilters, passesOriginCountryFilter, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles, selectCurrentSourceSnapshots, SourceBatch } from "@watchwarden/scoring";
 import { submitRequest } from "../services/request.service";
 
 const logger = createLogger("plex-sync-job");
+
+async function currentBatchSnapshots<T extends { source: string; snapshotAt: Date }>(snapshots: T[], sourceIds: string[]): Promise<T[]> {
+    const markers = await prisma.appSetting.findMany({ where: { key: { in: sourceIds.map((source) => `source.batch.${source}`) } }, select: { value: true } });
+    if (markers.length === 0) throw new Error("No complete source batch available; existing shelf preserved");
+    return selectCurrentSourceSnapshots(snapshots, markers.map((marker) => marker.value as unknown as SourceBatch));
+}
 
 // ── SMART collection filter queries ──────────────────────────────────────────
 
@@ -196,7 +202,13 @@ async function resolveTopTrendingKeys(
                     title: { select: { plexRatingKey: true, releaseDate: true, streamingOn: true } },
                 },
             });
-            const snapshots = fetchedSnapshots.filter((snapshot) => isAllowedOrigin(snapshot.rawMetadata, allowedOriginCountries));
+            const segment = collection.mediaType === "MOVIE" ? "movie" : "tv";
+            const sourceIds = [regionConfig.primaryRegion, regionConfig.fallbackRegion].flatMap((region) => [
+                `tmdb_provider_${tmdbProviderId}_${segment}_${region}`,
+                ...(editorialNetflix ? [`netflix_top10_${segment}_${region}`] : []),
+            ]);
+            const snapshots = (await currentBatchSnapshots(fetchedSnapshots, sourceIds))
+                .filter((snapshot) => isAllowedOrigin(snapshot.rawMetadata, allowedOriginCountries));
             const officialNetflixSnapshots = editorialNetflix
                 ? snapshots.filter((snapshot) => snapshot.source.startsWith("netflix_top10_"))
                 : [];
@@ -332,8 +344,12 @@ async function resolveCulturalKeys(
         where: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
         select: { id: true, plexRatingKey: true, trendSnapshots: { where: { providerId: null, snapshotAt: { gte: since } }, orderBy: { snapshotAt: "desc" }, take: 20 } },
     });
+    const segment = collection.mediaType === "MOVIE" ? "movie" : "tv";
+    const currentGlobal = new Set(await currentBatchSnapshots(titles.flatMap((title) => title.trendSnapshots),
+        ["trending_day", "trending_week", "popular", "current"].map((feed) => `tmdb_${feed}_${segment}`)));
     const globalLane = titles.flatMap((title) => {
         const latestBySource = [...new Map(title.trendSnapshots
+            .filter((snapshot) => currentGlobal.has(snapshot))
             .filter((snapshot) => isAllowedOrigin(snapshot.rawMetadata, allowedOriginCountries))
             .filter((s) => s.source.startsWith("tmdb_"))
             .map((s) => [s.source, s])).values()];
@@ -363,12 +379,14 @@ async function resolveCulturalKeys(
                 providerId: String(providerId), providerRank: { not: null }, snapshotAt: { gte: providerSince },
                 title: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
             },
-            select: { titleId: true, providerRank: true, snapshotAt: true, rawMetadata: true },
+            select: { titleId: true, source: true, region: true, providerRank: true, snapshotAt: true, rawMetadata: true },
         });
-        const snapshots = fetchedSnapshots.filter((snapshot) => isAllowedOrigin(snapshot.rawMetadata, allowedOriginCountries));
-        const lane = rankProviderHistory(snapshots.map((snapshot) => ({
-            titleId: snapshot.titleId, providerRank: snapshot.providerRank!, snapshotAt: snapshot.snapshotAt,
-        })), now);
+        const snapshots = (await currentBatchSnapshots(fetchedSnapshots,
+            ["CA", "US"].map((region) => `tmdb_provider_${providerId}_${segment}_${region}`)))
+            .filter((snapshot) => isAllowedOrigin(snapshot.rawMetadata, allowedOriginCountries));
+        const lane = resolvePlatformSnapshots(snapshots.map((snapshot) => ({
+            titleId: snapshot.titleId, providerRank: snapshot.providerRank!, snapshotAt: snapshot.snapshotAt, region: snapshot.region,
+        }))).map((snapshot) => snapshot.titleId);
         if (lane.length) providerLanes.push(lane);
     }
     const ordered = interleave([globalLane, ...providerLanes]);
@@ -536,7 +554,7 @@ async function filterAutoRequestCandidates(candidateIds: string[]): Promise<stri
  * Syncs managed collections and, when explicitly enabled, evaluates the
  * auto-request roster before publishing Plex Home shelves.
  */
-export async function plexSyncJob(): Promise<void> {
+export async function plexSyncJob(options: { allowAcquisition?: boolean } = {}): Promise<void> {
     const { plex } = await getIntegrationConfig();
 
     if (!plex.baseUrl || !plex.token) {
@@ -581,7 +599,7 @@ export async function plexSyncJob(): Promise<void> {
 
     const automationSetting = await prisma.appSetting.findUnique({ where: { key: "automation.roster" } });
     const automation = (automationSetting?.value ?? {}) as { enabled?: boolean; maxNewRequestsPerRun?: number };
-    if (automation.enabled === true) {
+    if (automation.enabled === true && options.allowAcquisition !== false) {
         const candidateLists: string[][] = [];
         for (const collection of collections.filter((item) => item.enabled && item.autoRequest)) {
             candidateLists.push(await resolveAutoRequestIds(collection));
@@ -653,7 +671,7 @@ export async function plexSyncJob(): Promise<void> {
             });
 
             if (result.collectionRatingKey) {
-                const publish = publishedIds.has(collection.id);
+                const publish = publishedIds.has(collection.id) && targetKeys.length > 0;
                 await service.syncCollectionRecommendation({
                     sectionId: collection.sectionId,
                     collectionId: result.collectionRatingKey,

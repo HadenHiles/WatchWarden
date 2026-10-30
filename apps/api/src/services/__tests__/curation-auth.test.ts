@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { once } from "node:events";
 import express from "express";
-import { requireAuth, requireCurationRead } from "../../middleware/auth";
+import { requireAuth, requireCurationRead, requireCurationControl } from "../../middleware/auth";
 import { errorHandler } from "../../middleware/error";
 
 test("the curation credential permits only the exact status GET, never other reads or writes", async (context) => {
@@ -40,4 +40,29 @@ test("the curation credential permits only the exact status GET, never other rea
     assert.equal((await request("/settings", "PATCH", readToken)).status, 403);
     delete process.env.CURATION_READ_TOKEN;
     assert.equal((await request("/plex/curation-status", "GET", adminToken)).status, 401);
+});
+
+test("the control token permits only refresh and Keep, never acquisition or deletion", async (context) => {
+    const previous = process.env.CURATION_CONTROL_TOKEN;
+    const token = "control-only-".repeat(4);
+    process.env.CURATION_CONTROL_TOKEN = token;
+    context.after(() => { if (previous === undefined) delete process.env.CURATION_CONTROL_TOKEN; else process.env.CURATION_CONTROL_TOKEN = previous; });
+    const app = express();
+    app.post("/plex/curation-refresh", requireCurationControl, (_req, res) => { res.json({ ok: true }); });
+    app.post("/plex/retention/:titleId/keep", requireCurationControl, (_req, res) => { res.json({ ok: true }); });
+    app.use(requireAuth);
+    app.use((_req, res) => { res.json({ ok: true }); });
+    app.use(errorHandler);
+    const server = app.listen(0, "127.0.0.1");
+    context.after(() => { server.closeAllConnections(); server.close(); });
+    await once(server, "listening");
+    const address = server.address(); assert.ok(address && typeof address !== "string");
+    for (const [path, method, expected] of [
+        ["/plex/curation-refresh", "POST", 200], ["/plex/retention/title123/keep", "POST", 200],
+        ["/plex/retention/title123/delete", "POST", 403], ["/requests", "POST", 403],
+        ["/settings", "PATCH", 403], ["/jobs/plex-sync/trigger", "POST", 403], ["/jobs", "GET", 403],
+    ] as const) {
+        const response = await fetch(`http://127.0.0.1:${address.port}${path}`, { method, headers: { Authorization: `Bearer ${token}` } });
+        assert.equal(response.status, expected);
+    }
 });

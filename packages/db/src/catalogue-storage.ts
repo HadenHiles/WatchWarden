@@ -15,7 +15,7 @@ export async function reserveCatalogueStorage(
     db: Pick<PrismaClient, "$transaction"> = prisma,
 ): Promise<void> {
     await db.$transaction(async (transaction) => {
-        await transaction.$queryRaw`SELECT pg_advisory_xact_lock(614621)`;
+        await transaction.$queryRaw`SELECT pg_advisory_xact_lock(614621)::text`;
         const rows = await transaction.appSetting.findMany({ where: { key: { in: ["catalogue.storage", "catalogue.storageEvidence", "catalogue.reservations"] } } });
         const settings = new Map(rows.map((row) => [row.key, row.value as Prisma.JsonObject]));
         const policy = { ...DEFAULT_CATALOGUE_STORAGE, ...settings.get("catalogue.storage") };

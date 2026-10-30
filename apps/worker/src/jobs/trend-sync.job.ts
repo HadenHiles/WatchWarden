@@ -98,6 +98,7 @@ export async function trendSyncJob(): Promise<void> {
     let totalIngested = 0;
     let failedSources = 0;
     let attemptedSources = 0;
+    const providerCache = new Map<string, string[]>();
 
     for (const adapter of adapters) {
         // Check if this source is enabled in DB config
@@ -127,7 +128,23 @@ export async function trendSyncJob(): Promise<void> {
             continue;
         }
 
+        const snapshotAt = new Date();
+        const snapshots: import("@prisma/client").Prisma.ExternalTrendSnapshotCreateManyInput[] = [];
         for (const item of items) {
+            const raw = item.rawMetadata as Record<string, unknown>;
+            if (discoveryFilters.allowedOriginCountries.length && item.tmdbId
+                && !Array.isArray(raw.origin_country) && !Array.isArray(raw.originCountry)) {
+                try {
+                    const segment = item.mediaType === "MOVIE" ? "movie" : "tv";
+                    const details = await axios.get(`${TMDB_BASE}/${segment}/${item.tmdbId}`, {
+                        params: { api_key: sources.tmdbApiKey }, timeout: 8000,
+                    });
+                    raw.origin_country = details.data.origin_country
+                        ?? details.data.production_countries?.map((country: { iso_3166_1: string }) => country.iso_3166_1);
+                    raw.original_language ??= details.data.original_language;
+                    raw.popularity ??= details.data.popularity;
+                } catch { throw new Error(`Origin metadata unavailable for source ${adapter.sourceId}; previous batch preserved`); }
+            }
             if (isExcluded(item, discoveryFilters)) {
                 logger.debug("Skipping title excluded by global discovery filters", { title: item.title });
                 continue;
@@ -138,11 +155,16 @@ export async function trendSyncJob(): Promise<void> {
             }
 
             // Upsert the canonical Title record
-            const title = await upsertTitle(item, sources.tmdbApiKey ?? undefined);
+            const cacheKey = `${item.mediaType}:${item.tmdbId}`;
+            let providers = providerCache.get(cacheKey);
+            if (!providers) {
+                providers = item.tmdbId && sources.tmdbApiKey
+                    ? await fetchStreamingProviders(item.tmdbId, item.mediaType, sources.tmdbApiKey) : [];
+                providerCache.set(cacheKey, providers);
+            }
+            const title = await upsertTitle(item, providers);
 
-            // Record the trend snapshot
-            await prisma.externalTrendSnapshot.create({
-                data: {
+            snapshots.push({
                     titleId: title.id,
                     source: item.source,
                     region: item.region ?? null,
@@ -151,16 +173,23 @@ export async function trendSyncJob(): Promise<void> {
                     providerId: item.providerId ?? null,
                     providerRank: item.providerRank ?? null,
                     rawMetadata: item.rawMetadata as import("@prisma/client").Prisma.InputJsonValue,
-                    snapshotAt: new Date(),
+                    snapshotAt,
                     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                },
             });
 
             totalIngested++;
         }
 
         // Update lastSyncAt on SourceConfig
-        await prisma.sourceConfig.upsert({
+        await prisma.$transaction([
+            prisma.externalTrendSnapshot.createMany({ data: snapshots }),
+            prisma.appSetting.upsert({
+                where: { key: `source.batch.${adapter.sourceId}` },
+                update: { value: { source: adapter.sourceId, snapshotAt: snapshotAt.toISOString(), completedAt: new Date().toISOString(), count: snapshots.length } },
+                create: { key: `source.batch.${adapter.sourceId}`, category: "source-evidence",
+                    value: { source: adapter.sourceId, snapshotAt: snapshotAt.toISOString(), completedAt: new Date().toISOString(), count: snapshots.length } },
+            }),
+            prisma.sourceConfig.upsert({
             where: { sourceId: adapter.sourceId },
             update: { lastSyncAt: new Date(), sourceName: adapter.sourceName },
             create: {
@@ -169,18 +198,15 @@ export async function trendSyncJob(): Promise<void> {
                 enabled: true,
                 lastSyncAt: new Date(),
             },
-        });
+            }),
+        ]);
     }
 
     logger.info(`Trend sync complete`, { totalIngested });
     if (failedSources > 0) throw new Error(`${failedSources} of ${attemptedSources} trend sources failed or returned empty data`);
 }
 
-async function upsertTitle(item: SourceTrendItem, tmdbApiKey?: string) {
-    // Fetch streaming providers (CA preferred, US fallback)
-    const streamingOn = item.tmdbId && tmdbApiKey
-        ? await fetchStreamingProviders(item.tmdbId, item.mediaType, tmdbApiKey)
-        : [];
+async function upsertTitle(item: SourceTrendItem, streamingOn: string[]) {
 
     // Try to find existing title by TMDB ID first, then IMDB ID
     const existing = item.tmdbId

@@ -18,6 +18,14 @@ export function requireCurationRead(req: Request, res: Response, next: NextFunct
     return requireAuth(req, res, next);
 }
 
+export function requireCurationControl(req: Request, res: Response, next: NextFunction) {
+    const token = req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : "";
+    const expected = process.env.CURATION_CONTROL_TOKEN;
+    const allowedPath = req.path === "/plex/curation-refresh" || /^\/plex\/retention\/[a-zA-Z0-9_-]{1,100}\/keep$/.test(req.path);
+    if (req.method === "POST" && allowedPath && expected && expected.length >= 32 && matchesSecret(token, expected)) return next();
+    return requireAuth(req, res, next);
+}
+
 // Extend the session type to carry our admin auth flag
 declare module "express-session" {
     interface SessionData {
@@ -35,7 +43,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith("Bearer ")) {
         const token = authHeader.slice(7);
-        if (matchesSecret(token, process.env.CURATION_READ_TOKEN)) {
+        if (matchesSecret(token, process.env.CURATION_READ_TOKEN) || matchesSecret(token, process.env.CURATION_CONTROL_TOKEN)) {
             throw new AppError(403, "Curation token is read-only and endpoint-scoped", "CURATION_SCOPE_DENIED");
         }
         if (matchesSecret(token, process.env.API_SECRET)) {

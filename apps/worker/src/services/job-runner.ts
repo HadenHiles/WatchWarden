@@ -5,7 +5,7 @@ import type { JobName } from "@watchwarden/types";
 const logger = createLogger("job-runner");
 
 export class JobRunner {
-    async run(jobName: JobName, fn: () => Promise<void>): Promise<void> {
+    async run(jobName: JobName, fn: () => Promise<void>, propagateFailure = false): Promise<void> {
         // Check if already running (idempotency guard)
         const running = await prisma.jobRun.findFirst({
             where: { jobName, status: "RUNNING" },
@@ -22,6 +22,7 @@ export class JobRunner {
                 });
             } else {
                 logger.debug(`Job ${jobName} already running — skipping`);
+                if (propagateFailure) throw new Error(`Job ${jobName} is already running`);
                 return;
             }
         }
@@ -49,6 +50,7 @@ export class JobRunner {
                 data: { status: "FAILED", finishedAt: new Date(), duration, error },
             });
             logger.error(`Job failed: ${jobName}`, { runId: run.id, error });
+            if (propagateFailure) throw new Error(error);
         }
     }
 

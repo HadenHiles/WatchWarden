@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 async function isSetupComplete(): Promise<boolean> {
     try {
@@ -16,6 +17,15 @@ async function isSetupComplete(): Promise<boolean> {
 }
 
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+    if (process.env.NODE_ENV === "production" && process.env.NEXTAUTH_URL) {
+        const canonical = new URL(process.env.NEXTAUTH_URL);
+        const requestHeaders = headers();
+        const host = requestHeaders.get("host");
+        const protocol = requestHeaders.get("x-forwarded-proto")?.split(",")[0].trim();
+        if (canonical.protocol === "https:" && host && host !== canonical.host && protocol !== "https") {
+            redirect(new URL("/login", canonical).toString());
+        }
+    }
     if (!(await isSetupComplete())) redirect("/onboarding");
     return <>{children}</>;
 }

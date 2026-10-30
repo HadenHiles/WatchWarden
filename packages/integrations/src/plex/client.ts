@@ -106,6 +106,40 @@ export class PlexClient {
 
     // ── Library sections ──────────────────────────────────────────────────────
 
+    async getItemStorage(ratingKey: string, mediaType: "MOVIE" | "SHOW"): Promise<number> {
+        if (!/^\d+$/.test(ratingKey)) throw new Error("Invalid Plex item identity");
+        let totalBytes = 0;
+        let expected: number | undefined;
+        const seen = new Set<string>();
+        const parts = new Set<string>();
+        for (let offset = 0; offset <= 10000; offset += 200) {
+            const response = await this.http.get(`/library/metadata/${ratingKey}${mediaType === "SHOW" ? "/allLeaves" : ""}`, {
+                headers: { "X-Plex-Container-Start": String(offset), "X-Plex-Container-Size": "200" },
+            });
+            const container = response.data?.MediaContainer;
+            const items = container?.Metadata ?? [];
+            const total = container?.totalSize ?? container?.size;
+            if (!Number.isSafeInteger(total) || total < 0 || total > 10000 || !Array.isArray(items)
+                || container.size !== items.length || (expected !== undefined && expected !== total)) throw new Error("Incomplete Plex storage inventory");
+            expected = total;
+            for (const item of items) {
+                if (!item.ratingKey || seen.has(String(item.ratingKey))) throw new Error("Overlapping Plex storage inventory");
+                seen.add(String(item.ratingKey));
+                if (!Array.isArray(item.Media) || item.Media.length === 0) throw new Error("Missing Plex media-part evidence");
+                for (const media of item.Media) {
+                    if (!Array.isArray(media.Part) || media.Part.length === 0) throw new Error("Missing Plex media-part evidence");
+                    for (const part of media.Part) {
+                        if (!part.id || !Number.isSafeInteger(part.size) || part.size <= 0) throw new Error("Invalid Plex part size");
+                        if (!parts.has(String(part.id))) { parts.add(String(part.id)); totalBytes += part.size; }
+                    }
+                }
+            }
+            if (seen.size === expected) return totalBytes;
+            if (items.length === 0 || seen.size > total || mediaType === "MOVIE") throw new Error("Incomplete Plex storage inventory");
+        }
+        throw new Error("Plex storage inventory limit exceeded");
+    }
+
     async getSections(): Promise<PlexSection[]> {
         try {
             const res = await this.http.get<{

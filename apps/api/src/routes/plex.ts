@@ -14,6 +14,13 @@ export const plexRouter = Router();
 const decisionService = new DecisionService();
 const requestService = new RequestService();
 
+export const curationRefreshHandler = asyncHandler(async (_req, res) => {
+    const key = "job.trigger.curation-refresh";
+    await prisma.appSetting.upsert({ where: { key }, update: { value: { triggeredAt: new Date().toISOString() } },
+        create: { key, category: "job-triggers", value: { triggeredAt: new Date().toISOString() } } });
+    res.status(202).json({ success: true, data: { queued: "curation-refresh", acquisitionAllowed: false } });
+});
+
 export const curationStatusHandler = asyncHandler(async (_req, res) => {
     const [jobs, shelves, priority, catalogue] = await Promise.all([
         Promise.all(CURATION_JOBS.map(async (name) => {
@@ -31,12 +38,24 @@ export const curationStatusHandler = asyncHandler(async (_req, res) => {
             },
         }),
         prisma.appSetting.findUnique({ where: { key: "downloadPriority.status" }, select: { value: true } }),
-        prisma.appSetting.findMany({ where: { key: { in: ["catalogue.storage", "catalogue.retentionReview"] } }, select: { key: true, value: true } }),
+        prisma.appSetting.findMany({ where: { key: { in: ["catalogue.storage", "catalogue.retentionReview", "catalogue.storageEvidence"] } }, select: { key: true, value: true } }),
     ]);
     res.json({ success: true, data: curationStatus(jobs, shelves, new Date(), priority?.value, {
         storagePolicy: catalogue.find((setting) => setting.key === "catalogue.storage")?.value,
         retentionReview: catalogue.find((setting) => setting.key === "catalogue.retentionReview")?.value,
+        storageEvidence: catalogue.find((setting) => setting.key === "catalogue.storageEvidence")?.value,
     }) });
+});
+
+export const retentionKeepHandler = asyncHandler(async (req, res) => {
+    const title = await prisma.title.findUnique({ where: { id: req.params.titleId }, select: { id: true } });
+    if (!title) return res.status(404).json({ success: false, error: "Title not found" });
+    await prisma.$transaction([
+        prisma.title.update({ where: { id: title.id }, data: { isPinned: true, cleanupEligible: false, cleanupEligibleSince: null } }),
+        prisma.auditLog.create({ data: { action: "RETENTION_KEEP", entityType: "Title", entityId: title.id, titleId: title.id,
+            details: { source: "standalone_review", deletionAuthorized: false } } }),
+    ]);
+    return res.json({ success: true, data: { titleId: title.id, decision: "keep", deletionAuthorized: false } });
 });
 
 plexRouter.get("/titles/:titleId/seasons", asyncHandler(async (req, res) => {

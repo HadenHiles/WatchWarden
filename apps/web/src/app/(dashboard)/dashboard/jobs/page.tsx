@@ -60,6 +60,7 @@ interface JobRun {
 
 interface JobSummary {
     jobName: string;
+    enabled: boolean;
     lastRun: JobRun | null;
     recentRuns: JobRun[];
     successCount: number;
@@ -88,12 +89,12 @@ export default function JobsPage() {
         }
     }
 
-    const jobs = data?.data ?? [];
+    const jobs = (data?.data ?? []).filter(job => job.enabled);
 
     return (
         <div className="space-y-4 max-w-3xl">
             <div className="flex items-center justify-between">
-                <h1 className="text-xl font-bold text-white">Jobs</h1>
+                <h1 className="text-xl font-bold text-white">Automation</h1>
                 <p className="text-xs text-gray-500">Auto-refreshes every 15s</p>
             </div>
 

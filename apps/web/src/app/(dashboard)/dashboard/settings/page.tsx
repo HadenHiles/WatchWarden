@@ -33,9 +33,14 @@ const KNOWN_SETTINGS: SettingSection[] = [
         keys: [
             { key: "automation.roster", subKey: "enabled", label: "Auto-request shelf roster", type: "boolean" },
             { key: "automation.roster", subKey: "maxNewRequestsPerRun", label: "Maximum new requests per run", type: "number", hint: "Recommended: 5", placeholder: "5" },
-            { key: "automation.roster", subKey: "deleteUnwatched", label: "Delete bot-requested titles after they leave rotation", type: "boolean", hint: "Unwatched titles are removed immediately; watched titles wait out the grace period below" },
-            { key: "automation.roster", subKey: "cleanupGraceDays", label: "Grace period before deletion (days)", type: "number", hint: "How long a watched title can sit out of rotation before it's removed; Maintainerr remains a fallback. Recommended: 30", placeholder: "30" },
-            { key: "automation.roster", subKey: "maxDeletesPerRun", label: "Maximum deletions per run", type: "number", hint: "Safety cap; recommended: 3", placeholder: "3" },
+        ],
+    },
+    {
+        section: "Catalogue Budget",
+        keys: [
+            { key: "catalogue.storage", subKey: "maxStorageBytes", label: "Maximum managed bytes", type: "number", placeholder: "1000000000000" },
+            { key: "catalogue.storage", subKey: "movieReservationBytes", label: "Movie acquisition reservation bytes", type: "number" },
+            { key: "catalogue.storage", subKey: "showReservationBytes", label: "TV acquisition reservation bytes", type: "number" },
         ],
     },
     {

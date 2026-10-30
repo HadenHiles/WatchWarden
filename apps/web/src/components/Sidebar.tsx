@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
+  { href: "/dashboard/curation", label: "Curation", icon: Library },
     { href: "/dashboard/plex/collections", label: "Plex Home", icon: Clapperboard },
     { href: "/dashboard/library", label: "Library", icon: Library },
     { href: "/dashboard/jobs", label: "Automation", icon: Briefcase },

@@ -15,8 +15,8 @@ const TMDB_BASE = "https://api.themoviedb.org/3";
  */
 export const PROVIDER_TMDB_ID_MAP: Record<string, number> = {
     "Netflix": 8,
-    "Amazon Prime Video": 9,
-    "Prime Video": 9,
+    "Amazon Prime Video": 119,
+    "Prime Video": 119,
     "Disney Plus": 337,
     "Disney+": 337,
     "Apple TV Plus": 350,

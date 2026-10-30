@@ -11,10 +11,10 @@ import { decisionsRouter } from "./decisions";
 import { requestsRouter } from "./requests";
 import { exportsRouter } from "./exports";
 import { auditRouter } from "./audit";
-import { plexRouter, curationStatusHandler } from "./plex";
+import { plexRouter, curationStatusHandler, curationRefreshHandler, retentionKeepHandler } from "./plex";
 import { statsRouter } from "./stats";
 import { discoverRouter } from "./discover";
-import { requireAuth, requireCurationRead } from "../middleware/auth";
+import { requireAuth, requireCurationRead, requireCurationControl } from "../middleware/auth";
 
 export function createRouter(env: ApiEnv) {
     const router = Router();
@@ -23,6 +23,8 @@ export function createRouter(env: ApiEnv) {
     router.use("/health", healthRouter);
     router.use("/auth", authRouter(env));
     router.get("/plex/curation-status", requireCurationRead, curationStatusHandler);
+    router.post("/plex/curation-refresh", requireCurationControl, curationRefreshHandler);
+    router.post("/plex/retention/:titleId/keep", requireCurationControl, retentionKeepHandler);
 
     // Protected endpoints (require admin session or API_SECRET bearer token)
     router.use("/settings", requireAuth, settingsRouter);
