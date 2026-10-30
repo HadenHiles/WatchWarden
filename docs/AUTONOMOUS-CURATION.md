@@ -9,10 +9,17 @@ Exact replication of personalized streaming-provider home screens is not promise
 
 ## Ownership
 
+- WatchWarden must be useful independently of FamFlix Ops, OpenAI and Discord.
+  Core policy, scheduling, evidence, preview, review persistence and owner decisions
+  belong in WatchWarden. Its local UI must provide the same essential decisions;
+  the fuller review UI remains a planned feature, not already implemented.
 - WatchWarden owns trend ingestion, source provenance, ranking, shelf publication,
   acquisition planning, and the optional visual preview/configuration console.
 - FamFlix Ops owns conversation, preference interpretation, explanations,
   exceptions, approvals, and operational health reporting through a typed API.
+  This is an optional interface for this owner's stack, not a mandatory backend
+  or dependency. Without Ops, ambiguous cases stay visible in WatchWarden's local
+  review records and must not become silent automatic deletions.
 - Reclaimerr remains the retention/deletion authority. WatchWarden must not run a
   competing deletion policy. No AI output overrides hard protections.
 - Plex owns its client experience and global home layout. Never adopt or change
@@ -154,6 +161,8 @@ support truthful states. The UX redesign has not been implemented in this slice.
 
 ### 2. Trustworthy sources and stable rotation
 
+- Source selection and cadence decisions are tracked in
+  [chart sources and refresh reliability](CHART-SOURCES.md).
 - [ ] Validate Canadian chart coverage and harden ambiguous title matching.
 - [ ] Track source failures without turning them into empty successful snapshots.
 - [ ] Separate chart shelves, platform discovery, and rotating Fresh Picks.
@@ -272,6 +281,23 @@ single manually triggered sync as end-to-end acceptance.
   API/worker builds and final request-path type checks passed. Reservation tests use
   a serialized transaction double, not a live PostgreSQL concurrency acceptance.
   Ops: 286 tests passed, five opt-in tests skipped. No media or priorities changed.
+
+### 2026-10-29 Standalone Refresh And Source Review
+
+- Clarified that Ops is optional; core decisions/status belong in WatchWarden.
+- Reproduced and fixed a ranking bug that selected an old rank 1 instead of a
+  newer rank 12. Preserved CA/US preference while selecting the latest rank.
+- Found saved UI cron values were never read by the worker. They now load at
+  startup, with explicit failure for invalid schedules instead of silent omission.
+- Verified source roles against public documentation and documented the remaining
+  batch, publication-date and per-shelf freshness gates. TVDB is not a current
+  ranking feed. TMDB global trends are not Canadian viewing ranks.
+- Hardened Netflix chart completeness/identity and aggregate source error reporting.
+  Source adapters retain explicit unknown publication times, not fabricated dates.
+- Verification: 114 WatchWarden tests passed (45 scoring, 57 integrations, 12 API),
+  API/worker builds and final worker type check passed. A synthetic two-cycle Plex
+  reconciliation test updates and verifies membership/order with no Ops dependency.
+  No production services, collections, download priorities or media were changed.
 
 ## Initial Ops Connection
 

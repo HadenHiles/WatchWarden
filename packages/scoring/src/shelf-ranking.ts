@@ -123,8 +123,8 @@ export function selectStreamingEditorialTitles(candidates: StreamingEditorialCan
 
 export function comparePlatformSnapshots(a: PlatformSnapshot, b: PlatformSnapshot, config = DEFAULT_SHELF_RANKING_CONFIG): number {
     return regionPriority(a.region, config) - regionPriority(b.region, config)
-        || a.providerRank - b.providerRank
         || b.snapshotAt.getTime() - a.snapshotAt.getTime()
+    || a.providerRank - b.providerRank
         || a.titleId.localeCompare(b.titleId);
 }
 

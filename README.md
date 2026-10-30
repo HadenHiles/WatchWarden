@@ -9,6 +9,16 @@ transition to verified scheduled shelves, policy-bounded acquisitions, and
 FamFlix Ops integration. This is an incremental rollout, not an enabled new
 automatic download or deletion policy.
 
+WatchWarden is a standalone application. Its schedules, source ingestion, Plex
+publication, budget enforcement, review records and eventual decision UI must work
+without FamFlix Ops, Discord or OpenAI. Ops is an optional convenience client, not
+the policy engine or a required approval service. In the FamFlix installation,
+Reclaimerr remains the existing retention executor; it is not required for shelf
+curation, and its absence must never silently enable unsafe WatchWarden deletion.
+
+See [chart sources and refresh reliability](docs/CHART-SOURCES.md) for the verified
+difference between weekly country charts, global trends and provider availability.
+
 ## Plex Home curation
 
 Open **Plex Home Curation**, connect Plex, then choose **Add default shelves**. This creates disabled templates—existing installs never publish rows automatically—for Popular Movies/Shows Right Now, Recently Released Movies, and Netflix, Disney+, Prime Video, and Apple TV+ provider shelves. Crave, Paramount+, and other configured TMDB providers remain available for custom shelves.

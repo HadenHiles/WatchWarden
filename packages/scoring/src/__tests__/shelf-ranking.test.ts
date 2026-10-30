@@ -47,6 +47,16 @@ describe("shelf ranking", () => {
         ]);
         expect(rows.map((r) => [r.titleId, r.region])).toEqual([["b", "US"], ["a", "CA"]]);
     });
+    it("uses current provider ranks instead of preserving historical best ranks", () => {
+        const previous = new Date("2026-08-12T12:00:00Z");
+        const rows = resolvePlatformSnapshots([
+            { titleId: "incumbent", providerRank: 1, region: "CA", snapshotAt: previous },
+            { titleId: "incumbent", providerRank: 12, region: "CA", snapshotAt: now },
+            { titleId: "newcomer", providerRank: 8, region: "CA", snapshotAt: previous },
+            { titleId: "newcomer", providerRank: 1, region: "CA", snapshotAt: now },
+        ]);
+        expect(rows.map((row) => [row.titleId, row.providerRank])).toEqual([["newcomer", 1], ["incumbent", 12]]);
+    });
     it("enforces an enabled deterministic Home budget", () => {
         expect(selectPublishedShelfIds([
             { id: "b", enabled: true, publishToHome: true, homePriority: 1 },

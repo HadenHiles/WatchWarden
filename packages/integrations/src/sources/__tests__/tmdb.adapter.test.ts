@@ -39,6 +39,9 @@ describe("TmdbTrendingAdapter", () => {
 
         expect(axios.get).toHaveBeenCalledWith(expect.stringContaining(path), expect.any(Object));
         expect(items[0]).toMatchObject({ tmdbId: 42, mediaType: "MOVIE", trendScore: 0.8 });
+        expect(items[0].rawMetadata).toMatchObject({ rankingRegion: null, sourcePublishedAt: null,
+            rankingBasis: feed.startsWith("trending_") ? "tmdb_global_trending"
+                : feed === "popular" ? "tmdb_global_popularity" : "release_or_airing_activity" });
     });
 
     it("normalizes TV responses that do not include media_type", async () => {

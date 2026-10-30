@@ -107,7 +107,7 @@ export class TmdbProviderDiscoveryAdapter implements SourceAdapter {
         this.apiKey = config.apiKey;
         this.maxResults = config.maxResults ?? 20;
         this.sourceId = `tmdb_provider_${config.tmdbProviderId}_${config.mediaType}_${config.region}`;
-        this.sourceName = `${config.providerName} Top ${this.maxResults} ${config.mediaType === "movie" ? "Movies" : "Shows"} (${config.region})`;
+        this.sourceName = `${config.providerName} Discovery ${config.mediaType === "movie" ? "Movies" : "Shows"} (${config.region})`;
     }
 
     async fetchTrending(): Promise<SourceTrendItem[]> {
@@ -197,6 +197,10 @@ export class TmdbProviderDiscoveryAdapter implements SourceAdapter {
             providerId: String(this.tmdbProviderId),
             providerRank,
             rawMetadata: {
+                rankingBasis: "tmdb_global_popularity",
+                rankingRegion: null,
+                availabilityRegion: this.region,
+                sourcePublishedAt: null,
                 providerName: this.providerName,
                 providerId: this.tmdbProviderId,
                 providerRank,

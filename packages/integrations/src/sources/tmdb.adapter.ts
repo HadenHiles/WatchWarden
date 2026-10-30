@@ -121,7 +121,14 @@ export class TmdbTrendingAdapter implements SourceAdapter {
             region: null,
             rank,
             trendScore,
-            rawMetadata: item as unknown as Record<string, unknown>,
+            rawMetadata: {
+                ...item,
+                rankingBasis: this.feed.startsWith("trending_") ? "tmdb_global_trending"
+                    : this.feed === "popular" ? "tmdb_global_popularity" : "release_or_airing_activity",
+                rankingRegion: null,
+                timeWindow: this.feed === "trending_day" ? "day" : this.feed === "trending_week" ? "week" : null,
+                sourcePublishedAt: null,
+            },
         };
     }
 }

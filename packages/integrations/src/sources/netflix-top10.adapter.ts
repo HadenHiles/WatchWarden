@@ -44,7 +44,7 @@ export function parseNetflixTop10Titles(html: string): string[] {
 }
 
 export function netflixTitleForTmdbSearch(chartTitle: string): string {
-    const base = chartTitle.replace(/: (?:Season \d+|Limited Series|\d{4} - .+)$/i, "").trim();
+    const base = chartTitle.replace(/: (?:Season \d+|Part \d+|S\d+: .+|Limited Series|\d{4} - .+)$/i, "").trim();
     // Netflix's weekly chart abbreviates the long-running WWE series.
     if (base.toLocaleLowerCase() === "raw") return "WWE Raw";
     return base;
@@ -77,10 +77,11 @@ export class NetflixTop10Adapter implements SourceAdapter {
             headers: { "User-Agent": "WatchWarden/1.0 (+https://github.com/HadenHiles/WatchWarden)" },
         });
         const chartTitles = parseNetflixTop10Titles(html);
-        if (chartTitles.length === 0) throw new Error(`Netflix Top 10 page contained no ${this.mediaType} titles for ${this.region}`);
+        if (chartTitles.length !== 10) throw new Error(`Netflix Top 10 chart is incomplete for ${this.region} ${this.mediaType}`);
 
         const resolved = await Promise.all(chartTitles.map((title, index) => this.resolveTitle(title, index + 1)));
         const items = resolved.filter((item): item is SourceTrendItem => item !== null);
+        if (items.length !== chartTitles.length) throw new Error(`Netflix Top 10 title resolution is incomplete for ${this.region} ${this.mediaType}`);
         logger.info("Fetched official Netflix Top 10", { region: this.region, mediaType: this.mediaType, chartItems: chartTitles.length, resolved: items.length });
         return items;
     }
@@ -92,11 +93,12 @@ export class NetflixTop10Adapter implements SourceAdapter {
                 params: { api_key: this.apiKey, language: "en-US", query: searchTitle, page: 1 }, timeout: 10_000,
             });
             const normalized = searchTitle.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
-            const result = data.results.find((candidate) =>
+            const matches = data.results.filter((candidate) =>
                 [candidate.title, candidate.name, candidate.original_title, candidate.original_name]
                     .some((name) => name?.toLocaleLowerCase().replace(/[^a-z0-9]/g, "") === normalized),
-            ) ?? data.results[0];
-            if (!result) return null;
+            );
+            if (matches.length !== 1) return null;
+            const result = matches[0];
             const rawDate = this.mediaType === "movie" ? result.release_date : result.first_air_date;
             const year = rawDate ? Number.parseInt(rawDate.slice(0, 4), 10) : null;
             return {
@@ -109,7 +111,8 @@ export class NetflixTop10Adapter implements SourceAdapter {
                 posterPath: result.poster_path ?? null, backdropPath: result.backdrop_path ?? null,
                 genres: mapTmdbGenres(result.genre_ids), source: this.sourceId, region: this.region,
                 rank, trendScore: (11 - rank) / 10, providerId: "8", providerRank: rank,
-                rawMetadata: { providerName: "Netflix", officialNetflixTop10: true, chartTitle, chartRank: rank },
+                rawMetadata: { providerName: "Netflix", officialNetflixTop10: true, chartTitle, chartRank: rank,
+                    rankingBasis: "netflix_country_chart", rankingRegion: this.region, timeWindow: "week", sourcePublishedAt: null },
             };
         } catch (error) {
             logger.warn("Could not resolve Netflix chart title through TMDB", { chartTitle, error: String(error) });

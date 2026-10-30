@@ -92,11 +92,12 @@ export async function trendSyncJob(): Promise<void> {
     });
 
     if (adapters.length === 0) {
-        logger.warn("No trend adapters configured — skipping trend sync");
-        return;
+        throw new Error("No trend adapters configured; fresh trend data is unavailable");
     }
 
     let totalIngested = 0;
+    let failedSources = 0;
+    let attemptedSources = 0;
 
     for (const adapter of adapters) {
         // Check if this source is enabled in DB config
@@ -109,6 +110,7 @@ export async function trendSyncJob(): Promise<void> {
         }
 
         logger.info(`Fetching trending from ${adapter.sourceName}`);
+        attemptedSources++;
         let items: SourceTrendItem[] = [];
 
         try {
@@ -116,6 +118,12 @@ export async function trendSyncJob(): Promise<void> {
             logger.info(`Fetched ${items.length} items from ${adapter.sourceName}`);
         } catch (err) {
             logger.error(`Failed to fetch from ${adapter.sourceName}`, { error: String(err) });
+            failedSources++;
+            continue;
+        }
+        if (items.length === 0) {
+            failedSources++;
+            logger.warn("Trend source returned no items; not advancing source success", { source: adapter.sourceId });
             continue;
         }
 
@@ -154,7 +162,7 @@ export async function trendSyncJob(): Promise<void> {
         // Update lastSyncAt on SourceConfig
         await prisma.sourceConfig.upsert({
             where: { sourceId: adapter.sourceId },
-            update: { lastSyncAt: new Date() },
+            update: { lastSyncAt: new Date(), sourceName: adapter.sourceName },
             create: {
                 sourceId: adapter.sourceId,
                 sourceName: adapter.sourceName,
@@ -165,6 +173,7 @@ export async function trendSyncJob(): Promise<void> {
     }
 
     logger.info(`Trend sync complete`, { totalIngested });
+    if (failedSources > 0) throw new Error(`${failedSources} of ${attemptedSources} trend sources failed or returned empty data`);
 }
 
 async function upsertTitle(item: SourceTrendItem, tmdbApiKey?: string) {

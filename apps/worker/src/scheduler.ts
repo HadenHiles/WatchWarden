@@ -37,12 +37,11 @@ export function buildScheduler(env: WorkerEnv) {
         ...(env.DOWNLOAD_PRIORITY_ENABLED ? [{ name: "download-priority", cron: env.DOWNLOAD_PRIORITY_CRON, fn: () => downloadPriorityJob(env) }] : []),
     ];
 
-    const scheduledTasks = tasks.map(({ name, cron: cronExpr, fn }) => {
-        if (!cron.validate(cronExpr)) {
-            logger.warn(`Invalid cron expression for job ${name}: "${cronExpr}" — job will not be scheduled`);
-            return null;
-        }
+    for (const task of tasks) {
+        if (!cron.validate(task.cron)) throw new Error(`Invalid cron expression for job ${task.name}`);
+    }
 
+    const scheduledTasks = tasks.map(({ name, cron: cronExpr, fn }) => {
         logger.info(`Scheduling job "${name}" with cron "${cronExpr}"`);
 
         return cron.schedule(cronExpr, async () => {

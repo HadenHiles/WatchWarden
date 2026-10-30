@@ -1,4 +1,5 @@
-import { validateEnv, workerEnvSchema, createLogger } from "@watchwarden/config";
+import { validateEnv, workerEnvSchema, createLogger, resolveWorkerSchedules } from "@watchwarden/config";
+import { prisma } from "@watchwarden/db";
 import { buildScheduler } from "./scheduler";
 
 const env = validateEnv(workerEnvSchema);
@@ -6,7 +7,8 @@ const logger = createLogger("worker");
 
 async function main() {
     logger.info("Watch Warden Worker starting...", { env: env.NODE_ENV });
-    const scheduler = buildScheduler(env);
+    const saved = await prisma.appSetting.findUnique({ where: { key: "refreshIntervals" }, select: { value: true } });
+    const scheduler = buildScheduler(resolveWorkerSchedules(env, saved?.value));
     scheduler.start();
     logger.info("Scheduler started. Worker is running.");
 }
