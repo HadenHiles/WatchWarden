@@ -32,15 +32,16 @@ export class TautulliClient {
     /** GET /api/v2 with a given cmd and params */
     private async call<T>(cmd: string, params: Record<string, unknown> = {}): Promise<T> {
         try {
-            const response = await this.http.get<TautulliApiResponse<T>>("/api/v2", {
-                params: { apikey: this.apiKey, cmd, ...params },
+            const body = new URLSearchParams(Object.fromEntries(Object.entries({ apikey: this.apiKey, cmd, ...params }).map(([key, value]) => [key, String(value)])));
+            const response = await this.http.post<TautulliApiResponse<T>>("/api/v2", body, {
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
             });
 
-            const body = response.data.response;
-            if (body.result !== "success") {
-                throw new Error(`Tautulli API error [${cmd}]: ${body.message ?? "unknown error"}`);
+            const result = response.data.response;
+            if (result.result !== "success") {
+                throw new Error(`Tautulli API error [${cmd}]: ${result.message ?? "unknown error"}`);
             }
-            return body.data;
+            return result.data;
         } catch (err) {
             if (err instanceof AxiosError) {
                 logger.error("Tautulli HTTP error", {
@@ -82,7 +83,7 @@ export class TautulliClient {
             order_dir: "desc",
         };
         if (options.daysAgo) {
-            const after = Math.floor(Date.now() / 1000) - options.daysAgo * 86400;
+            const after = new Date(Date.now() - options.daysAgo * 86400000).toISOString().slice(0, 10);
             params["after"] = after;
         }
         const data = await this.call<{ data: TautulliHistoryRow[] }>("get_history", params);

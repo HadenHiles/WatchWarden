@@ -1,8 +1,8 @@
 import { prisma, getIntegrationConfig } from "@watchwarden/db";
-import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP } from "@watchwarden/integrations";
+import { PlexClient, PlexService, PROVIDER_TMDB_ID_MAP, providerIdForRegion } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import type { Prisma } from "@prisma/client";
-import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, passesAutoRequestDiscoveryFilters, passesOriginCountryFilter, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles, selectCurrentSourceSnapshots, SourceBatch } from "@watchwarden/scoring";
+import { culturalHeat, diversifyShelf, isAutoRequestEligibleShow, passesAutoRequestDiscoveryFilters, passesOriginCountryFilter, resolvePlatformSnapshots, selectPublishedShelfIds, selectStreamingEditorialTitles, selectCurrentSourceSnapshots, SourceBatch, genreBalanceBoost } from "@watchwarden/scoring";
 import { submitRequest } from "../services/request.service";
 
 const logger = createLogger("plex-sync-job");
@@ -183,7 +183,7 @@ async function resolveTopTrendingKeys(
             const editorialNetflix = providerName === "Netflix";
             const fetchedSnapshots = await prisma.externalTrendSnapshot.findMany({
                 where: {
-                    providerId: String(tmdbProviderId),
+                    providerId: { in: [regionConfig.primaryRegion, regionConfig.fallbackRegion].map(region => String(providerIdForRegion(providerName, region))) },
                     providerRank: { not: null },
                     title: {
                         mediaType: collection.mediaType as "MOVIE" | "SHOW",
@@ -204,7 +204,7 @@ async function resolveTopTrendingKeys(
             });
             const segment = collection.mediaType === "MOVIE" ? "movie" : "tv";
             const sourceIds = [regionConfig.primaryRegion, regionConfig.fallbackRegion].flatMap((region) => [
-                `tmdb_provider_${tmdbProviderId}_${segment}_${region}`,
+                `tmdb_provider_${providerIdForRegion(providerName, region)}_${segment}_${region}`,
                 ...(editorialNetflix ? [`netflix_top10_${segment}_${region}`] : []),
             ]);
             const snapshots = (await currentBatchSnapshots(fetchedSnapshots, sourceIds))
@@ -342,8 +342,12 @@ async function resolveCulturalKeys(
     const since = new Date(now.getTime() - 8 * 86_400_000);
     const titles = await prisma.title.findMany({
         where: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
-        select: { id: true, plexRatingKey: true, trendSnapshots: { where: { providerId: null, snapshotAt: { gte: since } }, orderBy: { snapshotAt: "desc" }, take: 20 } },
+        select: { id: true, genres: true, plexRatingKey: true, trendSnapshots: { where: { providerId: null, snapshotAt: { gte: since } }, orderBy: { snapshotAt: "desc" }, take: 20 } },
     });
+    const genreSetting = await prisma.appSetting.findUnique({ where: { key: "catalogue.genreBalance" } });
+    const genreEvidence = genreSetting?.value as { observedAt?: string; counts?: Record<string, Record<string, number>> } | undefined;
+    const genreCounts = genreEvidence?.observedAt && now.getTime() - Date.parse(genreEvidence.observedAt) < 86400000
+        ? genreEvidence.counts?.[collection.mediaType] ?? {} : {};
     const segment = collection.mediaType === "MOVIE" ? "movie" : "tv";
     const currentGlobal = new Set(await currentBatchSnapshots(titles.flatMap((title) => title.trendSnapshots),
         ["trending_day", "trending_week", "popular", "current"].map((feed) => `tmdb_${feed}_${segment}`)));
@@ -361,7 +365,7 @@ async function resolveCulturalKeys(
                 rank: Math.min(...latestBySource.map((s) => s.rank ?? 100)),
                 snapshotAt: newest.snapshotAt,
                 region: newest.region,
-            }, now) : 0
+            }, now) * genreBalanceBoost(title.genres, genreCounts) : 0
         }];
     }).sort((a, b) => b.score - a.score || a.title.id.localeCompare(b.title.id))
         .map((x) => x.title.id);
@@ -376,13 +380,13 @@ async function resolveCulturalKeys(
         if (!providerId) continue;
         const fetchedSnapshots = await prisma.externalTrendSnapshot.findMany({
             where: {
-                providerId: String(providerId), providerRank: { not: null }, snapshotAt: { gte: providerSince },
+                providerId: { in: ["CA", "US"].map(region => String(providerIdForRegion(providerName, region))) }, providerRank: { not: null }, snapshotAt: { gte: providerSince },
                 title: { mediaType: collection.mediaType as "MOVIE" | "SHOW", inLibrary: true, plexRatingKey: { not: null } },
             },
             select: { titleId: true, source: true, region: true, providerRank: true, snapshotAt: true, rawMetadata: true },
         });
         const snapshots = (await currentBatchSnapshots(fetchedSnapshots,
-            ["CA", "US"].map((region) => `tmdb_provider_${providerId}_${segment}_${region}`)))
+            ["CA", "US"].map((region) => `tmdb_provider_${providerIdForRegion(providerName, region)}_${segment}_${region}`)))
             .filter((snapshot) => isAllowedOrigin(snapshot.rawMetadata, allowedOriginCountries));
         const lane = resolvePlatformSnapshots(snapshots.map((snapshot) => ({
             titleId: snapshot.titleId, providerRank: snapshot.providerRank!, snapshotAt: snapshot.snapshotAt, region: snapshot.region,

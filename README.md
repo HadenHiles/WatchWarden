@@ -19,6 +19,10 @@ curation, and its absence must never silently enable unsafe WatchWarden deletion
 See [chart sources and refresh reliability](docs/CHART-SOURCES.md) for the verified
 difference between weekly country charts, global trends and provider availability.
 
+See the [current operating model](docs/OPERATING-MODEL.md) for one-command startup,
+the six home rows, job/screen audit, household retention safeguards, bounded TV
+seasons, optional Ops monitoring and remaining automatic-acquisition gates.
+
 ## Plex Home curation
 
 Open **Plex Home Curation**, connect Plex, then choose **Add default shelves**. This creates disabled templates—existing installs never publish rows automatically—for Popular Movies/Shows Right Now, Recently Released Movies, and Netflix, Disney+, Prime Video, and Apple TV+ provider shelves. Crave, Paramount+, and other configured TMDB providers remain available for custom shelves.

@@ -40,6 +40,11 @@ export const PROVIDER_TMDB_ID_MAP: Record<string, number> = {
     "STACKTV": 230, // STACKTV is delivered via Crave channels in TMDB CA data
 };
 
+export function providerIdForRegion(providerName: string, region: string): number | undefined {
+    if (["Amazon Prime Video", "Prime Video"].includes(providerName) && region === "US") return 9;
+    return PROVIDER_TMDB_ID_MAP[providerName];
+}
+
 interface TmdbDiscoverResult {
     id: number;
     title?: string;

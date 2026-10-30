@@ -18,12 +18,13 @@ describe("Plex collection protocol", () => {
     });
 
     it("sets custom sort and moves the first item to the front, then each successor", async () => {
+        http.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ type: "collection", librarySectionID: 1, smart: false }] } } });
         await client.setCollectionOrder("100", ["3", "1", "2"]);
         expect(http.put.mock.calls).toEqual([
-            ["/library/metadata/100/prefs", null, { params: { collectionSort: 2 } }],
-            ["/library/metadata/100/items/3/move", null, { params: {} }],
-            ["/library/metadata/100/items/1/move", null, { params: { after: "3" } }],
-            ["/library/metadata/100/items/2/move", null, { params: { after: "1" } }],
+            ["/library/sections/1/all", null, { params: { type: 18, id: "100", collectionSort: 2 } }],
+            ["/library/collections/100/items/3/move", null, { params: {} }],
+            ["/library/collections/100/items/1/move", null, { params: { after: "3" } }],
+            ["/library/collections/100/items/2/move", null, { params: { after: "1" } }],
         ]);
     });
 

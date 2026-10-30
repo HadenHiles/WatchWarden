@@ -5,12 +5,14 @@
 # Start: docker compose up -d
 # ─────────────────────────────────────────────────────────────────────────────
 
+name: watchwarden
+
 services:
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: watchwarden-postgres
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_DB: watchwarden
       POSTGRES_USER: watchwarden
@@ -18,7 +20,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U watchwarden" ]
       interval: 10s
@@ -32,7 +34,7 @@ services:
       dockerfile: apps/api/Dockerfile
       network: host
     container_name: watchwarden-api
-    restart: unless-stopped
+    restart: always
     env_file:
       - .env
     environment:
@@ -50,7 +52,7 @@ services:
         condition: service_healthy
     volumes:
       - exports_data:/app/exports
-    command: ["/bin/sh", "-c", "/app/node_modules/.bin/prisma migrate deploy --schema /app/packages/db/prisma/schema.prisma && node dist/index.js"]
+    command: [ "/bin/sh", "-c", "/app/node_modules/.bin/prisma migrate deploy --schema /app/packages/db/prisma/schema.prisma && node dist/index.js" ]
     healthcheck:
       test: [ "CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" ]
       interval: 30s
@@ -59,17 +61,16 @@ services:
       start_period: 10s
     networks:
       default:
-      watchwarden_lan:
-      famflix_media_net:
+      media:
 
-  # ── Worker ──────────────────────────────────────────────────────────────────
+        # ── Worker ──────────────────────────────────────────────────────────────────
   worker:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
       network: host
     container_name: watchwarden-worker
-    restart: unless-stopped
+    restart: always
     env_file:
       - .env
     environment:
@@ -80,21 +81,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      api:
+        condition: service_healthy
     volumes:
       - exports_data:/app/exports
     networks:
       default:
-      watchwarden_lan:
-      famflix_media_net:
+      media:
 
-  # ── Web ─────────────────────────────────────────────────────────────────────
+        # ── Web ─────────────────────────────────────────────────────────────────────
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       network: host
     container_name: watchwarden-web
-    restart: unless-stopped
+    restart: always
     env_file:
       - .env
     environment:
@@ -110,10 +112,11 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       default:
-      famflix_media_net:
+      media:
         aliases:
           - watchwarden
     healthcheck:
@@ -128,7 +131,6 @@ volumes:
   exports_data:
 
 networks:
-  famflix_media_net:
-    external: true
-  watchwarden_lan:
-    external: true
+  media:
+    name: ${WATCHWARDEN_MEDIA_NETWORK:-watchwarden_media}
+    external: ${WATCHWARDEN_MEDIA_NETWORK_EXTERNAL:-false}

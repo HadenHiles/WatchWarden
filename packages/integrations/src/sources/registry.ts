@@ -1,7 +1,7 @@
 import { createLogger } from "@watchwarden/config";
 import type { SourceAdapter } from "./adapter";
 import { TmdbTrendingAdapter } from "./tmdb.adapter";
-import { TmdbProviderDiscoveryAdapter, PROVIDER_TMDB_ID_MAP } from "./tmdb-provider.adapter";
+import { TmdbProviderDiscoveryAdapter, PROVIDER_TMDB_ID_MAP, providerIdForRegion } from "./tmdb-provider.adapter";
 import { NetflixTop10Adapter } from "./netflix-top10.adapter";
 
 const logger = createLogger("source-registry");
@@ -64,7 +64,7 @@ export function buildSourceAdapters(env: {
                     adapters.push(
                         new TmdbProviderDiscoveryAdapter({
                             providerName: name,
-                            tmdbProviderId,
+                            tmdbProviderId: providerIdForRegion(name, region)!,
                             mediaType,
                             region,
                             apiKey: env.TMDB_API_KEY!,

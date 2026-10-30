@@ -1,10 +1,15 @@
 import axios from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { TmdbProviderDiscoveryAdapter } from "../tmdb-provider.adapter";
+import { TmdbProviderDiscoveryAdapter, providerIdForRegion } from "../tmdb-provider.adapter";
 
 vi.mock("axios", () => ({ default: { get: vi.fn() } }));
 
 describe("TmdbProviderDiscoveryAdapter", () => {
+    it("uses current country-specific Prime provider identities", () => {
+        expect(providerIdForRegion("Prime Video", "CA")).toBe(119);
+        expect(providerIdForRegion("Prime Video", "US")).toBe(9);
+        expect(providerIdForRegion("Netflix", "CA")).toBe(8);
+    });
     beforeEach(() => { vi.clearAllMocks(); });
     it("requests flatrate subscription results explicitly", async () => {
         vi.mocked(axios.get).mockResolvedValue({ data: { page: 1, total_pages: 1, total_results: 0, results: [] } });

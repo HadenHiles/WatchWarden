@@ -24,6 +24,7 @@ export interface PlexMediaItem {
     year?: number;
     type: "movie" | "show" | "episode";
     guids: Array<{ id: string }>; // e.g. { id: "tmdb://12345" }
+    genres?: string[];
 }
 
 export interface PlexCollection {
@@ -189,6 +190,7 @@ export class PlexClient {
                             /** Legacy single-guid string for old Plex agents
                              *  e.g. "com.plexapp.agents.themoviedb://12345?lang=en" */
                             guid?: string;
+                            Genre?: Array<{ tag: string }>;
                         }>;
                     };
                 }>(`/library/sections/${sectionId}/all`, {
@@ -203,6 +205,10 @@ export class PlexClient {
 
                 const container = res.data.MediaContainer;
                 const items = container.Metadata ?? [];
+                if (!Number.isSafeInteger(container.size) || container.size !== items.length
+                    || container.totalSize !== undefined && container.totalSize < offset + items.length) {
+                    throw new Error("Incomplete Plex library response");
+                }
 
                 for (const item of items) {
                     // Prefer new-style Guid array; fall back to the legacy guid string
@@ -220,6 +226,7 @@ export class PlexClient {
                         year: item.year,
                         type: item.type as PlexMediaItem["type"],
                         guids,
+                        genres: (item.Genre ?? []).map((genre) => genre.tag),
                     });
                 }
 
@@ -391,11 +398,16 @@ export class PlexClient {
 
     async setCollectionOrder(collectionId: string, ratingKeys: string[]): Promise<void> {
         try {
-            await this.http.put(`/library/metadata/${collectionId}/prefs`, null, {
-                params: { collectionSort: 2 },
+            const metadata = (await this.http.get(`/library/metadata/${collectionId}`)).data?.MediaContainer?.Metadata?.[0];
+            const sectionId = String(metadata?.librarySectionID ?? "");
+            if (metadata?.type !== "collection" || !/^\d+$/.test(sectionId) || metadata.smart === true || metadata.smart === 1) {
+                throw new Error("Collection ordering identity is unverified");
+            }
+            await this.http.put(`/library/sections/${sectionId}/all`, null, {
+                params: { type: 18, id: collectionId, collectionSort: 2 },
             });
             for (const [index, ratingKey] of ratingKeys.entries()) {
-                await this.http.put(`/library/metadata/${collectionId}/items/${ratingKey}/move`, null, {
+                await this.http.put(`/library/collections/${collectionId}/items/${ratingKey}/move`, null, {
                     params: index === 0 ? {} : { after: ratingKeys[index - 1] },
                 });
             }

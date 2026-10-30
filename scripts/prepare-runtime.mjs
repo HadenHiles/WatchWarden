@@ -13,6 +13,7 @@ for (const name of ['CURATION_READ_TOKEN', 'CURATION_CONTROL_TOKEN']) {
 }
 if (env.CURATION_READ_TOKEN === env.CURATION_CONTROL_TOKEN || env.CURATION_READ_TOKEN === env.API_SECRET || env.CURATION_CONTROL_TOKEN === env.API_SECRET) throw new Error('Curation credentials must be distinct');
 additions.push('LEGACY_AUTOMATION_ENABLED=false', 'DOWNLOAD_PRIORITY_ENABLED=false');
+additions.push('WATCHWARDEN_MEDIA_NETWORK=famflix_media_net', 'WATCHWARDEN_MEDIA_NETWORK_EXTERNAL=true');
 if (additions.length) await appendFile(path, `\n${additions.join('\n')}\n`, { mode: 0o600 });
 await chmod(path, 0o600);
 const sql = `BEGIN;

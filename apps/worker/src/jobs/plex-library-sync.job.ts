@@ -55,11 +55,13 @@ export async function plexLibrarySyncJob(): Promise<void> {
     const movieMap = new Map<number, string>(); // tmdbId → ratingKey
     const showMap = new Map<number, string>();
     let failedSections = 0;
+    const genreCounts = { MOVIE: {} as Record<string, number>, SHOW: {} as Record<string, number> };
 
     for (const section of movieSections) {
         try {
             const items = await client.getAllItemsInSection(section.key, "movie");
             for (const item of items) {
+                for (const genre of item.genres ?? []) genreCounts.MOVIE[genre] = (genreCounts.MOVIE[genre] ?? 0) + 1;
                 const tmdbId = PlexClient.extractTmdbId(item.guids);
                 if (tmdbId) movieMap.set(tmdbId, item.ratingKey);
             }
@@ -78,6 +80,7 @@ export async function plexLibrarySyncJob(): Promise<void> {
         try {
             const items = await client.getAllItemsInSection(section.key, "show");
             for (const item of items) {
+                for (const genre of item.genres ?? []) genreCounts.SHOW[genre] = (genreCounts.SHOW[genre] ?? 0) + 1;
                 const tmdbId = PlexClient.extractTmdbId(item.guids);
                 if (tmdbId) showMap.set(tmdbId, item.ratingKey);
             }
@@ -95,6 +98,9 @@ export async function plexLibrarySyncJob(): Promise<void> {
     if (failedSections > 0) {
         throw new Error(`Failed to scan ${failedSections} Plex library section(s); reconciliation aborted`);
     }
+    const genreEvidence = { observedAt: now.toISOString(), counts: genreCounts };
+    await prisma.appSetting.upsert({ where: { key: "catalogue.genreBalance" }, update: { value: genreEvidence },
+        create: { key: "catalogue.genreBalance", category: "catalogue", value: genreEvidence } });
 
     // ── Reconcile with DB ─────────────────────────────────────────────────────
     const allTitles = await prisma.title.findMany({

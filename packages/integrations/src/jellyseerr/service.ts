@@ -9,6 +9,7 @@ import type {
     JellyseerrDiscoverSlider,
 } from "@watchwarden/types";
 import { JellyseerrDiscoverSliderType as SliderType } from "@watchwarden/types";
+import { selectInitialSeasons } from "./season-policy";
 
 const logger = createLogger("jellyseerr-service");
 
@@ -20,7 +21,7 @@ export interface RequestMediaInput {
     botUserId: number;
     rootFolder?: string;
     qualityProfileId?: number;
-    /** For TV, optionally specify seasons. Defaults to all seasons. */
+    /** Explicit owner selection; otherwise bounded first/latest aired seasons. */
     seasons?: number[];
 }
 
@@ -126,7 +127,8 @@ export class JellyseerrService {
             }
 
             const seasons = input.mediaType === "tv"
-                ? (input.seasons ?? media.seasons?.map((season) => season.seasonNumber).filter((season) => season > 0) ?? [])
+                ? (input.seasons?.length ? [...new Set(input.seasons)].filter(season => Number.isSafeInteger(season) && season > 0)
+                    : selectInitialSeasons(media.seasons ?? []).seasons)
                 : undefined;
             if (input.mediaType === "tv" && (!seasons || seasons.length === 0)) {
                 return { success: false, error: `No requestable seasons found for TV TMDB ${input.tmdbId}` };

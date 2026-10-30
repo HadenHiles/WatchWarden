@@ -6,6 +6,10 @@ const logger = createLogger("rotation-retention-review");
 
 export async function rotationCleanupJob(): Promise<void> {
     const now = new Date();
+    const snapshot = await prisma.appSetting.findUnique({ where: { key: "catalogue.storageEvidence" } });
+    const evidence = snapshot?.value as { observedAt?: string; complete?: boolean; protectedIds?: string[] } | undefined;
+    const requestsKnown = evidence?.complete === true && evidence.observedAt
+        && now.getTime() - Date.parse(evidence.observedAt) < 30 * 60000;
     const titles = await prisma.title.findMany({
         where: { inLibrary: true, requestRecord: { requestedByBot: true } },
         include: { requestRecord: true, watchSignals: true },
@@ -15,7 +19,7 @@ export async function rotationCleanupJob(): Promise<void> {
     const items = titles.slice(0, 100).map((title) => {
         const signal = title.watchSignals[0];
         const decision = assessRetention({
-            userRequested: null, pinned: title.isPinned,
+            userRequested: requestsKnown ? evidence?.protectedIds?.includes(title.id) ?? null : null, pinned: title.isPinned,
             permanent: title.lifecyclePolicy === "PERMANENT" || title.lifecyclePolicy === "PINNED",
             keepUntil: title.keepUntil, activePlayback: null, inProgress: null, watchlisted: null,
             lastWatchedAt: signal?.lastWatchedAt ?? null, playbackHistoryComplete: false,
