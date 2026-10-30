@@ -75,6 +75,72 @@ bandwidth reservation and cannot manufacture missing download sources.
 
 ## Delivery Steps
 
+### Managed Catalogue Budget And Retention
+
+- The effective default `catalogue.storage.maxStorageBytes` is **1 TB decimal**
+  (1,000,000,000,000 bytes), configurable through authenticated settings. This is
+  an acquisition budget, not a filesystem quota or measured free-space claim.
+- Count all WatchWarden-owned retained titles, even after they leave the shelves,
+  plus pending reservations. Human requests are not speculative WatchWarden media.
+  Protected titles can exceed the target; stop acquisitions rather than delete
+  protected media to force the number back under the budget.
+- Both WatchWarden submission paths reserve capacity under a PostgreSQL
+  transaction-level advisory lock before requesting media. Unknown/partial/stale
+  accounting or missing movie/show reservation sizes blocks acquisition. Automatic
+  deferral does not stop shelf refresh. Reservations never expire/release on a
+  blind timeout because a remote request may still be executing.
+- `catalogue.storageEvidence`, `catalogue.reservations`, and
+  `catalogue.retentionReview` are worker-owned and cannot be overwritten by ordinary
+  settings saves. No production settings or accounting have been written yet.
+- The footprint collector and actual import/reservation reconciliation are not
+  implemented yet. Until complete, acquisitions fail closed. Do not seed an empty
+  snapshot merely to make admission succeed. Movie/show reservation sizes start
+  unset, not guessed; future TV reservations must cover the selected season scope.
+- Rotation cleanup now records a bounded non-destructive review instead of
+  calling Jellyseerr media deletion, regardless of the old deleteUnwatched flag.
+  Reclaimerr remains independent; its native rules/protections were not changed.
+- Retention policy keeps explicit requests, pins/permanent titles, active viewing,
+  viewing in progress, linked-account Watchlist titles, recent playback, featured
+  titles, and sustained demand. Missing source coverage is unknown, not absence.
+  The current worker only has pins/retention dates and recorded recent playback;
+  unimplemented live/requester/Watchlist/progress evidence stays unknown.
+- Complete evidence with uncertain demand becomes an owner decision. Missing
+  evidence is an Ops investigation first, not an owner coin toss. Even an eligible
+  retirement candidate is not deletion authority. The read-only status endpoint
+  exposes reasons to Ops; proactive Discord decision-card delivery is still pending.
+
+Implementation and activation checklist:
+
+- [x] Add configurable 1 TB effective maximum and serialized admission reservations.
+- [x] Add deterministic keep/review/retirement decisions and non-destructive reviews.
+- [x] Expose bounded budget/protection evidence through the scoped Ops read tool.
+- [ ] Collect full owned-media byte accounting, including retained/imported media,
+  pending downloads, and ownership changes after human requests.
+- [ ] Reconcile reservation/import outcomes durably without replaying uncertain requests.
+- [ ] Verify active/progress history and linked-user Watchlist coverage per title.
+- [ ] Connect complete protection decisions to Reclaimerr without weakening native rules.
+- [ ] Deliver deduplicated owner decision cards only after Ops resolves evidence gaps.
+
+### UX Direction
+
+Revise the existing dashboard around the daily operating experience, not a large
+suggestion inbox. Keep the visual console; let Discord handle exceptions.
+
+1. **Home Preview:** the first few movie/TV shelves, with actual posters/order,
+   source provenance, last verified refresh, and pending additions/removals.
+2. **Storage:** used/reserved/headroom against the configurable 1 TB budget,
+   protected retained bytes, accounting freshness, and acquisition blockers.
+3. **Protected:** favourites, requests, Watchlists and in-progress viewing, each
+   with its reason and evidence freshness. Leaving a shelf is not leaving Plex.
+4. **Needs Your Decision:** only evidence-complete tradeoffs with a recommended
+   keep/retire action, storage impact, and concise reasoning. Missing telemetry
+   belongs in health/investigation, not this queue.
+
+Keep acquisition count/byte limits and minimum shelf residency visible in policy
+settings; remove the obsolete immediate-deletion controls during the UI update.
+Do not redesign the dashboard before byte accounting and protection sources can
+support truthful states. The UX redesign has not been implemented in this slice.
+
 ### 1. Verified shelf reconciliation (in progress)
 
 - [ ] Inspect sanitized runtime job outcomes/settings and owned Plex collections.
@@ -195,6 +261,17 @@ single manually triggered sync as end-to-end acceptance.
   SAB position-response contract also passed the 24 focused priority/ownership
   tests. No runtime configuration, other-title priority, acquisition, or deletion
   changes were made.
+
+### 2026-10-29 Catalogue Policy Foundation
+
+- Pushed the earlier WatchWarden and Ops commits at the owner's request.
+- Implemented the budget/retention foundation and release gates documented above.
+  No live accounting, Watchlist coverage, automated owner notices, or production
+  configuration is claimed. The runtime services remain stopped pending rollout.
+- Verification: 105 WatchWarden tests passed (44 scoring, 52 integrations, 9 API),
+  API/worker builds and final request-path type checks passed. Reservation tests use
+  a serialized transaction double, not a live PostgreSQL concurrency acceptance.
+  Ops: 286 tests passed, five opt-in tests skipped. No media or priorities changed.
 
 ## Initial Ops Connection
 

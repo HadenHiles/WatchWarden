@@ -1,11 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
-import { prisma } from "@watchwarden/db";
+import { prisma, DEFAULT_CATALOGUE_STORAGE } from "@watchwarden/db";
 import { TautulliClient, JellyseerrClient, PlexClient, RadarrClient } from "@watchwarden/integrations";
-import { asyncHandler } from "../middleware/error";
+import { AppError, asyncHandler } from "../middleware/error";
 import { validateBody } from "../middleware/validation";
 
 export const settingsRouter = Router();
+
+const catalogueStorageSchema = z.object({
+    maxStorageBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).default(DEFAULT_CATALOGUE_STORAGE.maxStorageBytes),
+    movieReservationBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().default(null),
+    showReservationBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().default(null),
+}).strict();
 
 // POST /settings/test-connection — tests connectivity to Tautulli or Jellyseerr (used from settings page)
 settingsRouter.post("/test-connection", asyncHandler(async (req, res) => {
@@ -79,7 +85,8 @@ settingsRouter.post("/test-connection", asyncHandler(async (req, res) => {
 }));
 
 // Internal-only keys that should never be returned to the UI
-const INTERNAL_KEYS = new Set(["setup.complete", "admin.credentials", "password.changed"]);
+const CATALOGUE_INTERNAL_KEYS = new Set(["catalogue.storageEvidence", "catalogue.reservations", "catalogue.retentionReview"]);
+const INTERNAL_KEYS = new Set(["setup.complete", "admin.credentials", "password.changed", ...CATALOGUE_INTERNAL_KEYS]);
 
 // GET /settings — returns all settings grouped by category (excludes internal keys)
 settingsRouter.get("/", asyncHandler(async (_req, res) => {
@@ -88,11 +95,13 @@ settingsRouter.get("/", asyncHandler(async (_req, res) => {
         if (!INTERNAL_KEYS.has(s.key)) acc[s.key] = s.value;
         return acc;
     }, {});
+    grouped["catalogue.storage"] = catalogueStorageSchema.parse(grouped["catalogue.storage"] ?? DEFAULT_CATALOGUE_STORAGE);
     res.json({ success: true, data: grouped });
 }));
 
 // GET /settings/:key
 settingsRouter.get("/:key", asyncHandler(async (req, res) => {
+    if (CATALOGUE_INTERNAL_KEYS.has(req.params.key)) throw new AppError(403, "Catalogue evidence is available only through curation status");
     const setting = await prisma.appSetting.findUnique({ where: { key: req.params.key } });
     if (!setting) return res.status(404).json({ success: false, error: "Setting not found" });
     return res.json({ success: true, data: setting });
@@ -105,7 +114,10 @@ const upsertSettingSchema = z.object({
 
 // PUT /settings/:key — upsert a single setting
 settingsRouter.put("/:key", validateBody(upsertSettingSchema), asyncHandler(async (req, res) => {
-    const { value, category } = req.body as { value: unknown; category?: string };
+    if (CATALOGUE_INTERNAL_KEYS.has(req.params.key)) throw new AppError(403, "Catalogue evidence is worker-managed");
+    const body = req.body as { value: unknown; category?: string };
+    const value = req.params.key === "catalogue.storage" ? catalogueStorageSchema.parse(body.value) : body.value;
+    const { category } = body;
     const setting = await prisma.appSetting.upsert({
         where: { key: req.params.key },
         update: { value: value as object, ...(category ? { category } : {}) },
@@ -123,6 +135,8 @@ const batchUpdateSchema = z.record(z.unknown());
 // PATCH /settings — batch update multiple settings
 settingsRouter.patch("/", validateBody(batchUpdateSchema), asyncHandler(async (req, res) => {
     const updates = req.body as Record<string, unknown>;
+    if (Object.keys(updates).some((key) => CATALOGUE_INTERNAL_KEYS.has(key))) throw new AppError(403, "Catalogue evidence is worker-managed");
+    if ("catalogue.storage" in updates) updates["catalogue.storage"] = catalogueStorageSchema.parse(updates["catalogue.storage"]);
     await prisma.$transaction(
         Object.entries(updates).map(([key, value]) =>
             prisma.appSetting.upsert({

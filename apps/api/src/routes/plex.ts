@@ -15,7 +15,7 @@ const decisionService = new DecisionService();
 const requestService = new RequestService();
 
 export const curationStatusHandler = asyncHandler(async (_req, res) => {
-    const [jobs, shelves, priority] = await Promise.all([
+    const [jobs, shelves, priority, catalogue] = await Promise.all([
         Promise.all(CURATION_JOBS.map(async (name) => {
             const [lastAttempt, lastSuccess] = await Promise.all([
                 prisma.jobRun.findFirst({ where: { jobName: name }, orderBy: { startedAt: "desc" }, select: { status: true, startedAt: true, finishedAt: true } }),
@@ -31,8 +31,12 @@ export const curationStatusHandler = asyncHandler(async (_req, res) => {
             },
         }),
         prisma.appSetting.findUnique({ where: { key: "downloadPriority.status" }, select: { value: true } }),
+        prisma.appSetting.findMany({ where: { key: { in: ["catalogue.storage", "catalogue.retentionReview"] } }, select: { key: true, value: true } }),
     ]);
-    res.json({ success: true, data: curationStatus(jobs, shelves, new Date(), priority?.value) });
+    res.json({ success: true, data: curationStatus(jobs, shelves, new Date(), priority?.value, {
+        storagePolicy: catalogue.find((setting) => setting.key === "catalogue.storage")?.value,
+        retentionReview: catalogue.find((setting) => setting.key === "catalogue.retentionReview")?.value,
+    }) });
 });
 
 plexRouter.get("/titles/:titleId/seasons", asyncHandler(async (req, res) => {

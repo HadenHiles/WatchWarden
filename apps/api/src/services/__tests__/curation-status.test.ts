@@ -44,3 +44,16 @@ test("projects recorded WatchWarden-only demotions without implying changes to u
     assert.doesNotMatch(JSON.stringify(status), /apiKey|secret/);
     assert.equal(curationStatus([], [], now, { mode: "apply" }).downloadPriority, null);
 });
+
+test("reports the 1 TB effective maximum and bounded review-only retention evidence", () => {
+    const item = { titleId: "title", title: "Example", mediaType: "MOVIE", decision: "review",
+        reasons: ["watchlist_coverage_unknown"], deletionAuthorized: false, reviewKind: "investigation_required" };
+    const status = curationStatus([], [], now, null, { retentionReview: {
+        checkedAt: now.toISOString(), complete: true, mode: "review_only", deletionAuthority: "reclaimerr", items: Array(12).fill(item),
+    } });
+    assert.equal(status.catalogue.storagePolicy?.maxStorageBytes, 1_000_000_000_000);
+    assert.equal(status.catalogue.accountingState, "not_verified");
+    assert.equal(status.catalogue.retentionReview?.items.length, 10);
+    assert.equal(status.catalogue.retentionReview?.recordedItems, 12);
+    assert.equal(curationStatus([], [], now, null, { storagePolicy: { maxStorageBytes: -1 } }).catalogue.storagePolicy, null);
+});

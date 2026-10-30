@@ -1,4 +1,5 @@
-import { prisma, getIntegrationConfig } from "@watchwarden/db";
+import { prisma, getIntegrationConfig, reserveCatalogueStorage } from "@watchwarden/db";
+import { assessStorageAdmission } from "@watchwarden/scoring";
 import { JellyseerrService } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 
@@ -42,6 +43,13 @@ export async function submitRequest(titleId: string): Promise<void> {
         botPassword: jellyseerr.botPassword ?? undefined,
     });
     const botUserId = jellyseerr.botUserId ?? 0;
+
+    try {
+        await reserveCatalogueStorage(titleId, title.mediaType, assessStorageAdmission);
+    } catch {
+        logger.warn("Auto-request deferred until catalogue storage admission is verified", { titleId });
+        return;
+    }
 
     await prisma.requestRecord.upsert({
         where: { titleId },

@@ -1,7 +1,9 @@
-import { prisma, getIntegrationConfig } from "@watchwarden/db";
+import { prisma, getIntegrationConfig, reserveCatalogueStorage } from "@watchwarden/db";
+import { assessStorageAdmission } from "@watchwarden/scoring";
 import { JellyseerrService } from "@watchwarden/integrations";
 import { createLogger } from "@watchwarden/config";
 import { AuditService } from "./audit.service";
+import { AppError } from "../middleware/error";
 
 const logger = createLogger("request-service");
 const auditService = new AuditService();
@@ -43,6 +45,12 @@ export class RequestService {
         if (existingRecord && !["FAILED", "DECLINED"].includes(existingRecord.requestStatus)) {
             logger.info("Request already active — skipping duplicate submission", { titleId, status: existingRecord.requestStatus });
             return existingRecord;
+        }
+
+        try {
+            await reserveCatalogueStorage(titleId, title.mediaType, assessStorageAdmission);
+        } catch {
+            throw new AppError(409, "Request deferred until catalogue storage and reservation capacity are verified", "CATALOGUE_ADMISSION_BLOCKED");
         }
 
         // Upsert the request record to PENDING
