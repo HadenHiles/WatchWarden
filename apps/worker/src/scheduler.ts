@@ -14,6 +14,7 @@ import { plexSyncJob } from "./jobs/plex-sync.job";
 import { plexLibrarySyncJob } from "./jobs/plex-library-sync.job";
 import { radarrSyncJob } from "./jobs/radarr-sync.job";
 import { rotationCleanupJob } from "./jobs/rotation-cleanup.job";
+import { downloadPriorityJob } from "./jobs/download-priority.job";
 
 const logger = createLogger("scheduler");
 
@@ -33,6 +34,7 @@ export function buildScheduler(env: WorkerEnv) {
         { name: "plex-sync", cron: env.PLEX_SYNC_CRON, fn: plexSyncJob },
         { name: "radarr-sync", cron: env.RADARR_SYNC_CRON, fn: radarrSyncJob },
         { name: "rotation-cleanup", cron: env.ROTATION_CLEANUP_CRON, fn: rotationCleanupJob },
+        ...(env.DOWNLOAD_PRIORITY_ENABLED ? [{ name: "download-priority", cron: env.DOWNLOAD_PRIORITY_CRON, fn: () => downloadPriorityJob(env) }] : []),
     ];
 
     const scheduledTasks = tasks.map(({ name, cron: cronExpr, fn }) => {

@@ -17,8 +17,10 @@ test("distinguishes a failed latest attempt from historical success without clai
 });
 
 test("represents missing history as unknown and strips unapproved fields", () => {
-    const shelf = { id: "shelf", name: "Top 10", mediaType: "MOVIE", shelfType: "CUSTOM", enabled: true,
-        publishToHome: true, autoRequest: false, itemCount: 0, lastSyncAt: null, token: "secret", error: "/private/path" };
+    const shelf = {
+        id: "shelf", name: "Top 10", mediaType: "MOVIE", shelfType: "CUSTOM", enabled: true,
+        publishToHome: true, autoRequest: false, itemCount: 0, lastSyncAt: null, token: "secret", error: "/private/path"
+    };
     const status = curationStatus([{ name: "plex-sync", lastAttempt: null, lastSuccess: null }], [shelf], now);
     assert.equal(status.jobs[0].lastAttempt, null);
     assert.equal(status.shelves[0].lastSyncAt, null);
@@ -26,7 +28,19 @@ test("represents missing history as unknown and strips unapproved fields", () =>
 });
 
 test("refuses a truncated shelf inventory", () => {
-    const shelf = { id: "shelf", name: "Top 10", mediaType: "MOVIE", shelfType: "CUSTOM", enabled: true,
-        publishToHome: true, autoRequest: false, itemCount: 0, lastSyncAt: null };
+    const shelf = {
+        id: "shelf", name: "Top 10", mediaType: "MOVIE", shelfType: "CUSTOM", enabled: true,
+        publishToHome: true, autoRequest: false, itemCount: 0, lastSyncAt: null
+    };
     assert.throws(() => curationStatus([], Array(101).fill(shelf)), /100-shelf limit/);
+});
+
+test("projects recorded WatchWarden-only demotions without implying changes to user priorities", () => {
+    const status = curationStatus([], [], now, { checkedAt: now.toISOString(), mode: "observe",
+        sabDemotions: 2, torrentDemotions: 1, torrentQueueing: false, verified: false, apiKey: "secret" });
+    assert.equal(status.downloadPriority?.policy, "watchwarden_only_demotion");
+    assert.equal(status.downloadPriority?.verified, false);
+    assert.equal(status.downloadPriority?.mode, "observe");
+    assert.doesNotMatch(JSON.stringify(status), /apiKey|secret/);
+    assert.equal(curationStatus([], [], now, { mode: "apply" }).downloadPriority, null);
 });

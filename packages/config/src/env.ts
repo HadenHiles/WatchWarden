@@ -23,6 +23,7 @@ export const apiEnvSchema = baseEnvSchema.extend({
     PORT: z.coerce.number().int().positive().default(4000),
     SESSION_SECRET: z.string().min(32).default(DEFAULT_SESSION_SECRET),
     API_SECRET: z.string().min(16).default(DEFAULT_API_SECRET),
+    CURATION_READ_TOKEN: z.string().min(32).optional(),
     ADMIN_USERNAME: z.string().min(1).default("admin"),
     ADMIN_PASSWORD_HASH: z.string().min(1).default(DEFAULT_PASSWORD_HASH),
     TAUTULLI_BASE_URL: z.string().url().optional(),
@@ -61,6 +62,18 @@ export const workerEnvSchema = baseEnvSchema.extend({
     EXPORT_CRON: z.string().default("15 */6 * * *"),
     PLEX_SYNC_CRON: z.string().default("10,40 * * * *"),
     ROTATION_CLEANUP_CRON: z.string().default("30 4 * * *"),
+    DOWNLOAD_PRIORITY_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+    DOWNLOAD_PRIORITY_MODE: z.enum(["observe", "apply"]).default("observe"),
+    DOWNLOAD_PRIORITY_CRON: z.string().default("* * * * *"),
+    SONARR_BASE_URL: z.string().url().optional(),
+    SONARR_API_KEY: z.string().optional(),
+    SABNZBD_BASE_URL: z.string().url().optional(),
+    SABNZBD_API_KEY: z.string().optional(),
+    SABNZBD_DOWNLOAD_CLIENT_NAME: z.string().optional(),
+    QBITTORRENT_BASE_URL: z.string().url().optional(),
+    QBITTORRENT_USERNAME: z.string().optional(),
+    QBITTORRENT_PASSWORD: z.string().optional(),
+    QBITTORRENT_DOWNLOAD_CLIENT_NAME: z.string().optional(),
 });
 
 export const webEnvSchema = z.object({

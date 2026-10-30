@@ -14,8 +14,8 @@ export const plexRouter = Router();
 const decisionService = new DecisionService();
 const requestService = new RequestService();
 
-plexRouter.get("/curation-status", asyncHandler(async (_req, res) => {
-    const [jobs, shelves] = await Promise.all([
+export const curationStatusHandler = asyncHandler(async (_req, res) => {
+    const [jobs, shelves, priority] = await Promise.all([
         Promise.all(CURATION_JOBS.map(async (name) => {
             const [lastAttempt, lastSuccess] = await Promise.all([
                 prisma.jobRun.findFirst({ where: { jobName: name }, orderBy: { startedAt: "desc" }, select: { status: true, startedAt: true, finishedAt: true } }),
@@ -25,12 +25,15 @@ plexRouter.get("/curation-status", asyncHandler(async (_req, res) => {
         })),
         prisma.plexCollection.findMany({
             orderBy: [{ homePriority: "asc" }, { id: "asc" }], take: 101,
-            select: { id: true, name: true, mediaType: true, shelfType: true, enabled: true,
-                publishToHome: true, autoRequest: true, itemCount: true, lastSyncAt: true },
+            select: {
+                id: true, name: true, mediaType: true, shelfType: true, enabled: true,
+                publishToHome: true, autoRequest: true, itemCount: true, lastSyncAt: true
+            },
         }),
+        prisma.appSetting.findUnique({ where: { key: "downloadPriority.status" }, select: { value: true } }),
     ]);
-    res.json({ success: true, data: curationStatus(jobs, shelves) });
-}));
+    res.json({ success: true, data: curationStatus(jobs, shelves, new Date(), priority?.value) });
+});
 
 plexRouter.get("/titles/:titleId/seasons", asyncHandler(async (req, res) => {
     const title = await prisma.title.findUnique({ where: { id: req.params.titleId }, select: { tmdbId: true, mediaType: true } });

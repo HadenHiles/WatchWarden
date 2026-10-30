@@ -30,3 +30,5 @@ export { TmdbTrendingAdapter } from "./sources/tmdb.adapter";
 export { TmdbProviderDiscoveryAdapter, PROVIDER_TMDB_ID_MAP } from "./sources/tmdb-provider.adapter";
 export { NetflixTop10Adapter, parseNetflixTop10Titles, netflixTitleForTmdbSearch } from "./sources/netflix-top10.adapter";
 export { buildSourceAdapters } from "./sources/registry";
+export { DownloadPriorityService } from "./downloads/service";
+export type { DownloadPriorityConfig } from "./downloads/service";

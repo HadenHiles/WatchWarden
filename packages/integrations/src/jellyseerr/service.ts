@@ -27,6 +27,7 @@ export interface RequestMediaInput {
 export interface RequestMediaResult {
     success: boolean;
     request?: JellyseerrRequest;
+    requestedByBot?: boolean;
     error?: string;
 }
 
@@ -110,13 +111,18 @@ export class JellyseerrService {
             // If Jellyseerr already has a non-declined request, don't create a duplicate.
             // Jellyseerr request status: 1 = Pending, 2 = Approved, 3 = Declined
             const existingRequests = media.mediaInfo?.requests ?? [];
-            const activeRequest = existingRequests.find((r) => r.status !== 3);
+            const activeRequests = existingRequests.filter((request) => request.status !== 3);
+            const activeRequest = activeRequests.find((request) => request.requestedBy?.id !== input.botUserId)
+                ?? activeRequests[0];
             if (activeRequest) {
                 logger.info("Active request already exists in Jellyseerr — skipping duplicate", {
                     tmdbId: input.tmdbId,
                     requestId: activeRequest.id,
                 });
-                return { success: true, request: activeRequest };
+                return {
+                    success: true, request: activeRequest,
+                    requestedByBot: input.botUserId > 0 && activeRequest.requestedBy?.id === input.botUserId
+                };
             }
 
             const seasons = input.mediaType === "tv"
@@ -135,7 +141,10 @@ export class JellyseerrService {
                 qualityProfileId: input.qualityProfileId,
             });
 
-            return { success: true, request };
+            return {
+                success: true, request,
+                requestedByBot: input.botUserId > 0 && request.requestedBy?.id === input.botUserId
+            };
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             logger.error("Failed to request media via Jellyseerr", { input, error: message });

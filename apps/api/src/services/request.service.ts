@@ -53,7 +53,7 @@ export class RequestService {
                 titleId,
                 mediaType: title.mediaType,
                 requestStatus: "PENDING",
-                requestedByBot: true,
+                requestedByBot: false,
             },
         });
 
@@ -79,6 +79,7 @@ export class RequestService {
                 data: {
                     jellyseerrRequestId: result.request.id,
                     requestStatus: isPendingApproval ? "PENDING" : "PROCESSING",
+                    requestedByBot: result.requestedByBot === true,
                     overseerrMedia: result.request as object,
                 },
             });

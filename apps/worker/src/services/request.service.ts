@@ -46,7 +46,7 @@ export async function submitRequest(titleId: string): Promise<void> {
     await prisma.requestRecord.upsert({
         where: { titleId },
         update: { requestStatus: "PENDING", retryCount: { increment: 1 } },
-        create: { titleId, mediaType: title.mediaType, requestStatus: "PENDING", requestedByBot: true },
+        create: { titleId, mediaType: title.mediaType, requestStatus: "PENDING", requestedByBot: false },
     });
 
     const result = await service.requestMedia({
@@ -63,6 +63,7 @@ export async function submitRequest(titleId: string): Promise<void> {
             data: {
                 jellyseerrRequestId: result.request.id,
                 requestStatus: isPendingApproval ? "PENDING" : "PROCESSING",
+                requestedByBot: result.requestedByBot === true,
                 overseerrMedia: result.request as object,
             },
         });

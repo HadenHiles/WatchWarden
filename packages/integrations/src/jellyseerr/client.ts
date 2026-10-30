@@ -36,6 +36,8 @@ export class JellyseerrClient {
         this.http = axios.create({
             baseURL: this.baseUrl,
             timeout: this.timeout,
+            maxRedirects: 0,
+            maxContentLength: 2097152,
             headers: {
                 "Content-Type": "application/json",
                 "X-Api-Key": config.apiKey,
@@ -143,6 +145,29 @@ export class JellyseerrClient {
         } catch (err) {
             this.handleError(`getRequest(${requestId})`, err);
         }
+    }
+
+    async getAllRequests(): Promise<JellyseerrRequest[]> {
+        const requests: JellyseerrRequest[] = [];
+        let total: number | undefined;
+        for (let skip = 0; skip <= 10000; skip += 100) {
+            const response = await this.http.get<{
+                results: JellyseerrRequest[];
+                pageInfo: { results: number };
+            }>("/request", { params: { take: 100, skip, filter: "all", sort: "added" } });
+            const page = response.data;
+            if (!Number.isSafeInteger(page.pageInfo?.results) || page.pageInfo.results < 0 || page.pageInfo.results > 10000
+                || !Array.isArray(page.results) || page.results.length > 100
+                || (total !== undefined && total !== page.pageInfo.results)) throw new Error("Incomplete Jellyseerr request inventory");
+            total = page.pageInfo.results;
+            requests.push(...page.results);
+            if (requests.length === total) {
+                if (new Set(requests.map((request) => request.id)).size !== total) throw new Error("Overlapping Jellyseerr request inventory");
+                return requests;
+            }
+            if (page.results.length === 0 || requests.length > total) throw new Error("Incomplete Jellyseerr request inventory");
+        }
+        throw new Error("Jellyseerr request inventory limit exceeded");
     }
 
     /** Delete / retract a request */

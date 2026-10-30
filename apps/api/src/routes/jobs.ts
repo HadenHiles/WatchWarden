@@ -16,6 +16,7 @@ const JOB_NAMES = [
     "export",
     "plex-sync",
     "rotation-cleanup",
+    "download-priority",
 ] as const;
 
 // GET /jobs — summary status for all jobs

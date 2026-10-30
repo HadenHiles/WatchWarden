@@ -38,6 +38,40 @@ Exact replication of personalized streaming-provider home screens is not promise
   sustained demand, explicit requests/protection, storage pressure, and reacquisition
   cost. Missing activity is unknown, not proof nobody wants a title.
 - Keep shared rows concise. Do not recreate the retired FamFlix Requests rows.
+- User-requested media outranks speculative WatchWarden acquisitions by lowering
+  ONLY positively identified WatchWarden download jobs. Never promote, demote,
+  resume, force-start, or otherwise rewrite user or unidentified job priorities.
+
+## WatchWarden-Only Download Demotion
+
+The optional `download-priority` job runs every minute when explicitly enabled.
+It uses a dedicated Jellyseerr requester ID, a complete request inventory, and
+complete Radarr/Sonarr queues to resolve exact download IDs. A non-declined human
+request, missing requester identity, shared/ambiguous download, or mismatched
+download-client name prevents WatchWarden ownership. No title-name matching is used.
+
+- SABnzbd: set verified WatchWarden jobs from Normal/High to Low (`-1`). Already
+  low, paused, forced, and unknown states are untouched. No queue-wide sort.
+- qBittorrent: move verified incomplete WatchWarden jobs behind other eligible
+  downloads using `bottomPrio`. Do not write other hashes, force-start/resume,
+  change bandwidth limits, or enable queueing. If queueing is disabled, report
+  that ordering is ineffective rather than changing the client's settings.
+- Other jobs naturally shift ordinal position when a WatchWarden torrent moves
+  behind them; no priority command targets those jobs.
+- Observe mode proposes counts without priority writes. Apply mode rereads
+  ownership and queues before bounded writes, then verifies demotions. Failed or
+  ambiguous execution is reported as failed, never as an automatic success/retry.
+- The worker is disabled by default. Configuration is listed in `.env.example`.
+  Both Arr inventories are mandatory. Configured client names must match the
+  corresponding names in Arr; only configured clients can receive writes.
+
+Activation sequence: back up database/configuration and retain rollback images;
+inspect the old acquisition/cleanup settings; verify a dedicated requester account
+and exact client names; enable observe mode and review real identity matches;
+then explicitly switch `DOWNLOAD_PRIORITY_MODE=apply`. No live queue changes have
+been performed by this implementation. The one-minute schedule is polling, not an
+instantaneous Jellyseerr approval webhook. Queue priority is not a guaranteed
+bandwidth reservation and cannot manufacture missing download sources.
 
 ## Delivery Steps
 
@@ -84,6 +118,8 @@ Exact replication of personalized streaming-provider home screens is not promise
 
 - [x] Add an initial authenticated recorded-status endpoint and opt-in Ops read
   tool. Unknown source freshness and lack of live Plex verification are explicit.
+- [x] Add a dedicated server-enforced read-only curation token and synthetic HTTP
+  tests denying all other reads/writes. Project observed/applied demotion results.
 - [ ] Add an authenticated, versioned, bounded read-only curation-status endpoint:
   last attempt/success, source freshness, desired/verified shelves, differences,
   selection reasons, policy state, and budget usage. Exclude secrets/private paths.
@@ -138,14 +174,37 @@ single manually triggered sync as end-to-end acceptance.
   no acquisition/deletion performed, and no TV-client or scheduled-cycle acceptance
   claimed. Turbo emitted certificate/cache warnings but completed successfully.
 
+### 2026-10-29 Follow-Up
+
+- Added requester-based ownership preservation to both submission paths. Existing
+  human requests are not converted into WatchWarden-owned records. Existing stored
+  records are not bulk rewritten; the demotion worker uses fresh Jellyseerr evidence.
+- Implemented the disabled-by-default demotion worker described above, bounded
+  request/Arr/client inventories, synthetic protocol tests, and recorded mode/results
+  in the read-only status contract. No requests were submitted during testing.
+- Added the endpoint-scoped `CURATION_READ_TOKEN`. This credential cannot invoke
+  job triggers, settings, media actions, or unrelated reads, even if accidentally
+  configured with the same value as the admin token. Use a distinct random value.
+- Read-only local Docker inspection found API, worker, web, and PostgreSQL stopped
+  for nine days. No running worker means no scheduled updates on this engine.
+  Why they stopped, saved policies, other deployment locations, source health, and
+  actual Plex-client presentation remain unverified. Containers were not restarted
+  because old enabled automation could acquire/delete media on startup.
+- Verification: 88 WatchWarden tests passed (31 scoring, 52 integrations, 5 API);
+  API/worker dependency builds passed. Ops: 285 passed, 5 opt-in skips. The corrected
+  SAB position-response contract also passed the 24 focused priority/ownership
+  tests. No runtime configuration, other-title priority, acquisition, or deletion
+  changes were made.
+
 ## Initial Ops Connection
 
 Deploy the tested WatchWarden API and worker together only after backup, active-job
 inspection, and rollback preparation. The API endpoint is GET
 `/plex/curation-status` and returns `{ success: true, data: { version: 1, ... } }`.
-The existing API_SECRET bearer authentication applies. It is an administrative
-credential, not a server-enforced read-only token; adding a dedicated read-only
-credential is a prerequisite before enabling this connection in production.
+Configure a distinct random `CURATION_READ_TOKEN` (at least 32 characters) in the
+WatchWarden API and mount the same value as the Ops secret named below. It permits
+only this exact GET. Do not use the administrative API_SECRET for Ops. Credential
+provisioning and private runtime connectivity still need deployment verification.
 
 Ops configuration is opt-in and references a mounted secret, never a literal key:
 

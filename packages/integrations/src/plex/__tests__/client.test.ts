@@ -2,7 +2,7 @@ import axios from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlexClient } from "../client";
 
-vi.mock("axios", () => ({ default: { create: vi.fn() }, AxiosError: class extends Error {} }));
+vi.mock("axios", () => ({ default: { create: vi.fn() }, AxiosError: class extends Error { } }));
 vi.mock("@watchwarden/config", () => ({
     createLogger: () => ({ info: vi.fn(), error: vi.fn() }),
 }));
@@ -28,10 +28,16 @@ describe("Plex collection protocol", () => {
     });
 
     it("returns complete ordered membership", async () => {
-        http.get.mockResolvedValue({ data: { MediaContainer: { size: 2, totalSize: 2, Metadata: [
-            { ratingKey: "2", title: "Second", type: "movie" },
-            { ratingKey: "1", title: "First", type: "movie" },
-        ] } } });
+        http.get.mockResolvedValue({
+            data: {
+                MediaContainer: {
+                    size: 2, totalSize: 2, Metadata: [
+                        { ratingKey: "2", title: "Second", type: "movie" },
+                        { ratingKey: "1", title: "First", type: "movie" },
+                    ]
+                }
+            }
+        });
         expect((await client.getCollectionItems("100")).map((item) => item.ratingKey)).toEqual(["2", "1"]);
     });
 
