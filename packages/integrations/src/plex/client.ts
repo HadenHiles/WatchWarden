@@ -247,6 +247,8 @@ export class PlexClient {
         try {
             const res = await this.http.get<{
                 MediaContainer: {
+                    size: number;
+                    totalSize?: number;
                     Metadata?: Array<{
                         ratingKey: string;
                         title: string;
@@ -256,7 +258,14 @@ export class PlexClient {
                     }>;
                 };
             }>(`/library/collections/${collectionId}/children`);
-            const items = res.data.MediaContainer.Metadata ?? [];
+            const container = res.data.MediaContainer;
+            const items = container.Metadata ?? [];
+            if (!Number.isSafeInteger(container.size) || container.size !== items.length
+                || (container.totalSize !== undefined && container.totalSize !== items.length)
+                || items.some((item) => !/^\d+$/.test(item.ratingKey))
+                || new Set(items.map((item) => item.ratingKey)).size !== items.length) {
+                throw new Error(`Plex collection ${collectionId} membership response is incomplete or invalid`);
+            }
             return items.map((item) => ({
                 ratingKey: item.ratingKey,
                 title: item.title,
@@ -343,6 +352,21 @@ export class PlexClient {
             logger.info("Renamed Plex collection", { collectionId, title });
         } catch (err) {
             this.handleError(`updateCollectionTitle(${collectionId})`, err);
+        }
+    }
+
+    async setCollectionOrder(collectionId: string, ratingKeys: string[]): Promise<void> {
+        try {
+            await this.http.put(`/library/metadata/${collectionId}/prefs`, null, {
+                params: { collectionSort: 2 },
+            });
+            for (const [index, ratingKey] of ratingKeys.entries()) {
+                await this.http.put(`/library/metadata/${collectionId}/items/${ratingKey}/move`, null, {
+                    params: index === 0 ? {} : { after: ratingKeys[index - 1] },
+                });
+            }
+        } catch (err) {
+            this.handleError(`setCollectionOrder(${collectionId})`, err);
         }
     }
 

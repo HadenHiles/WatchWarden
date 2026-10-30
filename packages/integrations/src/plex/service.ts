@@ -37,10 +37,15 @@ export class PlexService {
         mediaType: "movie" | "show";
         targetRatingKeys: string[];
         existingCollectionKey?: string | null;
+        onCollectionCreated?: (collectionKey: string) => Promise<void>;
     }): Promise<CollectionSyncResult> {
-        const { sectionId, collectionName, mediaType, targetRatingKeys, existingCollectionKey } =
+        const { sectionId, collectionName, mediaType, existingCollectionKey } =
             params;
 
+        const targetRatingKeys = [...new Set(params.targetRatingKeys)];
+        if (targetRatingKeys.some((key) => !/^\d+$/.test(key))) {
+            throw new Error("Plex collection targets must be numeric rating keys");
+        }
         const targetSet = new Set(targetRatingKeys);
         let collectionKey = existingCollectionKey ?? null;
 
@@ -66,6 +71,7 @@ export class PlexService {
                 for (const item of existingItems) {
                     await this.client.removeItemFromCollection(collectionKey, item.ratingKey);
                 }
+                await this.verifyCollection(collectionKey, []);
                 logger.info("Cleared empty Plex collection", { title: collectionName });
                 return { collectionRatingKey: collectionKey, added: 0, removed: existingItems.length, unchanged: 0 };
             }
@@ -86,6 +92,7 @@ export class PlexService {
                 machineIdentifier: machineId,
                 initialItemRatingKey: firstKey,
             });
+            await params.onCollectionCreated?.(collectionKey);
 
             // Add remaining items
             let added = 1;
@@ -97,6 +104,8 @@ export class PlexService {
                 });
                 added++;
             }
+            await this.client.setCollectionOrder(collectionKey, targetRatingKeys);
+            await this.verifyCollection(collectionKey, targetRatingKeys);
             return { collectionRatingKey: collectionKey, added, removed: 0, unchanged: 0 };
         }
 
@@ -120,6 +129,12 @@ export class PlexService {
             await this.client.removeItemFromCollection(collectionKey, key);
         }
 
+        const currentOrder = currentItems.map((item) => item.ratingKey);
+        if (JSON.stringify(currentOrder) !== JSON.stringify(targetRatingKeys)) {
+            await this.client.setCollectionOrder(collectionKey, targetRatingKeys);
+        }
+        await this.verifyCollection(collectionKey, targetRatingKeys);
+
         if (toAdd.length > 0 || toRemove.length > 0) {
             logger.info("Synced Plex collection", {
                 title: collectionName,
@@ -136,6 +151,14 @@ export class PlexService {
             unchanged,
         };
     }
+
+    private async verifyCollection(collectionId: string, expectedKeys: string[]): Promise<void> {
+        const actualKeys = (await this.client.getCollectionItems(collectionId)).map((item) => item.ratingKey);
+        if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+            throw new Error(`Plex collection ${collectionId} membership/order verification failed`);
+        }
+    }
+
     async syncCollectionRecommendation(params: {
         sectionId: string;
         collectionId: string;

@@ -644,14 +644,11 @@ export async function plexSyncJob(): Promise<void> {
                 mediaType: collection.mediaType === "MOVIE" ? "movie" : "show",
                 targetRatingKeys: targetKeys,
                 existingCollectionKey: collection.plexKey,
-            });
-
-            await prisma.plexCollection.update({
-                where: { id: collection.id },
-                data: {
-                    plexKey: result.collectionRatingKey || null,
-                    itemCount: targetKeys.length,
-                    lastSyncAt: new Date(),
+                onCollectionCreated: async (plexKey) => {
+                    await prisma.plexCollection.update({
+                        where: { id: collection.id },
+                        data: { plexKey },
+                    });
                 },
             });
 
@@ -670,6 +667,15 @@ export async function plexSyncJob(): Promise<void> {
                 });
                 if (collection.publishToHome && !publish) logger.info("Shelf skipped due to Home limit", { collectionId: collection.id });
             }
+
+            await prisma.plexCollection.update({
+                where: { id: collection.id },
+                data: {
+                    plexKey: result.collectionRatingKey || null,
+                    itemCount: targetKeys.length,
+                    lastSyncAt: new Date(),
+                },
+            });
 
             logger.info("Plex collection synced", {
                 name: collection.name,

@@ -4,6 +4,11 @@
 
 Watch Warden automatically surfaces culturally relevant movies and shows already available on your Plex server. It curates owner and shared-user Home shelves while retaining its acquisition, lifecycle, export, and cleanup workflows.
 
+The [autonomous FamFlix curation plan](docs/AUTONOMOUS-CURATION.md) tracks the
+transition to verified scheduled shelves, policy-bounded acquisitions, and
+FamFlix Ops integration. This is an incremental rollout, not an enabled new
+automatic download or deletion policy.
+
 ## Plex Home curation
 
 Open **Plex Home Curation**, connect Plex, then choose **Add default shelves**. This creates disabled templates—existing installs never publish rows automatically—for Popular Movies/Shows Right Now, Recently Released Movies, and Netflix, Disney+, Prime Video, and Apple TV+ provider shelves. Crave, Paramount+, and other configured TMDB providers remain available for custom shelves.

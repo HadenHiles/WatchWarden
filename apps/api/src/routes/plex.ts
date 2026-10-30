@@ -8,10 +8,29 @@ import { asyncHandler } from "../middleware/error";
 import { validateBody } from "../middleware/validation";
 import { DecisionService } from "../services/decision.service";
 import { RequestService } from "../services/request.service";
+import { CURATION_JOBS, curationStatus } from "../services/curation-status.service";
 
 export const plexRouter = Router();
 const decisionService = new DecisionService();
 const requestService = new RequestService();
+
+plexRouter.get("/curation-status", asyncHandler(async (_req, res) => {
+    const [jobs, shelves] = await Promise.all([
+        Promise.all(CURATION_JOBS.map(async (name) => {
+            const [lastAttempt, lastSuccess] = await Promise.all([
+                prisma.jobRun.findFirst({ where: { jobName: name }, orderBy: { startedAt: "desc" }, select: { status: true, startedAt: true, finishedAt: true } }),
+                prisma.jobRun.findFirst({ where: { jobName: name, status: "COMPLETED" }, orderBy: { finishedAt: "desc" }, select: { status: true, startedAt: true, finishedAt: true } }),
+            ]);
+            return { name, lastAttempt, lastSuccess };
+        })),
+        prisma.plexCollection.findMany({
+            orderBy: [{ homePriority: "asc" }, { id: "asc" }], take: 101,
+            select: { id: true, name: true, mediaType: true, shelfType: true, enabled: true,
+                publishToHome: true, autoRequest: true, itemCount: true, lastSyncAt: true },
+        }),
+    ]);
+    res.json({ success: true, data: curationStatus(jobs, shelves) });
+}));
 
 plexRouter.get("/titles/:titleId/seasons", asyncHandler(async (req, res) => {
     const title = await prisma.title.findUnique({ where: { id: req.params.titleId }, select: { tmdbId: true, mediaType: true } });
