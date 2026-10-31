@@ -72,4 +72,42 @@ describe("Plex collection protocol", () => {
         http.get.mockResolvedValue({ data: { MediaContainer: { size: 1, Metadata: [{ ratingKey: "1", Media: [{ Part: [{ id: 1 }] }] }] } } });
         await expect(client.getItemStorage("1", "MOVIE")).rejects.toThrow("part size");
     });
+
+    it("reads recommendation visibility from managed hubs without treating string zero as true", async () => {
+        http.get.mockResolvedValueOnce({ data: { MediaContainer: { Hub: [{ identifier: "custom.collection.1.100",
+            promotedToOwnHome: "1", promotedToSharedHome: true, promotedToRecommended: "0" }] } } });
+        expect(await client.getCollectionRecommendation("1", "100")).toEqual({ promotedToOwnHome: true,
+            promotedToSharedHome: true, promotedToRecommended: false });
+    });
+
+    it("can publish on Home independently of Library Recommended", async () => {
+        http.get.mockResolvedValueOnce({ data: { MediaContainer: { Hub: [{ identifier: "custom.collection.1.100" }] } } });
+        await client.setCollectionRecommendation({ sectionId: "1", collectionId: "100", publishToHome: true,
+            publishToSharedHome: true, publishToLibrary: false });
+        expect(http.put).toHaveBeenCalledWith("/hubs/sections/1/manage/custom.collection.1.100", null,
+            { params: { promotedToRecommended: 0, promotedToOwnHome: 1, promotedToSharedHome: 1 } });
+    });
+
+    it("hides only the verified collection's inline card and verifies the mode", async () => {
+        http.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ type: "collection", librarySectionID: 1,
+            Preferences: { Setting: [{ id: "collectionMode", value: "-1" }] } }] } } })
+            .mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ type: "collection", librarySectionID: 1,
+                Preferences: { Setting: [{ id: "collectionMode", value: "0" }] } }] } } });
+        await client.setCollectionLibraryVisibility("1", "100", true);
+        expect(http.get).toHaveBeenCalledWith("/library/metadata/100", { params: { includePreferences: 1 } });
+        expect(http.put).toHaveBeenCalledWith("/library/collections/100/prefs", null,
+            { params: { collectionMode: 0 } });
+    });
+
+    it("does not rewrite an already hidden collection and uses its authoritative preference", async () => {
+        http.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ type: "collection", librarySectionID: 1,
+            collectionMode: "2", Preferences: { Setting: [{ id: "collectionMode", value: "0" }] } }] } } });
+        await client.setCollectionLibraryVisibility("1", "100", true);
+        expect(http.put).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unverified preference write rather than treating missing mode as zero", async () => {
+        http.get.mockResolvedValue({ data: { MediaContainer: { Metadata: [{ type: "collection", librarySectionID: 1 }] } } });
+        await expect(client.setCollectionLibraryVisibility("1", "100", true)).rejects.toThrow("visibility verification failed");
+    });
 });

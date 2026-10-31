@@ -164,13 +164,21 @@ export class PlexService {
         collectionId: string;
         publishToHome: boolean;
         publishToSharedHome: boolean;
+        publishToLibrary?: boolean;
     }): Promise<boolean> {
-        const current = (await this.client.getCollections(params.sectionId)).find((c) => c.ratingKey === params.collectionId);
+        const current = await this.client.getCollectionRecommendation(params.sectionId, params.collectionId);
+        const library = params.publishToLibrary ?? (params.publishToHome || params.publishToSharedHome);
         if (current
             && current.promotedToOwnHome === params.publishToHome
             && current.promotedToSharedHome === params.publishToSharedHome
-            && current.promotedToRecommended === (params.publishToHome || params.publishToSharedHome)) return false;
+            && current.promotedToRecommended === library) return false;
         await this.client.setCollectionRecommendation(params);
+        const verified = await this.client.getCollectionRecommendation(params.sectionId, params.collectionId);
+        if ((!verified && (params.publishToHome || params.publishToSharedHome || library))
+            || verified && (verified.promotedToOwnHome !== params.publishToHome
+                || verified.promotedToSharedHome !== params.publishToSharedHome || verified.promotedToRecommended !== library)) {
+            throw new Error("Collection recommendation visibility verification failed");
+        }
         return true;
     }
 }

@@ -69,7 +69,7 @@ plexRouter.get("/titles/:titleId/seasons", asyncHandler(async (req, res) => {
     return res.json({ success: true, data: seasons });
 }));
 
-const DEFAULT_HOME_SETTINGS = { primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, backfillRecentReleases: true, recentlyReleasedBackfillDays: 365, defaultMaxItems: 20 };
+const DEFAULT_HOME_SETTINGS = { primaryRegion: "CA", fallbackRegion: "US", shelfLimit: 6, recentlyReleasedDays: 90, backfillRecentReleases: true, recentlyReleasedBackfillDays: 365, defaultMaxItems: 20, publishToLibrary: true, hideCollectionCards: false };
 
 const shelfConfigSchema = z.object({
     genres: z.array(z.string().trim().min(1).max(50)).min(1).max(5).optional(),
@@ -94,6 +94,7 @@ plexRouter.get("/home", asyncHandler(async (_req, res) => {
 }));
 
 const homeSettingsSchema = z.object({
+    publishToLibrary: z.boolean().optional(), hideCollectionCards: z.boolean().optional(),
     primaryRegion: z.string().length(2).default("CA"), fallbackRegion: z.string().length(2).default("US"),
     shelfLimit: z.number().int().min(0).max(20).default(6), recentlyReleasedDays: z.number().int().min(1).max(365).default(90),
     backfillRecentReleases: z.boolean().default(true), recentlyReleasedBackfillDays: z.number().int().min(1).max(730).default(365),

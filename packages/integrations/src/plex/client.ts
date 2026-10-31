@@ -424,20 +424,39 @@ export class PlexClient {
         }
     }
 
-    /**
-     * Plex promotes collections through the section hub management endpoint.
-     * This controls visibility, but Plex does not expose stable ordering among
-     * unrelated Home hubs; WatchWarden priority therefore governs the budget.
-     */
+    async getCollectionRecommendation(sectionId: string, collectionId: string) {
+        const response = await this.http.get<{ MediaContainer: { Hub?: Array<{ identifier: string;
+            promotedToOwnHome?: boolean | number | string; promotedToSharedHome?: boolean | number | string;
+            promotedToRecommended?: boolean | number | string }> } }>(`/hubs/sections/${sectionId}/manage`);
+        const hub = response.data.MediaContainer.Hub?.find(item => item.identifier === `custom.collection.${sectionId}.${collectionId}`);
+        return hub ? { promotedToOwnHome: Number(hub.promotedToOwnHome) === 1,
+            promotedToSharedHome: Number(hub.promotedToSharedHome) === 1,
+            promotedToRecommended: Number(hub.promotedToRecommended) === 1 } : null;
+    }
+
+    async setCollectionLibraryVisibility(sectionId: string, collectionId: string, hidden: boolean): Promise<void> {
+        const read = async () => (await this.http.get(`/library/metadata/${collectionId}`, { params: { includePreferences: 1 } })).data?.MediaContainer?.Metadata?.[0];
+        const readMode = (collection: { collectionMode?: string | number; Preferences?: { Setting?: Array<{ id: string; value: string | number }> } }) =>
+            collection?.Preferences?.Setting?.find(setting => setting.id === "collectionMode")?.value ?? collection?.collectionMode;
+        const current = await read();
+        if (current?.type !== "collection" || String(current.librarySectionID) !== sectionId) throw new Error("Collection visibility ownership mismatch");
+        const mode = hidden ? 0 : 2;
+        if (Number(readMode(current) ?? NaN) === mode) return;
+        await this.http.put(`/library/collections/${collectionId}/prefs`, null, { params: { collectionMode: mode } });
+        const verified = await read();
+        if (Number(readMode(verified) ?? NaN) !== mode) throw new Error("Collection inline visibility verification failed");
+    }
+
     async setCollectionRecommendation(params: {
         sectionId: string;
         collectionId: string;
         publishToHome: boolean;
         publishToSharedHome: boolean;
+        publishToLibrary?: boolean;
     }): Promise<void> {
         try {
             const visibility = {
-                promotedToRecommended: Number(params.publishToHome || params.publishToSharedHome),
+                promotedToRecommended: Number(params.publishToLibrary ?? (params.publishToHome || params.publishToSharedHome)),
                 promotedToOwnHome: Number(params.publishToHome),
                 promotedToSharedHome: Number(params.publishToSharedHome),
             };
@@ -454,7 +473,7 @@ export class PlexClient {
                     null,
                     { params: visibility },
                 );
-            } else if (params.publishToHome || params.publishToSharedHome) {
+            } else if (params.publishToHome || params.publishToSharedHome || params.publishToLibrary) {
                 // Plex creates a custom managed hub with POST; PUT is only for
                 // visibility changes after that hub already exists.
                 await this.http.post(`/hubs/sections/${params.sectionId}/manage`, null, {

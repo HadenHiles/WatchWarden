@@ -51,6 +51,47 @@ Whole-library Plex genre counts apply a modest discovery boost, normally up to
 ranks, human request priority, download queue settings or hard exclusions. Missing
 genre evidence is neutral.
 
+### Plex Home Presentation
+
+Settings separates inline Library cards from Library Recommended rows and Home
+publication. The operator selected `plexHome.hideCollectionCards=true` and
+`plexHome.publishToLibrary=true`: hide only WatchWarden's inline collection cards,
+while retaining the owned rows on Library Recommended and owner/shared Home.
+The explicit Collections tab remains available. Users need the corresponding
+libraries pinned; cross-library Home grouping follows each user's pinned order.
+
+Only registered WatchWarden collections receive collection-mode changes. Movies
+and TV retain their existing global collection mode and native recommendation
+visibility. Routine sync no longer suppresses built-in Plex rows, even if an old
+manageRecommendations setting exists. Collection mode is written with PUT to
+`/library/collections/{id}/prefs` and verified using metadata with
+`includePreferences=1`; GET on the preference endpoint is unsupported.
+
+Within each library, Recently Added leads, followed by WatchWarden's ranked rows,
+then existing native discovery rows. Preserve unknown rows and their flags.
+To reapply this arrangement explicitly from the repository, with running services:
+
+```sh
+docker exec -i -w /app/apps/api watchwarden-api node --input-type=module < scripts/order-plex-home.mjs
+```
+
+The script backs up each original row list in the protected exports volume and
+verifies both order and unchanged visibility. It does not change media membership,
+recommendation flags or global library settings.
+
+Presentation regression gate: 136 tests passed (50 scoring, 73 integration,
+13 API), including live-shaped preferences, independent promotion, idempotence
+and missing-mode rejection. Existing release safety gates remain unchanged.
+
+Live verification on 2026-10-31: the browser-triggered acquisition-free refresh
+completed after deployment. All six collections read back mode 0 with all three
+managed-hub promotion flags enabled and their existing membership counts intact.
+Row order survived sync; both global library modes remain 2. The owner confirmed
+Recently Released Movies should remain disabled to avoid a similar second release
+row. Every other native visibility flag matches the original presentation backup.
+The Plex browser showed all six Home rows and populated Movies/TV Library grids
+without the WatchWarden inline cards. Family TV-client caching remains unverified.
+
 ## Core Routine Jobs
 
 | Job | Purpose | Default/saved behavior |
@@ -104,8 +145,8 @@ Watchlist coverage and a verified protection/retirement handoff remain release g
 
 ## Storage And Safety Gates
 
-The source default is 1 TB decimal. The operator changed the current live maximum
-to 2.5 TB through Settings; that value was preserved. The latest complete Plex
+The source default is 1 TB decimal. The operator most recently changed the live
+maximum to 3 TB through Settings; that newer value was preserved. The latest complete Plex
 logical-part inventory measured 2,044,348,463,524 bytes across 100 managed titles.
 This is not verified physical free space or hardlink-adjusted usage.
 

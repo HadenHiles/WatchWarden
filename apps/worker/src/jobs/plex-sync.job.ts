@@ -576,7 +576,7 @@ export async function plexSyncJob(options: { allowAcquisition?: boolean } = {}):
     const client = new PlexClient({ baseUrl: plex.baseUrl, token: plex.token });
     const service = new PlexService(client);
     const homeSetting = await prisma.appSetting.findUnique({ where: { key: "plexHome" } });
-    const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string; manageRecommendations?: boolean; backfillRecentReleases?: boolean; recentlyReleasedBackfillDays?: number };
+    const homeConfig = (homeSetting?.value ?? {}) as { shelfLimit?: number; primaryRegion?: string; fallbackRegion?: string; manageRecommendations?: boolean; backfillRecentReleases?: boolean; recentlyReleasedBackfillDays?: number; publishToLibrary?: boolean; hideCollectionCards?: boolean };
     const discoverySetting = await prisma.appSetting.findUnique({ where: { key: "discovery.filters" } });
     const discoveryFilters = (discoverySetting?.value ?? {}) as { allowedOriginCountries?: string[] };
     const allowedOriginCountries = discoveryFilters.allowedOriginCountries ?? [];
@@ -592,13 +592,6 @@ export async function plexSyncJob(options: { allowAcquisition?: boolean } = {}):
             primaryRegion: homeConfig.primaryRegion ?? "CA",
             fallbackRegion: homeConfig.fallbackRegion ?? "US",
         }, false, allowedOriginCountries));
-    }
-
-    if (homeConfig.manageRecommendations === true) {
-        for (const sectionId of new Set(collections.filter((item) => item.enabled).map((item) => item.sectionId))) {
-            const suppressed = await client.suppressBuiltInRecommendations(sectionId);
-            logger.info("WatchWarden recommendation management applied", { sectionId, suppressed });
-        }
     }
 
     const automationSetting = await prisma.appSetting.findUnique({ where: { key: "automation.roster" } });
@@ -681,7 +674,11 @@ export async function plexSyncJob(options: { allowAcquisition?: boolean } = {}):
                     collectionId: result.collectionRatingKey,
                     publishToHome: publish,
                     publishToSharedHome: publish && collection.publishToSharedHome,
+                    publishToLibrary: publish && homeConfig.publishToLibrary !== false,
                 });
+                if (typeof homeConfig.hideCollectionCards === "boolean") {
+                    await client.setCollectionLibraryVisibility(collection.sectionId, result.collectionRatingKey, homeConfig.hideCollectionCards);
+                }
                 logger.info(publish ? "Home shelf published" : "Home shelf unpublished", {
                     collectionId: collection.id, plexKey: result.collectionRatingKey,
                     shelfType: collection.shelfType, provider: collection.provider,

@@ -97,6 +97,7 @@ settingsRouter.get("/", asyncHandler(async (_req, res) => {
         return acc;
     }, {});
     grouped["catalogue.storage"] = catalogueStorageSchema.parse(grouped["catalogue.storage"] ?? DEFAULT_CATALOGUE_STORAGE);
+    grouped["plexHome"] = { publishToLibrary: true, hideCollectionCards: false, ...(grouped["plexHome"] as object ?? {}) };
     res.json({ success: true, data: grouped });
 }));
 

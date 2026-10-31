@@ -133,4 +133,17 @@ describe("Plex collection reconciliation", () => {
         expect(client.removeItemFromCollection).not.toHaveBeenCalled();
         expect(client.setCollectionOrder).not.toHaveBeenCalled();
     });
+
+    it("keeps Home publication independent from Library Recommended visibility", async () => {
+        const visibility = { promotedToOwnHome: true, promotedToSharedHome: true, promotedToRecommended: false };
+        const client = {
+            getCollections: vi.fn().mockResolvedValue([{ ratingKey: "100", ...visibility }]),
+            getCollectionRecommendation: vi.fn().mockResolvedValue(visibility),
+            setCollectionRecommendation: vi.fn(),
+        };
+        const settings = { sectionId: "1", collectionId: "100", publishToHome: true,
+            publishToSharedHome: true, publishToLibrary: false };
+        expect(await new PlexService(client as unknown as PlexClient).syncCollectionRecommendation(settings)).toBe(false);
+        expect(client.setCollectionRecommendation).not.toHaveBeenCalled();
+    });
 });
